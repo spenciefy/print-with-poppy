@@ -145,9 +145,9 @@ function DiscoveryBox() {
     </div>
   );
 }
-function Footer() {
+function Footer({ compact = false }: { compact?: boolean }) {
   return (
-    <footer className="protocol-footer">
+    <footer className={`protocol-footer${compact ? " protocol-concise" : ""}`}>
       <section aria-labelledby="protocol-title">
         <h2 id="protocol-title">How does Print with Poppy work?</h2>
         <p>
@@ -163,7 +163,7 @@ function Footer() {
               <a href="/.well-known/poppy.json">poppy.json</a> points your agent
               to the store’s identity, authentication and APIs.
             </p>
-            <DiscoveryBox />
+            {!compact && <DiscoveryBox />}
           </div>
           <div className="protocol-step">
             <h3>2. The API tells it what to do next.</h3>
@@ -171,38 +171,48 @@ function Footer() {
               The <a href="/openapi.json">API reference</a> shows your agent how
               to browse products, upload photos and prepare an order.
             </p>
-            <div className="api-reference">
-              <div className="reference-heading">
-                <a href="/openapi.json">OpenAPI reference</a>
-                <span>Store API</span>
+            {!compact && (
+              <div className="api-reference">
+                <div className="reference-heading">
+                  <a href="/openapi.json">OpenAPI reference</a>
+                  <span>Store API</span>
+                </div>
+                <dl>
+                  {[
+                    [
+                      "GET",
+                      "/api/catalog",
+                      "Products, prices and availability",
+                    ],
+                    ["POST", "/api/photos", "Private photo uploads"],
+                    [
+                      "POST",
+                      "/api/orders",
+                      "An order proposal for your approval",
+                    ],
+                    [
+                      "POST",
+                      "/api/operations/{id}/confirm",
+                      "Confirm the approved revision",
+                    ],
+                    [
+                      "GET",
+                      "/api/orders/{id}",
+                      "Payment, printing and tracking",
+                    ],
+                  ].map(([method, path, description]) => (
+                    <div key={path}>
+                      <dt>
+                        <span>{method}</span>
+                        <code>{path}</code>
+                      </dt>
+                      <dd>{description}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <a href="/agent.txt">Read the complete agent instructions</a>
               </div>
-              <dl>
-                {[
-                  ["GET", "/api/catalog", "Products, prices and availability"],
-                  ["POST", "/api/photos", "Private photo uploads"],
-                  [
-                    "POST",
-                    "/api/orders",
-                    "An order proposal for your approval",
-                  ],
-                  [
-                    "POST",
-                    "/api/operations/{id}/confirm",
-                    "Confirm the approved revision",
-                  ],
-                  ["GET", "/api/orders/{id}", "Payment, printing and tracking"],
-                ].map(([method, path, description]) => (
-                  <div key={path}>
-                    <dt>
-                      <span>{method}</span>
-                      <code>{path}</code>
-                    </dt>
-                    <dd>{description}</dd>
-                  </div>
-                ))}
-              </dl>
-              <a href="/agent.txt">Read the complete agent instructions</a>
-            </div>
+            )}
           </div>
         </div>
         <div className="protocol-approval protocol-step">
@@ -265,7 +275,61 @@ function Footer() {
     </footer>
   );
 }
-function Home({ config }: { config: Config }) {
+const variants = [
+  {
+    id: "compact",
+    name: "Compact",
+    description: "Small product previews, concise rows, then the agent prompt.",
+  },
+  {
+    id: "agent-first",
+    name: "Agent first",
+    description:
+      "Start with the copyable prompt; products follow in a quiet list.",
+  },
+  {
+    id: "gallery",
+    name: "Gallery",
+    description:
+      "Larger product images, stacked vertically with generous space.",
+  },
+] as const;
+type HomeVariant = (typeof variants)[number]["id"];
+function VariantNav({ current }: { current?: HomeVariant }) {
+  return (
+    <nav className="variant-nav" aria-label="Homepage variants">
+      <a href="/variants">All variants</a>
+      {variants.map((v) => (
+        <a
+          key={v.id}
+          href={`/variants/${v.id}`}
+          aria-current={current === v.id ? "page" : undefined}
+        >
+          {v.name}
+        </a>
+      ))}
+      <a href="/">Original</a>
+    </nav>
+  );
+}
+function VariantIndex() {
+  return (
+    <main className="variant-index">
+      <h1>Single-column explorations</h1>
+      <p>Three ways to keep the store simple.</p>
+      {variants.map((v) => (
+        <a className="variant-option" key={v.id} href={`/variants/${v.id}`}>
+          <h2>
+            {v.name} <Arrow />
+          </h2>
+          <p>{v.description}</p>
+        </a>
+      ))}
+      <a href="/">View the original homepage</a>
+    </main>
+  );
+}
+function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const prompt = `Order my photos from ${config.origin} using Personal Agent Protocol. Read /agent.txt, /.well-known/poppy.json and the catalog. Use the documented guest API if you do not support native Poppy sessions. Help me choose 4×6 prints or one 12×16 matte print. Show me the photos, crops, full shipping address, email, delivery estimate and total including tax for approval. Only after I approve, and if the store is accepting live orders, pay with your authorized card.`;
@@ -279,92 +343,105 @@ function Home({ config }: { config: Config }) {
       setError("Select and copy the instructions below.");
     }
   }
-  return (
-    <>
-      <main className="home-minimal store-home">
-        <section className="store-products" aria-labelledby="home-title">
-          <div className="store-heading">
-            <h1 id="home-title">Your photos, in print.</h1>
-            <p>Ordered by your personal agent. Delivered to your door.</p>
+  const productSection = (
+    <section className="store-products" aria-labelledby="home-title">
+      <div className="store-heading">
+        <h1 id="home-title">Your photos, in print.</h1>
+        <p>Ordered by your personal agent. Delivered to your door.</p>
+      </div>
+      <div className="product-list">
+        <article className="store-product">
+          <div
+            className="product-preview prints-preview"
+            role="img"
+            aria-label="Example 4 by 6 photo prints with white borders"
+          >
+            <img src="/photos/poppy-field-close.png" alt="" />
+            <img src="/photos/poppy-field-wide.png" alt="" />
           </div>
-          <div className="product-list">
-            <article className="store-product">
-              <div
-                className="product-preview prints-preview"
-                role="img"
-                aria-label="Example 4 by 6 photo prints with white borders"
-              >
-                <img src="/photos/poppy-field-close.png" alt="" />
-                <img src="/photos/poppy-field-wide.png" alt="" />
-              </div>
-              <div className="product-copy">
-                <div className="product-title">
-                  <h2>Photo prints</h2>
-                  <span>$12</span>
-                </div>
-                <p className="product-spec">4 × 6 inches · Lustre finish</p>
-                <p>Five prints included. Each extra print is 50¢.</p>
-              </div>
-            </article>
-            <article className="store-product">
-              <div className="product-preview poster-preview">
-                <img
-                  src="/photos/poppy-meadow-portrait.png"
-                  alt="Example vertical 12 by 16 wall print of a distant poppy meadow"
-                />
-              </div>
-              <div className="product-copy">
-                <div className="product-title">
-                  <h2>One for the wall</h2>
-                  <span>$35</span>
-                </div>
-                <p className="product-spec">
-                  12 × 16 inches · Portrait · Matte
-                </p>
-                <p>A portrait photo on heavyweight paper. Unframed.</p>
-              </div>
-            </article>
-          </div>
-          <p className="store-delivery">
-            {shippingSummary} Tax shown before approval.
-            <br />
-            Estimated delivery: 7–12 business days after payment.
-          </p>
-          <p className="home-status" role="status">
-            {config.mode === "live"
-              ? "Accepting orders through personal agents."
-              : config.mode === "loading"
-                ? "Checking ordering availability…"
-                : config.mode === "unavailable"
-                  ? "Ordering availability could not be checked. Please try again shortly."
-                  : "Ordering opens soon. Payments and physical fulfillment are not enabled yet."}
-          </p>
-        </section>
-        <section className="store-order" aria-labelledby="instructions-label">
-          <div className="agent-instructions">
-            <div className="instructions-heading">
-              <h2 id="instructions-label">
-                Copy prompt for your personal agent
-              </h2>
-              <button className="instructions-copy" onClick={copy}>
-                <CopyIcon copied={copied} />
-                {copied ? "Copied" : "Copy"}
-              </button>
+          <div className="product-copy">
+            <div className="product-title">
+              <h2>Photo prints</h2>
+              <span>$12</span>
             </div>
-            <p className="instructions-text">{prompt}</p>
-            <p className="instructions-feedback" aria-live="polite">
-              {error ||
-                (copied
-                  ? "Copied to clipboard."
-                  : "Paste into your agent, then attach your photos.")}
-            </p>
+            <p className="product-spec">4 × 6 inches · Lustre finish</p>
+            <p>Five prints included. Each extra print is 50¢.</p>
           </div>
-        </section>
+        </article>
+        <article className="store-product">
+          <div className="product-preview poster-preview">
+            <img
+              src="/photos/poppy-meadow-portrait.png"
+              alt="Example vertical 12 by 16 wall print of a distant poppy meadow"
+            />
+          </div>
+          <div className="product-copy">
+            <div className="product-title">
+              <h2>One for the wall</h2>
+              <span>$35</span>
+            </div>
+            <p className="product-spec">12 × 16 inches · Portrait · Matte</p>
+            <p>A portrait photo on heavyweight paper. Unframed.</p>
+          </div>
+        </article>
+      </div>
+      <p className="store-delivery">
+        {shippingSummary} Tax shown before approval.
+        <br />
+        Estimated delivery: 7–12 business days after payment.
+      </p>
+      <p className="home-status" role="status">
+        {config.mode === "live"
+          ? "Accepting orders through personal agents."
+          : config.mode === "loading"
+            ? "Checking ordering availability…"
+            : config.mode === "unavailable"
+              ? "Ordering availability could not be checked. Please try again shortly."
+              : "Ordering opens soon. Payments and physical fulfillment are not enabled yet."}
+      </p>
+    </section>
+  );
+  const promptSection = (
+    <section className="store-order" aria-labelledby="instructions-label">
+      <div className="agent-instructions">
+        <div className="instructions-heading">
+          <h2 id="instructions-label">Copy prompt for your personal agent</h2>
+          <button className="instructions-copy" onClick={copy}>
+            <CopyIcon copied={copied} />
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <p className="instructions-text">{prompt}</p>
+        <p className="instructions-feedback" aria-live="polite">
+          {error ||
+            (copied
+              ? "Copied to clipboard."
+              : "Paste into your agent, then attach your photos.")}
+        </p>
+      </div>
+    </section>
+  );
+  return (
+    <div className={variant ? `home-variant variant-${variant}` : undefined}>
+      {variant && <VariantNav current={variant} />}
+      <main className="home-minimal store-home">
+        {variant === "agent-first" ? (
+          <>
+            {promptSection}
+            {productSection}
+          </>
+        ) : (
+          <>
+            {productSection}
+            {promptSection}
+          </>
+        )}
       </main>
-      <Footer />
-    </>
+      <Footer compact={Boolean(variant)} />
+    </div>
   );
 }
+
 function Guide({ config }: { config: Config }) {
   return (
     <main className="agent-document">
@@ -872,10 +949,15 @@ function App() {
       document.startViewTransition(update);
     else update();
   }
+  const variant = variants.find((v) => route === `/variants/${v.id}`)?.id;
   return (
     <>
       <Header route={route} navigate={navigate} />
-      {route === "/for-agents" ? (
+      {route === "/variants" ? (
+        <VariantIndex />
+      ) : variant ? (
+        <Home config={config} variant={variant} />
+      ) : route === "/for-agents" ? (
         <Guide config={config} />
       ) : route === "/privacy" ? (
         <Privacy config={config} />
@@ -891,7 +973,9 @@ function App() {
           <a href="/">Back to Poppy →</a>
         </main>
       )}
-      {route !== "/" && route !== "/for-agents" && <Footer />}
+      {route !== "/" &&
+        route !== "/for-agents" &&
+        !route.startsWith("/variants") && <Footer />}
     </>
   );
 }
