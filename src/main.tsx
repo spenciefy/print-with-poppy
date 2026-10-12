@@ -22,17 +22,17 @@ function Brand() {
       <span className="brand-stack" aria-hidden="true">
         <img
           className="brand-photo back"
-          src="/poppy-photo-abstract.png"
+          src="/photos/poppy-field-close.png"
           alt=""
         />
         <img
           className="brand-photo middle"
-          src="/poppy-photo-abstract.png"
+          src="/photos/poppy-field-close.png"
           alt=""
         />
         <img
           className="brand-photo front"
-          src="/poppy-photo-abstract.png"
+          src="/photos/poppy-field-close.png"
           alt=""
         />
       </span>
@@ -684,17 +684,17 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
               <span className="brand-stack" aria-hidden="true">
                 <img
                   className="brand-photo back"
-                  src="/poppy-photo-abstract.png"
+                  src="/photos/poppy-field-close.png"
                   alt=""
                 />
                 <img
                   className="brand-photo middle"
-                  src="/poppy-photo-abstract.png"
+                  src="/photos/poppy-field-close.png"
                   alt=""
                 />
                 <img
                   className="brand-photo front"
-                  src="/poppy-photo-abstract.png"
+                  src="/photos/poppy-field-close.png"
                   alt=""
                 />
               </span>

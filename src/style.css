@@ -1225,9 +1225,9 @@ nav > a:first-child {
 /* Photo-print edge and spacious desktop storefront. */
 .brand img {
   background: white;
-  padding: 3px 3px 8px;
-  border: 1px solid oklch(91% 0.008 75);
-  box-shadow: 0 1px 3px oklch(25% 0.025 53 / 0.08);
+  padding: 3px;
+  border: 0;
+  box-shadow: 0 1px 2px oklch(25% 0.025 53 / 0.06);
   object-fit: cover;
 }
 .store-home {
@@ -1484,8 +1484,8 @@ header {
 .product-preview img {
   background: white;
   padding: 5px;
-  box-shadow: 0 2px 6px oklch(25% 0.025 53 / 0.13);
-  border: 1px solid oklch(92% 0.008 75);
+  box-shadow: 0 1px 2px oklch(25% 0.025 53 / 0.06);
+  border: 0;
 }
 .prints-preview img {
   width: 120px;
