@@ -213,6 +213,16 @@ if (view.status !== "shipped" || view.emails?.length !== 2)
 console.log(
   "\nVerified: approved → demo paid → submitted → shipped → 2 captured emails.",
 );
+if (cfg.sandboxEmailDelivery && process.env.SANDBOX_TEST_EMAIL) {
+  let emails;
+  for (let i = 0; i < 30; i++) {
+    emails = (await call(`/api/sandbox/orders/${orderId}/emails`)).emails;
+    if (emails.length === 2 && emails.every((e: any) => e.delivery === "submitted" && e.providerId)) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  if (!emails?.every((e: any) => e.delivery === "submitted" && e.providerId) || emails.length !== 2) throw new Error("Resend submission not verified.");
+  console.log("Resend submissions:", JSON.stringify(emails.map((e: any) => ({ id: e.providerId, subject: e.subject }))));
+}
 if (accountTest) {
   const history = await call("/api/account/orders");
   if (!history.orders.some((o: any) => o.id === orderId))
