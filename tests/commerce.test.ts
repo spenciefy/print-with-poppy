@@ -236,6 +236,12 @@ test("real Poppy discovery, DPoP upload, immutable approval, one payment, one pr
 });
 test("proof replay, wrong method, token binding, expired token, and session renewal are enforced", async () => {
   const a = await makeAgent();
+  const missingProof = await fetch(origin + "/api/photos", {
+    method: "POST",
+    headers: { Authorization: `DPoP ${a.session.access_token}` },
+  });
+  assert.equal(missingProof.status, 401);
+  assert.equal((await missingProof.json()).error, "invalid_dpop_proof");
   const proof = await a.proof(
     "GET",
     origin + "/api/orders/not_found",
@@ -897,7 +903,21 @@ test("discovery stays native while compatibility is documented separately", asyn
   assert.equal(native.components.securitySchemes.AgentGuest, undefined);
   assert.doesNotMatch(native.info.description, /\/api\/agent-sessions|Bearer/);
   assert.deepEqual(native.paths["/api/photos"].post.security, [{ DPoP: [] }]);
-  assert.equal(native.paths["/api/photos"].post.parameters[0].required, true);
+  assert.equal(native.components.securitySchemes.DPoP.scheme, "DPoP");
+  // DPA validates required operation parameters before its transport signs the request.
+  // Upload must be callable with only the photo, without a model-supplied proof.
+  assert.deepEqual(native.paths["/api/photos"].post.parameters, []);
+  for (const path of Object.values(native.paths) as any[]) {
+    for (const operation of Object.values(path) as any[]) {
+      for (const parameter of operation.parameters ?? []) {
+        assert.ok(!["dpop", "authorization"].includes(parameter.name.toLowerCase()));
+      }
+    }
+  }
+  assert.ok(native.paths["/api/orders"].post.parameters.some(
+    (p: any) => p.name === "Idempotency-Key" && p.required,
+  ));
+  assert.match(native.info.description, /No user account or interactive sign-in is needed/);
   const compat = await (
     await fetch(origin + "/api/compat/openapi.json")
   ).json();
