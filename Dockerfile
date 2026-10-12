@@ -16,6 +16,5 @@ COPY --from=build --chown=node:node /app/public ./public
 RUN mkdir -p /app/.data && chown node:node /app/.data
 USER node
 EXPOSE 8787
-VOLUME ["/app/.data"]
 HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["npm", "start"]
