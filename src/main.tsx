@@ -356,8 +356,8 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
             role="img"
             aria-label="Example 4 by 6 photo prints with white borders"
           >
-            <img src="/photos/poppy-abstract-red.webp" alt="" />
             <img src="/photos/poppy-abstract-cluster.webp" alt="" />
+            <img src="/photos/poppy-abstract-yellow.webp" alt="" />
           </div>
           <div className="product-copy">
             <div className="product-title">
