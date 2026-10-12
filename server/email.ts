@@ -1,3 +1,4 @@
+import { productOf } from "../src/offer.js";
 import { config } from "./config.js";
 import { addressText, money, type Order, type Shipment } from "./types.js";
 export const escapeHtml = (s: string) =>
@@ -43,12 +44,17 @@ export function emailFor(o: Order, kind: string, shipment?: Shipment) {
         ? "The carrier tracking page has the latest delivery estimate."
         : "An arrival estimate is not available for this shipment yet."
       : o.quote.estimate;
+  const product = productOf(o.quote);
+  const quantity = o.quote.items.reduce((sum, item) => sum + item.quantity, 0);
+  const productLine = `${quantity} × ${product.label} · ${product.dimensions} · ${o.quote.finish}`;
   const text = [
+    "Print with Poppy",
     config.demo ? "DEMO EMAIL — nothing was charged, printed, or sent." : "",
     subject,
     intro,
     `Order ${o.id}`,
-    `${o.quote.items.reduce((s, i) => s + i.quantity, 0)} × 4×6 ${o.quote.finish} prints`,
+    productLine,
+    `Prints: ${money(o.quote.subtotal)} · Shipping: ${money(o.quote.shipping)} · Tax: ${money(o.quote.tax)}`,
     addressText(o.quote.address),
     `Total paid: ${money(o.quote.total)}`,
     estimate,
@@ -58,6 +64,15 @@ export function emailFor(o: Order, kind: string, shipment?: Shipment) {
   ]
     .filter(Boolean)
     .join("\n\n");
-  const html = `<!doctype html><html><body style="background:#faf6ee;color:#30291f;font-family:Georgia,serif;padding:32px"><main style="max-width:560px;margin:auto"><p style="color:#c5480a;font-family:sans-serif"><img src="${escapeHtml(config.origin)}/poppy.png" width="32" height="32" alt="" style="vertical-align:middle;margin-right:8px"> PRINT WITH POPPY</p>${config.demo ? "<p>DEMO EMAIL — no real purchase or email delivery</p>" : ""}<h1 style="font-size:34px;font-weight:normal">${subject}</h1><p>${intro}</p><p>${o.quote.items.reduce((s, i) => s + i.quantity, 0)} × 4×6 ${escapeHtml(o.quote.finish)} prints · ${money(o.quote.total)}</p><hr style="border:0;border-top:1px solid #ded6c7"><h3>Delivering to</h3><p>${escapeHtml(addressText(o.quote.address))}</p><p>${escapeHtml(estimate)}</p>${shipping ? `<p>${escapeHtml(trackingText)}</p>` : ""}${tracking ? `<p><a href="${escapeHtml(tracking)}">Track your shipment →</a></p>` : ""}<p><a style="color:#af3e06" href="${escapeHtml(statusUrl)}">View your order →</a></p><p style="font-size:12px">${escapeHtml(o.id)}<br>Questions? ${escapeHtml(config.support)}</p></main></body></html>`;
+  const origin = escapeHtml(config.origin);
+  const html = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#faf6ee;color:#30291f;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#faf6ee"><tr><td align="center" style="padding:32px 20px"><table role="presentation" width="560" cellspacing="0" cellpadding="0" style="width:100%;max-width:560px"><tr><td>
+<table role="presentation" cellspacing="0" cellpadding="0"><tr><td><img src="${origin}/photos/poppy-email-logo.png" width="64" height="64" alt="Orange, red and yellow poppy photo stack" style="display:block;border:0"></td><td style="padding-left:12px;font-size:20px;letter-spacing:-0.5px">print with <strong>poppy</strong></td></tr></table>
+${config.demo ? '<p style="font-size:12px">DEMO EMAIL — no real purchase or email delivery</p>' : ''}
+<h1 style="font-size:30px;line-height:1.15;letter-spacing:-1px;margin:32px 0 16px">${subject}</h1><p style="font-size:16px;line-height:1.6;color:#6e6155">${intro}</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:28px 0;border-top:1px solid #ded6c7;border-bottom:1px solid #ded6c7"><tr><td width="88" style="padding:24px 16px 24px 0;vertical-align:middle"><img src="${origin}${product.emailImage}" width="72" alt="${product.label} — sample poppy artwork" style="display:block;border:6px solid #ffffff;width:72px;height:auto"></td><td style="padding:24px 0"><h2 style="font-size:20px;margin:0 0 8px">${product.label}</h2><p style="font-size:14px;line-height:1.6;color:#6e6155;margin:0">${product.dimensions} · ${escapeHtml(o.quote.finish)}<br>Quantity: ${quantity}</p></td></tr></table>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:14px;line-height:1.9"><tr><td>Prints</td><td align="right">${money(o.quote.subtotal)}</td></tr><tr><td>Shipping</td><td align="right">${o.quote.shipping ? money(o.quote.shipping) : 'Included'}</td></tr><tr><td>Tax</td><td align="right">${money(o.quote.tax)}</td></tr><tr><td style="padding-top:8px;font-weight:bold">Total paid · USD</td><td align="right" style="padding-top:8px;font-weight:bold">${money(o.quote.total)}</td></tr></table>
+<h2 style="font-size:16px;margin:28px 0 8px">Delivering to</h2><p style="font-size:14px;line-height:1.6;margin:0">${escapeHtml(addressText(o.quote.address))}</p><p style="font-size:14px;line-height:1.6;color:#6e6155">${escapeHtml(estimate)}</p>${shipping ? `<p style="font-size:14px;line-height:1.6">${escapeHtml(trackingText)}</p>` : ''}
+${tracking ? `<p><a style="color:#af3e06" href="${escapeHtml(tracking)}">Track your shipment →</a></p>` : ''}<p style="margin:28px 0"><a style="background:#30291f;color:#ffffff;text-decoration:none;padding:14px 20px;display:inline-block;border-radius:6px" href="${escapeHtml(statusUrl)}">View your order</a></p><p style="font-size:12px;line-height:1.7;color:#6e6155">${escapeHtml(o.id)}<br>Questions? <a style="color:#af3e06" href="mailto:${escapeHtml(config.support)}">${escapeHtml(config.support)}</a></p>
+</td></tr></table></td></tr></table></body></html>`;
   return { to: o.quote.email, subject, html, text };
 }

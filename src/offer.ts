@@ -29,6 +29,9 @@ export const priceSummary = `Up to 5 prints for $12, plus shipping. Additional p
 export const products = {
   prints: {
     name: "4 × 6 photo prints",
+    label: "Photo prints",
+    dimensions: "4 × 6 inches",
+    emailImage: "/photos/poppy-email-yellow.jpg",
     finish: "lustre",
     sku: "GLOBAL-PHO-4X6",
     attributes: { finish: "lustre" },
@@ -37,6 +40,9 @@ export const products = {
   },
   poster: {
     name: "12 × 16 matte print",
+    label: "Poster print",
+    dimensions: "12 × 16 inches",
+    emailImage: "/photos/poppy-email-red.jpg",
     finish: "matte · 200gsm",
     sku: "GLOBAL-FAP-12X16",
     attributes: { paperType: "EMA", substrateWeight: "200gsm" },
