@@ -151,8 +151,10 @@ function Footer() {
       <section aria-labelledby="protocol-title">
         <h2 id="protocol-title">How does Print with Poppy work?</h2>
         <p>
-          You give your personal agent photos to print. Here’s how it finds the
-          store, prepares your order and gets your approval.
+          Print with Poppy shows how personal agents can interact with real
+          businesses. It implements Personal Agent Protocol so agents can
+          discover the store, use its APIs and request your approval to place an
+          order.
         </p>
         <div className="protocol-reference-grid">
           <div className="protocol-step">
