@@ -271,7 +271,7 @@ function Footer({ compact = false }: { compact?: boolean }) {
         <Brand />
         <a href="https://x.com/spenciefy">a project by @spenciefy</a>
         <a href="/privacy">Photo privacy</a>
-        <a href="https://github.com/spenciefy/print-with-poppy">Source code</a>
+        <a href="https://github.com/spenciefy/print-with-poppy">View on Github</a>
         <a href="https://personalagentprotocol.org/">Personal Agent Protocol</a>
       </div>
     </footer>
@@ -564,7 +564,7 @@ Content-Type: application/json
           Operations extension
         </a>{" "}
         ·{" "}
-        <a href="https://github.com/spenciefy/print-with-poppy">Source code</a>
+        <a href="https://github.com/spenciefy/print-with-poppy">View on Github</a>
       </p>
     </main>
   );
