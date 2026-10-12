@@ -1481,3 +1481,171 @@ header {
     animation: none;
   }
 }
+
+/* One reading column, with small previews that explain the two formats. */
+.store-home {
+  display: block;
+  max-width: 760px;
+  padding-top: 32px;
+  padding-bottom: 48px;
+}
+.store-order {
+  max-width: 528px;
+  margin: 36px auto 0;
+}
+.store-product {
+  display: grid;
+  grid-template-columns: 156px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 24px;
+  padding: 24px 0;
+}
+.product-copy {
+  min-width: 0;
+}
+.store-product .product-spec {
+  margin-bottom: 14px;
+}
+.store-product p:last-child {
+  margin-bottom: 0;
+}
+.product-preview {
+  height: 126px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.product-preview img {
+  background: white;
+  padding: 5px;
+  box-shadow: 0 2px 6px oklch(25% 0.025 53 / 0.13);
+  border: 1px solid oklch(92% 0.008 75);
+}
+.prints-preview img {
+  width: 120px;
+  aspect-ratio: 3 / 2;
+  object-fit: contain;
+  position: absolute;
+}
+.prints-preview img:first-child {
+  transform: translate(-6px, -8px) rotate(-9deg);
+}
+.prints-preview img:last-child {
+  transform: translate(5px, 9px) rotate(5deg);
+}
+.poster-preview img {
+  width: 148px;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  padding: 8px;
+}
+.protocol-footer {
+  max-width: 696px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.protocol-reference-grid,
+.protocol-footer .store-faq {
+  grid-template-columns: minmax(0, 1fr);
+}
+.protocol-reference-grid {
+  gap: 24px;
+}
+
+/* Three little photo prints settle into a stack, then fan out on hover. */
+.brand-stack {
+  position: relative;
+  display: inline-block;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  margin-right: 4px;
+}
+.brand .brand-photo {
+  position: absolute;
+  left: 5px;
+  top: 4px;
+  width: 48px;
+  height: 48px;
+  transform-origin: 50% 85%;
+  transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: photo-arrive 580ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.brand-photo.back {
+  --photo-rest: translate(-4px, 2px) rotate(-12deg);
+  transform: var(--photo-rest);
+  animation-delay: 40ms;
+}
+.brand-photo.middle {
+  --photo-rest: translate(4px, 1px) rotate(9deg);
+  transform: var(--photo-rest);
+  animation-delay: 110ms;
+}
+.brand-photo.front {
+  --photo-rest: translate(0, -1px) rotate(-2deg);
+  transform: var(--photo-rest);
+  animation-delay: 180ms;
+}
+.brand:is(:hover, :focus-visible) .back {
+  transform: translate(-9px, 0) rotate(-21deg);
+}
+.brand:is(:hover, :focus-visible) .middle {
+  transform: translate(9px, -1px) rotate(17deg);
+}
+.brand:is(:hover, :focus-visible) .front {
+  transform: translate(0, -5px) rotate(0);
+}
+@keyframes photo-arrive {
+  from {
+    opacity: 0;
+    transform: translate(0, -12px) rotate(0) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: var(--photo-rest);
+  }
+}
+@media (max-width: 760px) {
+  .protocol-footer {
+    margin-left: 24px;
+    margin-right: 24px;
+  }
+}
+@media (max-width: 480px) {
+  .store-product {
+    grid-template-columns: 100px minmax(0, 1fr);
+    column-gap: 16px;
+  }
+  .product-preview {
+    height: 112px;
+  }
+  .prints-preview img {
+    width: 85px;
+  }
+  .poster-preview img {
+    width: 96px;
+    padding: 5px;
+  }
+  .product-title h2 {
+    font-size: 18px;
+  }
+  .product-title > span {
+    font-size: 20px;
+  }
+  .product-title {
+    gap: 6px;
+  }
+  .store-product p {
+    font-size: 13px;
+  }
+  .store-product .product-spec {
+    font-size: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand .brand-photo {
+    animation: none;
+    transition: none;
+  }
+}

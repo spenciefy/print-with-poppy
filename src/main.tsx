@@ -19,7 +19,23 @@ const Arrow = () => <span aria-hidden="true">↗</span>;
 function Brand() {
   return (
     <a className="brand" href="/" aria-label="Print with Poppy home">
-      <img src="/poppy-photo-abstract.png" alt="" />
+      <span className="brand-stack" aria-hidden="true">
+        <img
+          className="brand-photo back"
+          src="/poppy-photo-abstract.png"
+          alt=""
+        />
+        <img
+          className="brand-photo middle"
+          src="/poppy-photo-abstract.png"
+          alt=""
+        />
+        <img
+          className="brand-photo front"
+          src="/poppy-photo-abstract.png"
+          alt=""
+        />
+      </span>
       <span>
         print with <strong>poppy</strong>
       </span>
@@ -308,20 +324,40 @@ function Home({ config }: { config: Config }) {
           </div>
           <div className="product-list">
             <article className="store-product">
-              <div className="product-title">
-                <h2>Photo prints</h2>
-                <span>$12</span>
+              <div
+                className="product-preview prints-preview"
+                role="img"
+                aria-label="Example 4 by 6 photo prints with white borders"
+              >
+                <img src="/photos/mountain.jpg" alt="" />
+                <img src="/photos/lake.jpg" alt="" />
               </div>
-              <p className="product-spec">4 × 6 inches · Lustre finish</p>
-              <p>Five prints included. Each extra print is 50¢.</p>
+              <div className="product-copy">
+                <div className="product-title">
+                  <h2>Photo prints</h2>
+                  <span>$12</span>
+                </div>
+                <p className="product-spec">4 × 6 inches · Lustre finish</p>
+                <p>Five prints included. Each extra print is 50¢.</p>
+              </div>
             </article>
             <article className="store-product">
-              <div className="product-title">
-                <h2>One for the wall</h2>
-                <span>$35</span>
+              <div className="product-preview poster-preview">
+                <img
+                  src="/photos/lake.jpg"
+                  alt="Example unframed 12 by 16 landscape print with white borders"
+                />
               </div>
-              <p className="product-spec">12 × 16 inches · Matte · Unframed</p>
-              <p>One photo, printed on heavyweight 200gsm paper.</p>
+              <div className="product-copy">
+                <div className="product-title">
+                  <h2>One for the wall</h2>
+                  <span>$35</span>
+                </div>
+                <p className="product-spec">
+                  12 × 16 inches · Matte · Unframed
+                </p>
+                <p>One photo, printed on heavyweight 200gsm paper.</p>
+              </div>
             </article>
           </div>
           <p className="store-delivery">
@@ -667,7 +703,23 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
         <div>
           {checkout ? (
             <section className="checkout-demo">
-              <img src="/poppy-photo-abstract.png" alt="" />
+              <span className="brand-stack" aria-hidden="true">
+                <img
+                  className="brand-photo back"
+                  src="/poppy-photo-abstract.png"
+                  alt=""
+                />
+                <img
+                  className="brand-photo middle"
+                  src="/poppy-photo-abstract.png"
+                  alt=""
+                />
+                <img
+                  className="brand-photo front"
+                  src="/poppy-photo-abstract.png"
+                  alt=""
+                />
+              </span>
               <h2>
                 Make-believe payment.
                 <br />
