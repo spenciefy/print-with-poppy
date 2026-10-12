@@ -26,3 +26,5 @@ Sources: [Prodigi payments FAQ](https://www.prodigi.com/faq/all/), [Stripe fulfi
 Stripe charges and payouts enabled, Tax settings active. Created the live payment webhook and saved Stripe, print and Resend credentials privately in Railway. Resend domain verified in dashboard. Credentials are not proof of a paid/delivered order.
 
 Native Poppy clients use the existing allowlist. Optional `ALLOW_COMPAT_AGENT_SESSIONS=true` enables rate-limited plain HTTP guest sessions for agents without native support. These have unverified identity and private 24-hour Bearer tokens; they preserve session ownership and explicit revision approval. Native DPoP tokens cannot be downgraded to Bearer. Do not claim Muse/Instinct certification until tested from those products.
+
+Live preflight: actual production quote and Stripe Tax calculation succeeded for the five-print offer. A live Stripe Checkout session was created with the correct amount, verified unpaid, then expired. No card charge, print order or outbound email was performed. Full paid fulfillment and delivery remain unverified. Live deployment uses `/app/.data/live`, isolated from prior simulated orders.

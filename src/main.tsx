@@ -134,9 +134,9 @@ function Footer() {
             <summary>Can I buy directly on this website?</summary>
             <p>
               Orders start with a personal agent. There’s no cart or checkout
-              button here. Use an agent that supports Poppy draft 0.1 and its
-              operations extension. Live agents currently need their client
-              identity registered with the store;{" "}
+              button here. Agents can use native Poppy or our HTTP guest API.
+              Native Poppy identities need registration; guest API sessions do
+              not. Your agent needs file upload, API and payment tools;{" "}
               <a href="/for-agents">see the integration guide</a>.
             </p>
           </details>
@@ -703,7 +703,7 @@ function App() {
       ) : route.startsWith("/order/") ? (
         <OrderPage />
       ) : route.startsWith("/checkout/") ? (
-        <OrderPage checkout />
+        <OrderPage checkout={config.mode === "demo"} />
       ) : route === "/" ? (
         <Home config={config} />
       ) : (
