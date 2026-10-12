@@ -101,3 +101,15 @@ Frontend + Poppy API → SQLite order/approval + durable jobs
 Poppy flower supplied by the project owner. Decorative sample photography is from Unsplash: [lake source](https://images.unsplash.com/photo-1470770841072-f978cf4d019e), [landscape source](https://images.unsplash.com/photo-1500530855697-b586d89ba3ee), [mountain source](https://images.unsplash.com/photo-1464822759023-fed622ff2c3b). These are illustrative samples, never customer uploads. Fonts: [Young Serif](https://fonts.google.com/specimen/Young+Serif) and [Hanken Grotesk](https://fonts.google.com/specimen/Hanken+Grotesk), self-hosted with OFL licenses.
 
 [Poppy spec](https://personalagentprotocol.org/docs/spec) · [operations](https://personalagentprotocol.org/docs/extensions/operations) · [Prodigi API](https://www.prodigi.com/print-api/docs/reference/) · [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment)
+
+## Native Poppy and compatibility access
+
+`/.well-known/poppy.json` discovers `/openapi.json`, which documents native DPoP authentication only. `/agent.txt` also contains native-only instructions. Native client metadata URLs must appear in `AGENT_CLIENT_IDS`. Renew with the original session ID to retain access to pending operations.
+
+For agents without native Poppy support, `/api/compat/instructions` and `/api/compat/openapi.json` document the separate HTTP compatibility path. It uses unverified Bearer sessions and does **not** enforce the native identity allowlist or DPoP binding. `ALLOW_COMPAT_AGENT_SESSIONS=false` disables it in every mode; when unset it defaults on only in demo mode. Existing compatibility tokens remain supported when enabled.
+
+Malformed JSON bodies return `400 invalid_request`; oversized JSON bodies return `413 request_too_large`. Correct the request rather than retrying it unchanged.
+
+## License
+
+Project code is available under the [MIT License](LICENSE). Third-party fonts retain their accompanying licenses.

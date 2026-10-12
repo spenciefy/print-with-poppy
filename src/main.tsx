@@ -170,13 +170,29 @@ function Footer({ compact = false }: { compact?: boolean }) {
           <div className="protocol-step">
             <h3>2. The API tells it what to do next.</h3>
             <p>
-              The <a href="/docs">API reference</a> shows your agent how
-              to browse products, upload photos and prepare an order.
+              The <a href="/docs">API reference</a> shows your agent how to
+              browse products, upload photos and prepare an order.
             </p>
             {!compact && (
               <div className="api-reference">
                 <div className="reference-heading">
-                  <a className="docs-reference-link" href="/docs">OpenAPI reference <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M7 17L17 7" /></svg><span className="docs-link-label">View full reference</span></a>
+                  <a className="docs-reference-link" href="/docs">
+                    OpenAPI reference{" "}
+                    <svg
+                      aria-hidden="true"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M7 7h10v10M7 17L17 7" />
+                    </svg>
+                    <span className="docs-link-label">View full reference</span>
+                  </a>
                   <span>Store API</span>
                 </div>
                 <dl>
@@ -271,7 +287,9 @@ function Footer({ compact = false }: { compact?: boolean }) {
         <Brand />
         <a href="https://x.com/spenciefy">a project by @spenciefy</a>
         <a href="/privacy">Photo privacy</a>
-        <a href="https://github.com/spenciefy/print-with-poppy">View on Github</a>
+        <a href="https://github.com/spenciefy/print-with-poppy">
+          View on Github
+        </a>
         <a href="https://personalagentprotocol.org/">Personal Agent Protocol</a>
       </div>
     </footer>
@@ -334,7 +352,7 @@ function VariantIndex() {
 function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
-  const prompt = `I want to order photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and the catalog. Use the documented guest API if you do not support native Poppy sessions. Help me choose 4×6 prints or one 12×16 matte print. Show me the photos, crops, full shipping address, email, delivery estimate and total including tax for approval. Only after I approve, and if the store is accepting live orders, pay with your authorized card.`;
+  const prompt = `I want to order photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and the catalog. Only if you do not support native Poppy sessions, read /api/compat/instructions for HTTP compatibility access. Help me choose 4×6 prints or one 12×16 matte print. Show me the photos, crops, full shipping address, email, delivery estimate and total including tax for approval. Only after I approve, and if the store is accepting live orders, pay with your authorized card.`;
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -411,16 +429,32 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
         </div>
         <p className="instructions-text">{prompt}</p>
         <div className="instructions-actions">
-          <button className="instructions-copy" onClick={copy} aria-live="polite">
+          <button
+            className="instructions-copy"
+            onClick={copy}
+            aria-live="polite"
+          >
             <CopyIcon copied={copied} />
             {copied ? "Copied" : "Copy"}
           </button>
           <a className="instructions-copy" href="/demo">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11L13 8z" /></svg>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M4 2.5v11L13 8z" />
+            </svg>
             Play demo
           </a>
         </div>
-        {error && <p className="instructions-feedback" role="alert">{error}</p>}
+        {error && (
+          <p className="instructions-feedback" role="alert">
+            {error}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -455,8 +489,24 @@ function Guide({ config }: { config: Config }) {
       </p>
       <ul className="agent-references">
         <li>
-          <a className="docs-reference-link" href="/docs">OpenAPI reference <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M7 17L17 7" /></svg><span className="docs-link-label">View full reference</span></a> — endpoints, request
-          fields and responses
+          <a className="docs-reference-link" href="/docs">
+            OpenAPI reference{" "}
+            <svg
+              aria-hidden="true"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M7 7h10v10M7 17L17 7" />
+            </svg>
+            <span className="docs-link-label">View full reference</span>
+          </a>{" "}
+          — endpoints, request fields and responses
         </li>
         <li>
           <a href="/.well-known/poppy.json">poppy.json</a> — Poppy discovery and
@@ -489,24 +539,12 @@ function Guide({ config }: { config: Config }) {
         <a href={`mailto:${config.support}`}>{config.support}</a>.
       </p>
       <p>
-        <strong>HTTP compatibility:</strong> if native Poppy is unavailable,
-        request a guest session. No registration is required. This path does not
-        verify a native Poppy agent identity.
-      </p>
-      <pre>
-        <code>{`POST /api/agent-sessions
-Content-Type: application/json
-
-{}`}</code>
-      </pre>
-      <p>Use the returned token on subsequent API calls:</p>
-      <pre>
-        <code>Authorization: Bearer &lt;access_token&gt;</code>
-      </pre>
-      <p>
-        Keep it private. It expires after 24 hours. Do not put tokens in URLs or
-        share them between users. Muse and Instinct have not yet been verified
-        end to end.
+        <strong>Without native Poppy support:</strong> read the separate{" "}
+        <a href="/api/compat/instructions">HTTP compatibility instructions</a>{" "}
+        and <a href="/api/compat/openapi.json">compatibility API reference</a>.
+        This path does not verify agent identity and is not protected by the
+        native client allowlist. Native Poppy agents should use the session
+        above. Muse and Instinct have not yet been verified end to end.
       </p>
       <h2>3. Upload the user’s photos</h2>
       <p>
@@ -518,8 +556,9 @@ Content-Type: application/json
       <p>
         <code>POST /api/orders</code> with an <code>Idempotency-Key</code>,
         product, email, full US shipping address and photo items. Use{" "}
-        <code>cover</code> (the default) for edge-to-edge prints with a center crop. Use{" "}
-        <code>contain</code> only when the user wants the whole image with white margins.
+        <code>cover</code> (the default) for edge-to-edge prints with a center
+        crop. Use <code>contain</code> only when the user wants the whole image
+        with white margins.
       </p>
       <p>
         Show <code>operation.summary</code> verbatim, with the returned
@@ -564,7 +603,9 @@ Content-Type: application/json
           Operations extension
         </a>{" "}
         ·{" "}
-        <a href="https://github.com/spenciefy/print-with-poppy">View on Github</a>
+        <a href="https://github.com/spenciefy/print-with-poppy">
+          View on Github
+        </a>
       </p>
     </main>
   );
@@ -977,7 +1018,8 @@ function App() {
           <a href="/">Back to Poppy →</a>
         </main>
       )}
-      {route !== "/demo" && route !== "/" &&
+      {route !== "/demo" &&
+        route !== "/" &&
         route !== "/for-agents" &&
         !route.startsWith("/variants") && <Footer />}
     </>

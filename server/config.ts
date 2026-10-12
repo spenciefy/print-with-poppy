@@ -45,8 +45,9 @@ export const config = {
   finish: process.env.PRODIGI_FINISH || "lustre",
   shipping: process.env.PRODIGI_SHIPPING_METHOD || "Budget",
   compatibility:
-    process.env.ALLOW_COMPAT_AGENT_SESSIONS === "true" ||
-    env.APP_MODE === "demo",
+    process.env.ALLOW_COMPAT_AGENT_SESSIONS === undefined
+      ? env.APP_MODE === "demo"
+      : process.env.ALLOW_COMPAT_AGENT_SESSIONS === "true",
   allowedClients: (process.env.AGENT_CLIENT_IDS || "")
     .split(",")
     .map((s) => s.trim())

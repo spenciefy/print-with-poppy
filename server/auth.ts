@@ -237,7 +237,7 @@ export function compatibilitySession() {
     session_id: session.id,
     mode: config.APP_MODE,
     protocol: "http-compatibility",
-    instructions: `${config.origin}/agent.txt`,
+    instructions: `${config.origin}/api/compat/instructions`,
   };
 }
 export async function authenticate(req: Request): Promise<Session> {

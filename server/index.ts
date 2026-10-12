@@ -200,6 +200,10 @@ app.get("/.well-known/oauth-authorization-server", (_req, res) =>
     dpop_signing_alg_values_supported: ["ES256", "RS256", "EdDSA"],
   }),
 );
+app.get("/api/compat/openapi.json", (_req, res) => res.json(openapi(true)));
+app.get("/api/compat/instructions", (_req, res) =>
+  res.type("text/plain").send(agentInstructions(true)),
+);
 app.get("/openapi.json", (_req, res) => res.json(openapi()));
 app.get("/agent.txt", (_req, res) =>
   res.type("text/plain").send(agentInstructions()),
@@ -452,10 +456,21 @@ app.get("/{*path}", (_req, res) => {
 app.use(
   (
     e: any,
-    _req: express.Request,
+    req: express.Request,
     res: express.Response,
     _next: express.NextFunction,
   ) => {
+    if (e.type === "entity.parse.failed" || e.type === "entity.too.large") {
+      const tooLarge = e.type === "entity.too.large";
+      console.warn("Request rejected:", req.method, req.path, e.type);
+      res.status(tooLarge ? 413 : 400).json({
+        error: tooLarge ? "request_too_large" : "invalid_request",
+        message: tooLarge
+          ? "Request body exceeds the size limit."
+          : "Send a valid JSON object. For a compatibility session, send {} with Content-Type: application/json. Correct the body before retrying.",
+      });
+      return;
+    }
     if (e instanceof ZodError) {
       res.status(400).json({
         error: "invalid_request",
@@ -480,7 +495,13 @@ app.use(
         .json({ error: e.code, message: e.message, ...e.extra });
       return;
     }
-    console.error("Request failed:", e.name || "Error", e.code || "");
+    console.error(
+      "Request failed:",
+      req.method,
+      req.path,
+      e.name || "Error",
+      e.code || "",
+    );
     res.status(500).json({
       error: "internal_error",
       message:

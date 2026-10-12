@@ -866,3 +866,66 @@ test("HTTP compatibility sessions isolate ownership, expire, and cannot downgrad
   });
   assert.equal((await send(a.access_token)).status, 401);
 });
+
+test("malformed JSON is actionable, not a retryable server error", async () => {
+  for (const body of ["null", '"{}"', "{broken"]) {
+    const r = await fetch(origin + "/api/agent-sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    assert.equal(r.status, 400);
+    const error = await r.json();
+    assert.equal(error.error, "invalid_request");
+    assert.match(error.message, /valid JSON object/);
+  }
+  const oversized = await fetch(origin + "/api/agent-sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data: "x".repeat(130 * 1024) }),
+  });
+  assert.equal(oversized.status, 413);
+});
+
+test("discovery stays native while compatibility is documented separately", async () => {
+  const discovery = await (
+    await fetch(origin + "/.well-known/poppy.json")
+  ).json();
+  assert.equal(discovery.apis[0].url, origin + "/openapi.json");
+  const native = await (await fetch(origin + "/openapi.json")).json();
+  assert.equal(native.paths["/api/agent-sessions"], undefined);
+  assert.equal(native.components.securitySchemes.AgentGuest, undefined);
+  assert.doesNotMatch(native.info.description, /\/api\/agent-sessions|Bearer/);
+  assert.deepEqual(native.paths["/api/photos"].post.security, [{ DPoP: [] }]);
+  assert.equal(native.paths["/api/photos"].post.parameters[0].required, true);
+  const compat = await (
+    await fetch(origin + "/api/compat/openapi.json")
+  ).json();
+  assert.ok(compat.paths["/api/agent-sessions"]);
+  assert.equal(compat.components.securitySchemes.DPoP, undefined);
+  assert.deepEqual(compat.paths["/api/photos"].post.security, [
+    { AgentGuest: [] },
+  ]);
+  assert.match(compat.info.description, /does not verify agent identity/);
+  assert.match(
+    await (await fetch(origin + "/api/compat/instructions")).text(),
+    /POST \/api\/agent-sessions with JSON \{\}/,
+  );
+  const { config } = await import("../server/config.js");
+  const old = config.compatibility;
+  try {
+    config.compatibility = false;
+    assert.equal(
+      (
+        await fetch(origin + "/api/agent-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        })
+      ).status,
+      404,
+    );
+  } finally {
+    config.compatibility = old;
+  }
+});
