@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import Demo from "./Demo";
+import { orderSubtitle } from "./order-copy";
 import { productOf, shippingSummary } from "./offer";
 type Config = { mode: string; origin: string; support: string };
 const money = (c: number) =>
@@ -412,6 +414,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
           </button>
         </div>
         <p className="instructions-text">{prompt}</p>
+        <a className="home-demo-link" href="/demo"><span aria-hidden="true">▶</span> Play demo</a>
         <p className="instructions-feedback" aria-live="polite">
           {error ||
             (copied
@@ -730,7 +733,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
         <p>
           {checkout
             ? "In a live order, your agent uses its card on Stripe’s secure checkout page."
-            : "We’ll email you when your prints ship."}
+            : orderSubtitle(order.status)}
         </p>
       </div>
       {error && (
@@ -952,7 +955,9 @@ function App() {
   return (
     <>
       <Header route={route} navigate={navigate} />
-      {route === "/variants" ? (
+      {route === "/demo" ? (
+        <Demo />
+      ) : route === "/variants" ? (
         <VariantIndex />
       ) : variant ? (
         <Home config={config} variant={variant} />
@@ -972,7 +977,7 @@ function App() {
           <a href="/">Back to Poppy →</a>
         </main>
       )}
-      {route !== "/" &&
+      {route !== "/demo" && route !== "/" &&
         route !== "/for-agents" &&
         !route.startsWith("/variants") && <Footer />}
     </>
