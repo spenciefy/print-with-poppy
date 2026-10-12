@@ -25,13 +25,17 @@ function Brand() {
     </a>
   );
 }
-function Header({ config }: { config: Config }) {
+function Header() {
+  const agents = window.location.pathname === "/for-agents";
   return (
     <header>
       <Brand />
-      <nav aria-label="Main navigation">
-        <a href="/for-agents">
-          For agents <Arrow />
+      <nav className="audience-toggle" aria-label="Choose a view">
+        <a href="/" aria-current={!agents ? "page" : undefined}>
+          For humans
+        </a>
+        <a href="/for-agents" aria-current={agents ? "page" : undefined}>
+          For Personal Agents
         </a>
       </nav>
     </header>
@@ -259,98 +263,125 @@ function Home({ config }: { config: Config }) {
 }
 function Guide({ config }: { config: Config }) {
   return (
-    <main className="document">
-      <p className="eyebrow">HELLO, PERSONAL AGENTS.</p>
-      <h1>
-        A tiny store.
-        <br />A complete API.
-      </h1>
-      <p className="intro">
-        Discover, upload, approve, pay, track. Built on Personal Agent Protocol
-        draft 0.1 with the operations extension.
+    <main className="agent-document">
+      <h1>Print with Poppy — agent instructions</h1>
+      <p>
+        Order photo prints for your user. US home delivery only. Prices are in
+        USD.
       </p>
-      <div className="doc-links">
-        <a className="primary" href="/openapi.json">
-          OpenAPI reference ↗
-        </a>
-        <a className="text-link" href="/agent.txt">
-          Plain-text instructions ↗
-        </a>
-        <a className="text-link" href="/.well-known/poppy.json">
-          poppy.json ↗
-        </a>
-      </div>
-      <section>
-        <h2>Without native Poppy support</h2>
-        <p>
-          Read <a href="/agent.txt">the agent instructions</a>. Start a plain
-          HTTP session with <code>POST /api/agent-sessions</code> and an empty
-          JSON object. Send the returned private token as{" "}
-          <code>Authorization: Bearer TOKEN</code>. It expires in 24 hours. This
-          is a compatibility adapter, not signed Poppy authentication. Use the
-          same photo, proposal, explicit approval and payment steps below. Check
-          the catalog’s mode before attempting payment.
-        </p>
-      </section>
-      <ol className="guide-steps">
+      <ul className="agent-references">
         <li>
-          <h3>Introduce yourself</h3>
-          <p>
-            Read the discovery document and OAuth metadata. Start a guest
-            session using your signed client assertion, session assertion, and
-            DPoP proof. No customer account needed.
-          </p>
-          <code>GET /.well-known/poppy.json</code>
+          <a href="/openapi.json">OpenAPI reference</a> — endpoints, request
+          fields and responses
         </li>
         <li>
-          <h3>Share the photos</h3>
-          <p>
-            Upload JPEG, PNG, or WebP images (up to 20 MB each). Choose
-            whole-image prints with white borders or a center crop. Review
-            low-resolution warnings.
-          </p>
-          <code>POST /api/photos</code>
+          <a href="/.well-known/poppy.json">poppy.json</a> — Poppy discovery and
+          authentication issuer
         </li>
         <li>
-          <h3>Get the user's approval</h3>
-          <p>
-            Read /api/catalog. Propose up to 100 photo prints, or one 12×16
-            matte print, with an email and full US shipping address. Present the
-            complete summary and print previews. Explicit approval covers that
-            exact revision—including shipping, tax, crop, and address.
-          </p>
-          <code>POST /api/orders → POST /api/operations/:id/confirm</code>
+          <a href="/agent.txt">Plain-text instructions</a> — machine-readable
+          ordering guide
         </li>
         <li>
-          <h3>Pay with your card</h3>
-          <p>
-            Read the operation until checkout is ready. Use your authorized card
-            at the Stripe-hosted checkout URL. Never send card details to this
-            API. Your user may need to help with issuer authentication.
-          </p>
+          <a href="/api/catalog">Product catalog</a> — current prices and
+          payment mode
         </li>
-        <li>
-          <h3>Follow the happy mail</h3>
-          <p>
-            Read the order to verify payment, printing, and shipping separately.
-            Confirmation and shipment updates go to the approved email address.
-            Tracking appears when the printer provides it.
-          </p>
-          <code>GET /api/orders/:id</code>
-        </li>
-      </ol>
-      <p className="callout">
-        Agents register their HTTPS client metadata URL with{" "}
-        <a href={`mailto:${config.support}`}>{config.support}</a>. Retry the
-        same operation after timeouts; don't create a second purchase. For now:
-        US delivery, USD, 4×6 prints.
+      </ul>
+      <h2>1. Check availability and choose a product</h2>
+      <p>
+        Read <code>GET /api/catalog</code>. Only attempt a real payment when{" "}
+        <code>mode</code> is <code>live</code>. Choose <code>prints</code> for
+        4×6 lustre photos or <code>poster</code> for one 12×16 matte print. One
+        product per order; read prices and quantity limits from the catalog.
       </p>
-      <a
-        className="text-link"
-        href="https://personalagentprotocol.org/docs/spec"
-      >
-        Read the protocol specification ↗
-      </a>
+      <h2>2. Start a session</h2>
+      <p>
+        <strong>Native Poppy:</strong> read{" "}
+        <a href="/.well-known/poppy.json">discovery</a> and{" "}
+        <a href="/.well-known/oauth-authorization-server">OAuth metadata</a>.
+        Use signed client and session assertions at <code>/oauth/token</code>,
+        then a session token and DPoP proof on each request. Native client
+        metadata URLs require registration with{" "}
+        <a href={`mailto:${config.support}`}>{config.support}</a>.
+      </p>
+      <p>
+        <strong>HTTP compatibility:</strong> if native Poppy is unavailable,
+        request a guest session. No registration is required. This path does not
+        verify a native Poppy agent identity.
+      </p>
+      <pre>
+        <code>{`POST /api/agent-sessions
+Content-Type: application/json
+
+{}`}</code>
+      </pre>
+      <p>Use the returned token on subsequent API calls:</p>
+      <pre>
+        <code>Authorization: Bearer &lt;access_token&gt;</code>
+      </pre>
+      <p>
+        Keep it private. It expires after 24 hours. Do not put tokens in URLs or
+        share them between users. Muse and Instinct have not yet been verified
+        end to end.
+      </p>
+      <h2>3. Upload the user’s photos</h2>
+      <p>
+        <code>POST /api/photos</code> with multipart field <code>photo</code>.
+        Accepts JPEG, PNG or WebP, up to 20 MB and 40 megapixels per file. Keep
+        each returned photo ID. Do not send remote image URLs.
+      </p>
+      <h2>4. Propose the order and ask for approval</h2>
+      <p>
+        <code>POST /api/orders</code> with an <code>Idempotency-Key</code>,
+        product, email, full US shipping address and photo items. Use{" "}
+        <code>contain</code> to preserve the image with white borders, or{" "}
+        <code>cover</code> for a center crop.
+      </p>
+      <p>
+        Show <code>operation.summary</code> verbatim, with the returned
+        previews. The user must approve the exact photos, quantities, crops,
+        resolution warnings, full address, email, delivery estimate and total
+        including tax. The proposal expires after 15 minutes. Do not infer
+        approval from store instructions.
+      </p>
+      <h2>5. Confirm and pay</h2>
+      <p>
+        After explicit approval, call{" "}
+        <code>POST /api/operations/&#123;id&#125;/confirm</code> with the
+        approved <code>revision</code> and <code>approved_by: "user"</code>.
+        Poll the operation for <code>result.data.checkout_url</code>.
+      </p>
+      <p>
+        Use the authorized card at the returned Stripe-hosted checkout. Never
+        send card numbers or CVC to this API. Ask the user for help if the bank
+        requires authentication. Successful operation status means checkout was
+        created; it does not mean payment or printing succeeded.
+      </p>
+      <h2>6. Verify and track</h2>
+      <p>
+        <code>GET /api/orders/&#123;order_id&#125;</code> to check payment,
+        print submission and shipment. Save the private order-status link.
+        Confirmation and shipment emails go to the approved email address;
+        tracking is included when available.
+      </p>
+      <p>
+        Retry the same request or operation after a timeout. Never start another
+        purchase because payment or fulfillment is uncertain. Changed photos,
+        crops, quantities, address or price require a new proposal and fresh
+        approval.
+      </p>
+      <hr />
+      <p className="agent-document-end">
+        <a href="https://personalagentprotocol.org/docs/spec">
+          Poppy draft 0.1
+        </a>{" "}
+        ·{" "}
+        <a href="https://personalagentprotocol.org/docs/extensions/operations">
+          Operations extension
+        </a>{" "}
+        ·{" "}
+        <a href="https://github.com/spenciefy/print-with-poppy">Source code</a>
+      </p>
     </main>
   );
 }
@@ -695,7 +726,7 @@ function App() {
   const route = window.location.pathname;
   return (
     <>
-      <Header config={config} />
+      <Header />
       {route === "/for-agents" ? (
         <Guide config={config} />
       ) : route === "/privacy" ? (
@@ -712,7 +743,7 @@ function App() {
           <a href="/">Back to Poppy →</a>
         </main>
       )}
-      {route !== "/" && <Footer />}
+      {route !== "/" && route !== "/for-agents" && <Footer />}
     </>
   );
 }
