@@ -225,7 +225,7 @@ function Footer({ compact = false }: { compact?: boolean }) {
           </p>
         </div>
         <div className="store-faq">
-          <h2>A few more details</h2>
+          <h2>FAQ</h2>
           <Faq title="Does this work with Muse or Instinct?">
             <p>
               There are two integration paths: native Poppy sessions and a plain
