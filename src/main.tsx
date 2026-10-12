@@ -309,8 +309,8 @@ function Home({ config }: { config: Config }) {
             <article className="store-product">
               <div className="product-preview poster-preview">
                 <img
-                  src="/photos/poppy-meadow-poster.png"
-                  alt="Example 12 by 16 wall print of a distant poppy meadow with white borders"
+                  src="/photos/poppy-meadow-portrait.png"
+                  alt="Example vertical 12 by 16 wall print of a distant poppy meadow"
                 />
               </div>
               <div className="product-copy">
@@ -319,9 +319,9 @@ function Home({ config }: { config: Config }) {
                   <span>$35</span>
                 </div>
                 <p className="product-spec">
-                  12 × 16 inches · Matte · Unframed
+                  12 × 16 inches · Portrait · Matte
                 </p>
-                <p>One photo, printed on heavyweight 200gsm paper.</p>
+                <p>A portrait photo on heavyweight paper. Unframed.</p>
               </div>
             </article>
           </div>

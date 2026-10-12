@@ -1497,8 +1497,8 @@ header {
   transform: translate(5px, 9px) rotate(5deg);
 }
 .poster-preview img {
-  width: 148px;
-  aspect-ratio: 4 / 3;
+  width: 90px;
+  aspect-ratio: 3 / 4;
   object-fit: contain;
   padding: 8px;
 }
@@ -1586,7 +1586,7 @@ header {
     width: 85px;
   }
   .poster-preview img {
-    width: 96px;
+    width: 78px;
     padding: 5px;
   }
   .product-title h2 {
@@ -1628,7 +1628,7 @@ header {
   column-gap: 20px;
 }
 .poster-preview img {
-  width: 124px;
+  width: 90px;
 }
 .instructions-heading {
   align-items: flex-start;
@@ -1704,6 +1704,6 @@ header {
     column-gap: 16px;
   }
   .poster-preview img {
-    width: 96px;
+    width: 78px;
   }
 }
