@@ -332,7 +332,7 @@ function VariantIndex() {
 function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
-  const prompt = `Order my photos from ${config.origin} using Personal Agent Protocol. Read /agent.txt, /.well-known/poppy.json and the catalog. Use the documented guest API if you do not support native Poppy sessions. Help me choose 4×6 prints or one 12×16 matte print. Show me the photos, crops, full shipping address, email, delivery estimate and total including tax for approval. Only after I approve, and if the store is accepting live orders, pay with your authorized card.`;
+  const prompt = `I want to order photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and the catalog. Use the documented guest API if you do not support native Poppy sessions. Help me choose 4×6 prints or one 12×16 matte print. Show me the photos, crops, full shipping address, email, delivery estimate and total including tax for approval. Only after I approve, and if the store is accepting live orders, pay with your authorized card.`;
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -377,7 +377,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
           </div>
           <div className="product-copy">
             <div className="product-title">
-              <h2>One for the wall</h2>
+              <h2>Poster print</h2>
               <span>$35</span>
             </div>
             <p className="product-spec">12 × 16 inches · Portrait · Matte</p>
