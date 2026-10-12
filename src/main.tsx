@@ -415,7 +415,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
         </article>
       </div>
       <p className="store-delivery">
-        {shippingSummary} Tax shown before approval.
+        Currently shipping within the United States only. {shippingSummary} Tax shown before approval.
         <br />
         {sandbox ? "Illustrative prices and delivery estimates only. Nothing will be printed or shipped." : "Estimated delivery: 7–12 business days after payment."}
       </p>
