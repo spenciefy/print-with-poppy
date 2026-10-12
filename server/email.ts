@@ -65,7 +65,7 @@ export function emailFor(o: Order, kind: string, shipment?: Shipment) {
     .filter(Boolean)
     .join("\n\n");
   const origin = escapeHtml(config.origin);
-  const html = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#faf6ee;color:#30291f;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#faf6ee"><tr><td align="center" style="padding:32px 20px"><table role="presentation" width="560" cellspacing="0" cellpadding="0" style="width:100%;max-width:560px"><tr><td>
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#faf6ee;color:#30291f;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#faf6ee"><tr><td align="center" style="padding:32px 20px"><table role="presentation" width="560" cellspacing="0" cellpadding="0" style="width:100%;max-width:560px"><tr><td>
 <table role="presentation" cellspacing="0" cellpadding="0"><tr><td><img src="${origin}/photos/poppy-email-logo.png" width="64" height="64" alt="Orange, red and yellow poppy photo stack" style="display:block;border:0"></td><td style="padding-left:12px;font-size:20px;letter-spacing:-0.5px">print with <strong>poppy</strong></td></tr></table>
 ${config.demo ? '<p style="font-size:12px">DEMO EMAIL — no real purchase or email delivery</p>' : ''}
 <h1 style="font-size:30px;line-height:1.15;letter-spacing:-1px;margin:32px 0 16px">${subject}</h1><p style="font-size:16px;line-height:1.6;color:#6e6155">${intro}</p>
