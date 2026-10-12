@@ -1,0 +1,45 @@
+{
+  "name": "print-with-poppy",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
+    "build": "tsc --noEmit && vite build",
+    "start": "tsx server/index.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "tsx scripts/agent.ts --approve-demo",
+    "check": "npm run build && npm test",
+    "agent:demo": "tsx scripts/agent.ts",
+    "format": "prettier --write server src scripts tests *.json *.ts *.md",
+    "ops:status": "tsx scripts/status.ts"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "6.1.2",
+    "better-sqlite3": "13.0.3",
+    "concurrently": "10.0.6",
+    "dotenv": "18.0.7",
+    "express": "5.3.0",
+    "express-rate-limit": "8.7.1",
+    "helmet": "8.3.0",
+    "jose": "6.2.12",
+    "multer": "2.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "sharp": "0.35.5",
+    "stripe": "23.0.0",
+    "tsx": "4.23.15",
+    "vite": "8.3.4",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/express": "5.0.6",
+    "@types/multer": "2.3.0",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
+  }
+}

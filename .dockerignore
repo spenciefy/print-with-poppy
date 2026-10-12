@@ -1,0 +1,15 @@
+node_modules
+dist
+.data
+.env
+.env.*
+.git
+docs/reference
+test-results
+
+# Local account setup evidence and deployment credentials
+docs/account-setup/
+.vercel/
+.secrets/
+*.pem
+*.key
