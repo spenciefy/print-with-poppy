@@ -65,7 +65,7 @@ function Header({
           onClick={(e) => navigate(e, "/")}
           aria-current={!agents ? "page" : undefined}
         >
-          For humans
+          For Humans
         </a>
         <a
           href="/for-agents"
