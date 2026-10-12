@@ -1885,3 +1885,9 @@ header {
     padding: 20px;
   }
 }
+
+.docs-reference-link { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.docs-reference-link svg { flex: none; transition: transform 160ms ease; }
+.docs-reference-link:hover svg { transform: translate(2px, -2px); }
+.docs-reference-link .docs-link-label { font-size: 12px; font-weight: 400; color: var(--muted, #756657); }
+@media (prefers-reduced-motion: reduce) { .docs-reference-link svg { transition: none; } }

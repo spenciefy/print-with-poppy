@@ -22,17 +22,17 @@ function Brand() {
       <span className="brand-stack" aria-hidden="true">
         <img
           className="brand-photo back"
-          src="/photos/poppy-field-close.png"
+          src="/photos/poppy-abstract-close.webp"
           alt=""
         />
         <img
           className="brand-photo middle"
-          src="/photos/poppy-field-close.png"
+          src="/photos/poppy-abstract-portrait.webp"
           alt=""
         />
         <img
           className="brand-photo front"
-          src="/photos/poppy-field-close.png"
+          src="/photos/poppy-abstract-cluster.webp"
           alt=""
         />
       </span>
@@ -168,13 +168,13 @@ function Footer({ compact = false }: { compact?: boolean }) {
           <div className="protocol-step">
             <h3>2. The API tells it what to do next.</h3>
             <p>
-              The <a href="/openapi.json">API reference</a> shows your agent how
+              The <a href="/docs">API reference</a> shows your agent how
               to browse products, upload photos and prepare an order.
             </p>
             {!compact && (
               <div className="api-reference">
                 <div className="reference-heading">
-                  <a href="/openapi.json">OpenAPI reference</a>
+                  <a className="docs-reference-link" href="/docs">OpenAPI reference <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M7 17L17 7" /></svg><span className="docs-link-label">View full reference</span></a>
                   <span>Store API</span>
                 </div>
                 <dl>
@@ -452,7 +452,7 @@ function Guide({ config }: { config: Config }) {
       </p>
       <ul className="agent-references">
         <li>
-          <a href="/openapi.json">OpenAPI reference</a> — endpoints, request
+          <a className="docs-reference-link" href="/docs">OpenAPI reference <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M7 17L17 7" /></svg><span className="docs-link-label">View full reference</span></a> — endpoints, request
           fields and responses
         </li>
         <li>
@@ -750,17 +750,17 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
               <span className="brand-stack" aria-hidden="true">
                 <img
                   className="brand-photo back"
-                  src="/photos/poppy-field-close.png"
+                  src="/photos/poppy-abstract-close.webp"
                   alt=""
                 />
                 <img
                   className="brand-photo middle"
-                  src="/photos/poppy-field-close.png"
+                  src="/photos/poppy-abstract-close.webp"
                   alt=""
                 />
                 <img
                   className="brand-photo front"
-                  src="/photos/poppy-field-close.png"
+                  src="/photos/poppy-abstract-close.webp"
                   alt=""
                 />
               </span>

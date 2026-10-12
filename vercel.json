@@ -5,6 +5,14 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/docs",
+      "destination": "/docs/index.html"
+    },
+    {
+      "source": "/docs/",
+      "destination": "/docs/index.html"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://poppy-api-production-da91.up.railway.app/api/:path*"
     },

@@ -14,3 +14,5 @@ docs/account-setup/
 .secrets/
 *.pem
 *.key
+
+public/docs/vendor/

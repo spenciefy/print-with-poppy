@@ -12,7 +12,9 @@
     "check": "npm run build && npm test",
     "agent:demo": "tsx scripts/agent.ts",
     "format": "prettier --write server src scripts tests *.json *.ts *.md",
-    "ops:status": "tsx scripts/status.ts"
+    "ops:status": "tsx scripts/status.ts",
+    "predev": "node scripts/docs-assets.mjs",
+    "prebuild": "node scripts/docs-assets.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.1.2",
@@ -33,6 +35,7 @@
     "zod": "4.6.6"
   },
   "devDependencies": {
+    "@scalar/api-reference": "1.73.1",
     "@types/better-sqlite3": "9.6.0",
     "@types/express": "5.0.6",
     "@types/multer": "2.3.0",
