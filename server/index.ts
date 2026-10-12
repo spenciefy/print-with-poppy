@@ -523,7 +523,7 @@ app.use(
         error: tooLarge ? "request_too_large" : "invalid_request",
         message: tooLarge
           ? "Request body exceeds the size limit."
-          : "Send a valid JSON object. For a compatibility session, send {} with Content-Type: application/json. Correct the body before retrying.",
+          : "Send the request body as a JSON object with Content-Type: application/json, not as a quoted JSON string. Correct the body before retrying.",
       });
       return;
     }
