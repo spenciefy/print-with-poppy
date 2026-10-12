@@ -1,6 +1,34 @@
-# Print with Poppy
+<p align="center">
+  <a href="https://printwithpoppy.com">
+    <img src="public/photos/poppy-email-logo.png" alt="Print with Poppy — orange, red and yellow poppy photo stack" width="112" height="112" />
+  </a>
+</p>
 
-An agent-first photo store for **printwithpoppy.com**. See [SPEC.md](SPEC.md) for the product decisions. Built with React/Vite, TypeScript, Express, SQLite, Sharp, JOSE, Stripe, Prodigi and Resend.
+<h1 align="center">Print with Poppy</h1>
+
+<p align="center">Your photos, in print.<br />Ordered by your personal agent. Delivered to your door.</p>
+
+<p align="center">
+  <a href="https://printwithpoppy.com">Visit the store</a> ·
+  <a href="https://printwithpoppy.com/demo">Play the demo</a> ·
+  <a href="https://printwithpoppy.com/docs">API reference</a> ·
+  <a href="https://personalagentprotocol.org/docs/spec">Poppy protocol</a>
+</p>
+
+[![Print with Poppy homepage showing photo prints, a poster print, and copyable personal-agent instructions](docs/images/homepage.png)](https://printwithpoppy.com)
+
+A real photo-printing store and an open-source example of **[Personal Agent Protocol](https://personalagentprotocol.org/)**. The website presents the products; your personal agent handles the order. There is no human-facing cart or checkout button.
+
+## How it works
+
+1. **Discover.** The agent reads [`poppy.json`](https://printwithpoppy.com/.well-known/poppy.json), authenticates with a signed assertion and DPoP, and follows the OpenAPI reference.
+2. **Prepare.** It uploads your photos, selects prints or a poster, and requests an order proposal.
+3. **Approve.** You review the photos, crops, delivery address, email and complete price. The agent confirms that exact revision through Poppy Operations.
+4. **Print and deliver.** Stripe Checkout handles payment, Prodigi fulfills the order, and Resend sends confirmation and shipping updates when available.
+
+The [interactive demo](https://printwithpoppy.com/demo) walks through the journey with sample poppy artwork and simulated payment. See [SPEC.md](SPEC.md) for the product decisions and [authentication options](#native-poppy-and-compatibility-access) for native and compatibility integrations.
+
+**Built with:** React + Vite · TypeScript · Express · SQLite · Sharp · JOSE · Stripe · Prodigi · Resend
 
 ## Run locally
 
@@ -31,7 +59,7 @@ npm run test:e2e
 
 The reference client in `scripts/agent.ts` does discovery, issuer verification, signed client/session assertions, DPoP, upload, proposal, approval, demo payment and shipment, and checks both captured emails. Without `--approve-demo`, it stops at the approval summary. Its local identity is deliberately available only in demo mode; real agents publish and manage their own keys.
 
-Automated integration tests exercise the real Express API and temporary SQLite database. Provider-contract tests intercept requests: they validate payloads and error handling but do **not** prove real provider acceptance. Live Stripe, Prodigi and Resend integration remains unverified without accounts/keys.
+Automated integration tests exercise the real Express API and temporary SQLite database. Provider-contract tests intercept requests: they validate payloads and error handling but do **not** prove real provider acceptance. A passing local test suite does not verify a deployment’s credentials, payment capture, provider acceptance or email delivery. Verify those separately for your own installation.
 
 ## Connect accounts (sandbox first)
 
@@ -50,7 +78,7 @@ The card stays at **Stripe-hosted Checkout**. An agent with an authorized card m
 
 ## Prices, email and delivery
 
-- US/USD only, 4×6 prints, maximum 100 prints per order.
+- US/USD only. 4×6 lustre photo prints (up to 100 per order), or one 12×16 matte poster print for $35. Products are ordered separately.
 - $12 for 1–5 prints, then $0.50 per additional print through 100. US Budget shipping is $5 below a $25 merchandise subtotal and free at $25 or more; customer tax is added before approval. Shared constants in `src/offer.ts` power the site and quotes. Supplier costs, conservative tax/fee allowances and a $1 operating reserve that exceed pre-tax revenue stop the quote instead of silently increasing the price. See [pricing research](docs/PRICING-RESEARCH.md).
 - Quotes expire in 15 minutes. The approved checkout expires roughly one hour after creation. Changing address/photos/quantities requires a new proposal and fresh approval.
 - Payment confirmation email contains the full shipping address, total, order link and available estimate. Every shipped package gets a shipment email; newly available tracking generates an update. All packages remain visible on the order page.
@@ -62,7 +90,7 @@ The public example uses Vercel for the React website and same-origin rewrites to
 
 `vercel.json` contains the example backend's **public URL only**. Forks must replace that URL with their own Railway service. Set provider credentials only on Railway; Vercel needs no provider secrets. Keep one backend replica and mount the persistent volume before deploying. In Railway service settings, connect the `main` branch, use the detected Dockerfile, set the health check to `/api/health`, and keep serverless sleeping disabled. New services no longer support Railway config-as-code. Railway mounts volumes as root: this deployment sets `RAILWAY_RUN_UID=0` so the service can write its private volume.
 
-The hosted example starts in `APP_MODE=demo`: payments, prints and emails are simulated. Provider activation is a separate step; deploying the site does not enable live transactions. Use a separate data directory or volume when switching from demo to live.
+New installations default to `APP_MODE=demo`: payments, prints and emails are simulated. The public store can accept real orders; check `/api/catalog` for its current mode and availability. Deploying a fork does not enable live transactions. Use separate credentials and storage when switching from demo to live.
 
 ## Deployment and operations
 
@@ -98,7 +126,7 @@ Frontend + Poppy API → SQLite order/approval + durable jobs
 
 ## Assets and references
 
-Poppy flower supplied by the project owner. Decorative sample photography is from Unsplash: [lake source](https://images.unsplash.com/photo-1470770841072-f978cf4d019e), [landscape source](https://images.unsplash.com/photo-1500530855697-b586d89ba3ee), [mountain source](https://images.unsplash.com/photo-1464822759023-fed622ff2c3b). These are illustrative samples, never customer uploads. Fonts: [Young Serif](https://fonts.google.com/specimen/Young+Serif) and [Hanken Grotesk](https://fonts.google.com/specimen/Hanken+Grotesk), self-hosted with OFL licenses.
+Brand and sample artwork use abstract orange, red and yellow poppies. The homepage screenshot above shows the public storefront; sample artwork is illustrative, never a customer upload. Fonts: [Young Serif](https://fonts.google.com/specimen/Young+Serif) and [Hanken Grotesk](https://fonts.google.com/specimen/Hanken+Grotesk), self-hosted with OFL licenses.
 
 [Poppy spec](https://personalagentprotocol.org/docs/spec) · [operations](https://personalagentprotocol.org/docs/extensions/operations) · [Prodigi API](https://www.prodigi.com/print-api/docs/reference/) · [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment)
 
