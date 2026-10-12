@@ -515,8 +515,8 @@ Content-Type: application/json
       <p>
         <code>POST /api/orders</code> with an <code>Idempotency-Key</code>,
         product, email, full US shipping address and photo items. Use{" "}
-        <code>contain</code> to preserve the image with white borders, or{" "}
-        <code>cover</code> for a center crop.
+        <code>cover</code> (the default) for edge-to-edge prints with a center crop. Use{" "}
+        <code>contain</code> only when the user wants the whole image with white margins.
       </p>
       <p>
         Show <code>operation.summary</code> verbatim, with the returned
@@ -695,14 +695,14 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
     );
   const stages = ["paid", "printing", "shipped"];
   const labels: Record<string, string> = {
-    awaiting_payment: "One last little step.",
+    awaiting_payment: "Payment pending.",
     expired: "This checkout has expired.",
-    paid: "Your good ones are ordered.",
-    submitted: "Off to the print lab.",
-    printing: "Your memories are taking shape.",
+    paid: "Your print order has been placed.",
+    submitted: "Your print order has been placed.",
+    printing: "Your print order has been placed.",
     partially_shipped: "Your prints are on their way.",
-    shipped: "Happy mail is on its way.",
-    attention: "Your prints need a little attention.",
+    shipped: "Your prints have shipped.",
+    attention: "Your order needs attention.",
     cancelled: "An update on your order.",
   };
   const step =
@@ -722,11 +722,6 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
         </div>
       )}
       <div className="order-heading">
-        <p className="eyebrow">
-          {checkout
-            ? "03 / THE CHECKOUT"
-            : "A LITTLE SOMETHING TO LOOK FORWARD TO"}
-        </p>
         <h1>
           {checkout
             ? "Ready when you are."
@@ -735,7 +730,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
         <p>
           {checkout
             ? "In a live order, your agent uses its card on Stripe’s secure checkout page."
-            : "We’ll email you as your photos make their way home."}
+            : "We’ll email you when your prints ship."}
         </p>
       </div>
       {error && (
@@ -821,7 +816,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
                 <div className="shipment" key={s.id}>
                   <h3>
                     {s.status === "Shipped"
-                      ? "A package of good memories."
+                      ? "Your package has shipped."
                       : "Preparing your package."}
                   </h3>
                   <p>

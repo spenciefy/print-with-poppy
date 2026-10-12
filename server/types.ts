@@ -22,7 +22,7 @@ export const proposalSchema = z
           .object({
             photoId: short,
             quantity: z.number().int().min(1).max(100),
-            fit: z.enum(["contain", "cover"]).default("contain"),
+            fit: z.enum(["contain", "cover"]).default("cover"),
           })
           .strict(),
       )
