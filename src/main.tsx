@@ -817,10 +817,14 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
                   <h3>
                     {s.status === "Shipped"
                       ? "Your package has shipped."
-                      : "Preparing your package."}
+                      : s.status === "Cancelled"
+                        ? "Shipment cancelled."
+                        : "Not yet shipped."}
                   </h3>
                   <p>
-                    {s.carrier?.name || "Carrier pending"} · {s.status}
+                    {s.carrier?.name
+                      ? `${s.status === "Shipped" ? "Carrier" : "Planned carrier"}: ${s.carrier.name}`
+                      : "Carrier not assigned"}
                   </p>
                   <p>
                     {s.tracking?.number
