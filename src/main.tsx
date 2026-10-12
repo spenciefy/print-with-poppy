@@ -29,7 +29,6 @@ function Header({ config }: { config: Config }) {
     <header>
       <Brand />
       <nav aria-label="Main navigation">
-        <a href="/#how-it-works">How it works</a>
         <a href="/for-agents">
           For agents <Arrow />
         </a>
@@ -46,7 +45,7 @@ function Footer() {
   return (
     <footer>
       <Brand />
-      <p>A little less scrolling. A little more holding.</p>
+      <p>4 × 6 photo prints, ordered by your agent.</p>
       <div>
         <a href="/privacy">Photo privacy</a>
         <a
@@ -63,9 +62,10 @@ function Footer() {
 function Home({ config }: { config: Config }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
-  const prompt = config.mode === "demo"
-    ? `Try the photo-printing demo at ${config.origin}. Follow its Personal Agent Protocol instructions. Use sample photos and fictional shipping details. Show me the photos, crops, full shipping address, email, delivery estimate and total for approval, then simulate checkout. This demo does not charge cards or print photos. Never enter real card details.`
-    : `Use ${config.origin} to order my photos as 4×6 prints delivered to my home. Follow its Personal Agent Protocol instructions. Show me the photos, crop choices, full shipping address, email, delivery estimate and total including shipping and tax for approval. After I approve, use your authorized card at checkout.`;
+  const prompt =
+    config.mode === "demo"
+      ? `Try the photo-printing demo at ${config.origin}. Follow its Personal Agent Protocol instructions. Use sample photos and fictional shipping details. Show me the photos, crops, full shipping address, email, delivery estimate and total for approval, then simulate checkout. This demo does not charge cards or print photos. Never enter real card details.`
+      : `Use ${config.origin} to order my photos as 4×6 prints delivered to my home. Follow its Personal Agent Protocol instructions. Show me the photos, crop choices, full shipping address, email, delivery estimate and total including shipping and tax for approval. After I approve, use your authorized card at checkout.`;
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -77,147 +77,71 @@ function Home({ config }: { config: Config }) {
   }
   return (
     <>
-      <main>
-        {config.mode === "demo" && (
-          <p className="demo-banner">You’re exploring a demo. Payments, printing and emails are simulated. <a href="/demo">Try it out ↗</a></p>
-        )}
-        <section className="hero">
-          <div className="hero-copy">
-            <div className="eyebrow">
-              <span className="tiny-flower">✳</span> FROM YOUR CAMERA ROLL, WITH
-              LOVE
-            </div>
-            <h1>
-              Print out
-              <br />
-              your <em>memories.</em>
-            </h1>
-            <p className="intro">
-              The good ones deserve more than a screen.
-              <br className="desktop" /> Ask your personal agent to turn your
-              favorite photos into real prints, delivered to your door.
-            </p>
-            <button className="primary copy-button" onClick={copy}>
-              <span>
-                {copied
-                  ? "Copied. Over to your agent!"
-                  : "Copy instructions for my agent"}
-              </span>
-              <span aria-hidden="true">{copied ? "✓" : "↗"}</span>
-            </button>
-            <p className="under-button" aria-live="polite">
-              {copied
-                ? "Paste them into your agent, then share your photos."
-                : "Your photos. Your agent. A little Poppy magic."}
-            </p>
-            <details className="prompt-details" open={!!error}>
-              <summary>What am I copying?</summary>
-              <p>{prompt}</p>
-              {error && <p role="alert">{error}</p>}
-            </details>
-          </div>
-          <div
-            className="photo-scene"
-            aria-label="A collection of printed landscape memories"
+      <main className="home-minimal">
+        <section className="home-intro" aria-labelledby="home-title">
+          <p className="home-label">4 × 6 photo prints · Home delivery</p>
+          <h1 id="home-title">
+            Print out your
+            <br />
+            <em>memories.</em>
+          </h1>
+          <p className="home-description">
+            Send your photos to your personal agent.
+            <br />
+            We’ll print them and ship them to you.
+          </p>
+          <button
+            className="primary home-copy"
+            onClick={copy}
+            disabled={
+              config.mode === "loading" || config.mode === "unavailable"
+            }
           >
-            <figure className="print print-back">
-              <img src="/photos/mountain.jpg" alt="Sunlit mountain peaks" />
-              <figcaption>somewhere up there</figcaption>
-            </figure>
-            <figure className="print print-front">
-              <img
-                src="/photos/lake.jpg"
-                alt="A quiet lake reflecting mountains at sunset"
-              />
-              <figcaption>one of those days.</figcaption>
-            </figure>
-            <figure className="print print-small">
-              <img src="/photos/summer.jpg" alt="A golden summer landscape" />
-              <figcaption>more of this, please.</figcaption>
-            </figure>
-            <div className="print-stamp">
-              <span>REAL PHOTOS</span>
-              <strong>4 × 6</strong>
-              <span>HAPPY MAIL</span>
-            </div>
-            <img className="scene-poppy" src="/poppy.png" alt="" />
+            <span>
+              {copied
+                ? "Instructions copied"
+                : "Copy instructions for your agent"}
+            </span>
+            <Arrow />
+          </button>
+          <div className="home-status" aria-live="polite">
+            {config.mode === "demo" ? (
+              <>
+                Demo only. No payments or prints.{" "}
+                <a href="/demo">Try the demo</a>
+              </>
+            ) : config.mode === "loading" ? (
+              "Checking availability…"
+            ) : config.mode === "unavailable" ? (
+              "Ordering is temporarily unavailable. Please refresh to try again."
+            ) : (
+              "4 × 6 inches · Lustre finish · Ships within the US"
+            )}
           </div>
+          <details className="prompt-details" open={!!error}>
+            <summary>View instructions</summary>
+            <p>{prompt}</p>
+            {error && <p role="alert">{error}</p>}
+          </details>
         </section>
-        <section className="ticker" aria-label="Print details">
-          <span>4 × 6 photo prints</span>
-          <span aria-hidden="true">✳</span>
-          <span>Printed with care</span>
-          <span aria-hidden="true">✳</span>
-          <span>Delivered to your door</span>
-          <span aria-hidden="true">✳</span>
-          <span>Ordered by your agent</span>
-        </section>
-        <section className="how" id="how-it-works">
-          <div className="section-heading">
-            <p className="eyebrow">LESS ADMIN. MORE ALBUM.</p>
-            <h2>
-              You make the memories.
-              <br />
-              Your agent does the rest.
-            </h2>
-          </div>
-          <ol className="steps">
-            <li>
-              <span className="step-number">01</span>
-              <h3>Pick your good ones.</h3>
-              <p>
-                Send your favorite photos to your personal agent. Holidays,
-                everyday things, that very good dog.
-              </p>
-            </li>
-            <li>
-              <span className="step-number">02</span>
-              <h3>Give it the go-ahead.</h3>
-              <p>
-                Your agent shows you the prints, delivery address, and full
-                price. Nothing gets ordered without your approval.
-              </p>
-            </li>
-            <li>
-              <span className="step-number">03</span>
-              <h3>Make room on the fridge.</h3>
-              <p>
-                Your agent checks out. We print, pack, and send a little
-                happiness your way—with updates in your inbox.
-              </p>
-            </li>
-          </ol>
-        </section>
-        <section className="note-section">
-          <div className="little-note">
-            <img src="/poppy.png" alt="" />
+        <section
+          className="home-process"
+          id="how-it-works"
+          aria-labelledby="process-title"
+        >
+          <h2 id="process-title">Before we print.</h2>
+          <div>
             <p>
-              Not another thousand photos
-              <br />
-              you’ll forget to look at.
+              Your agent shows you the photos, crops, shipping address and
+              total. You approve the order, then pay by card.
             </p>
-            <span>A few you’ll love to live with.</span>
-          </div>
-          <div className="note-copy">
-            <p className="eyebrow">A SMALL STORE. AN OPEN IDEA.</p>
-            <h2>
-              A friend to
-              <br />
-              your personal agent.
-            </h2>
             <p>
-              Poppy is an open protocol that helps personal agents work with
-              real businesses. This is our little corner of it: turning pixels
-              into something you can hold.
+              Prodigi prints and ships. We email your confirmation and tracking
+              when it’s available.
             </p>
             <a className="text-link" href="/for-agents">
-              See how it works for agents <Arrow />
+              Built on Personal Agent Protocol <Arrow />
             </a>
-            {config.mode === "demo" && (
-              <a className="text-link secondary-link" href="/demo">
-                Walk through a demo order <Arrow />
-              </a>
-            )}
           </div>
         </section>
       </main>
@@ -1024,7 +948,9 @@ function App() {
   useEffect(() => {
     api("/api/config")
       .then(setConfig)
-      .catch(() => {});
+      .catch(() =>
+        setConfig((current) => ({ ...current, mode: "unavailable" })),
+      );
   }, []);
   const route = window.location.pathname;
   return (
