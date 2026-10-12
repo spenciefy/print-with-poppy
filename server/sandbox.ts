@@ -19,7 +19,7 @@ Origin: ${config.origin}. Test guide: ${config.origin}/sandbox. Read /api/config
 3. Call proposeOrder with a JSON object, an Idempotency-Key, email, address, items and optional product. Show the returned summary and obtain explicit approval through your interface. Confirm the operation through the Operations extension with the approved revision; poll until succeeded. This means checkout is prepared, not paid.
 4. Call simulatePayment with result.data.order_id. No card details, Stripe visit or real payment. Poll getOrder until printing.
 5. Call simulateShipment with the same order ID, then poll getOrder and getSandboxEmails until shipped and two captured emails are available. Carrier and tracking are simulated. No mail reaches an inbox. Payment/shipment simulation is safe to repeat on the same order.
-6. Optional account flow: use mediated sign-in with a unique synthetic @example.com, @example.org or @example.net email and requested scopes. Use getSandboxSignInEmail with the returned challenge id to retrieve your session's captured code, complete the challenge, and exchange the account token for a signed-in session token. Place a new order while signed in, then read getAccountOrders. This simulates email ownership, not real identity verification. Browser direct sign-in is not advertised in the sandbox.
+6. Optional account flow: use mediated sign-in with a unique synthetic @example.com, @example.org or @example.net email and requested scopes. Use getSandboxSignInEmail with the returned challenge id to retrieve your session's captured code, complete the challenge, and exchange the account token for a signed-in session token. Place a new order while signed in, then read listAccountOrders. This simulates email ownership, not real identity verification. Browser direct sign-in is not advertised in the sandbox.
 The /demo route is a scripted visual walkthrough, not this API test environment. Production at https://printwithpoppy.com is live. Never send sandbox tokens or test calls there. Test data may be reset.
 `;
 const security = [{ DPoP: [] }];
@@ -190,7 +190,7 @@ export function sandboxRoutes(app: Express) {
       res.json({ keys: [key] }),
     );
   }
-  app.get(["/", "/sandbox"], (_req, res) =>
+  app.get(["/", "/sandbox", "/for-agents"], (_req, res) =>
     res
       .type("html")
       .send(

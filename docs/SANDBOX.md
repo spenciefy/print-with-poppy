@@ -49,7 +49,7 @@ A suggested agent prompt:
 
 Sandbox advertises **mediated sign-in**. Start it using a native signed-out session, a unique email at `example.com`, `example.org`, or `example.net`, and `poppy:read poppy:write` scopes. Other email domains are rejected. This is a simulation of email ownership, not verification of a real address.
 
-The response contains `sign_in_id`. Call `getSandboxSignInEmail` (GET `/api/sandbox/sign-in/{id}/email`) in that same session, read the captured code, and complete the mediated challenge normally. This endpoint refuses other sessions, consumed challenges and expired challenges. Exchange the returned account token for a signed-in session token, create a new order, and call `getAccountOrders`. Guest orders are not retroactively linked. Do not log or share tokens or OTPs.
+The response contains `sign_in_id`. Call `getSandboxSignInEmail` (GET `/api/sandbox/sign-in/{id}/email`) in that same session, read the captured code, and complete the mediated challenge normally. This endpoint refuses other sessions, consumed challenges and expired challenges. Exchange the returned account token for a signed-in session token, create a new order, and call `listAccountOrders`. Guest orders are not retroactively linked. Do not log or share tokens or OTPs.
 
 Direct browser sign-in is not advertised in the hosted sandbox. Production OTP delivery remains real and never exposes this test-only endpoint.
 
