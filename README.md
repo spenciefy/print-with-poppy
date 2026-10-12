@@ -60,7 +60,7 @@ The card stays at **Stripe-hosted Checkout**. An agent with an authorized card m
 
 The public example uses Vercel for the React website and same-origin rewrites to a single Railway service. Railway owns the API, background worker, SQLite database and private images on a persistent `/app/.data` volume. `PUBLIC_URL` is the Vercel custom domain, so discovery, DPoP proofs, checkout returns and signed media URLs all use the same origin.
 
-`vercel.json` contains the example backend's **public URL only**. Forks must replace that URL with their own Railway service. Set provider credentials only on Railway; Vercel needs no provider secrets. Keep one backend replica and mount the persistent volume before deploying. `railway.json` configures Docker builds and health checks. Railway mounts volumes as root: this deployment sets `RAILWAY_RUN_UID=0` so the service can write its private volume.
+`vercel.json` contains the example backend's **public URL only**. Forks must replace that URL with their own Railway service. Set provider credentials only on Railway; Vercel needs no provider secrets. Keep one backend replica and mount the persistent volume before deploying. In Railway service settings, connect the `main` branch, use the detected Dockerfile, set the health check to `/api/health`, and keep serverless sleeping disabled. New services no longer support Railway config-as-code. Railway mounts volumes as root: this deployment sets `RAILWAY_RUN_UID=0` so the service can write its private volume.
 
 The hosted example starts in `APP_MODE=demo`: payments, prints and emails are simulated. Provider activation is a separate step; deploying the site does not enable live transactions. Use a separate data directory or volume when switching from demo to live.
 

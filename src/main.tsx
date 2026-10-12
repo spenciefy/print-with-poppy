@@ -63,7 +63,9 @@ function Footer() {
 function Home({ config }: { config: Config }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
-  const prompt = `Use ${config.origin} to order my photos as 4×6 prints delivered to my home. Follow its Personal Agent Protocol instructions. Show me the photos, crop choices, full shipping address, email, delivery estimate and total including shipping and tax for approval. After I approve, use your authorized card at checkout.`;
+  const prompt = config.mode === "demo"
+    ? `Try the photo-printing demo at ${config.origin}. Follow its Personal Agent Protocol instructions. Use sample photos and fictional shipping details. Show me the photos, crops, full shipping address, email, delivery estimate and total for approval, then simulate checkout. This demo does not charge cards or print photos. Never enter real card details.`
+    : `Use ${config.origin} to order my photos as 4×6 prints delivered to my home. Follow its Personal Agent Protocol instructions. Show me the photos, crop choices, full shipping address, email, delivery estimate and total including shipping and tax for approval. After I approve, use your authorized card at checkout.`;
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -76,6 +78,9 @@ function Home({ config }: { config: Config }) {
   return (
     <>
       <main>
+        {config.mode === "demo" && (
+          <p className="demo-banner">You’re exploring a demo. Payments, printing and emails are simulated. <a href="/demo">Try it out ↗</a></p>
+        )}
         <section className="hero">
           <div className="hero-copy">
             <div className="eyebrow">
