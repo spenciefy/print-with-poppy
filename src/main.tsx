@@ -273,6 +273,14 @@ function Footer({ compact = false }: { compact?: boolean }) {
               <a href="/for-agents">see the integration guide</a>.
             </p>
           </Faq>
+          <Faq title="Can my agent see previous orders?">
+            <p>
+              Yes. Ask your agent to sign in with your email. Verify a one-time
+              code and approve access; orders you place while signed in will be
+              saved to your account. You can disconnect through your agent at
+              any time. Guest ordering still works without an account.
+            </p>
+          </Faq>
           <Faq title="When will my prints arrive?">
             <p>
               Allow an estimated 7–12 business days after payment for US home
@@ -546,6 +554,20 @@ function Guide({ config }: { config: Config }) {
         native client allowlist. Native Poppy agents should use the session
         above. Muse and Instinct have not yet been verified end to end.
       </p>
+      <h3>Optional: sign in to save and view orders</h3>
+      <p>
+        Use <code>auth.direct</code> for a browser sign-in with email OTP and
+        consent, or <code>auth.mediated</code> to enter an email and then the
+        code through your agent. Request <code>poppy:read</code> for history and
+        <code>poppy:write</code> to save new orders. Get the user’s permission
+        first.
+      </p>
+      <p>
+        Read <code>GET /api/account/orders</code> with a signed-in session. Keep
+        the Account Token private and use it to renew sessions at
+        <code> /oauth/token</code>. Disconnect at <code>/oauth/revoke</code>.
+        Older guest orders are not automatically linked.
+      </p>
       <h2>3. Upload the user’s photos</h2>
       <p>
         <code>POST /api/photos</code> with multipart field <code>photo</code>.
@@ -636,6 +658,15 @@ function Privacy({ config }: { config: Config }) {
         information it needs to fulfill your order. Resend delivers order and
         shipment emails. We retain order and transaction records to support your
         purchase.
+      </p>
+      <h3>Optional accounts</h3>
+      <p>
+        We verify your email with a one-time code sent by Resend. With your
+        permission, a connected personal agent can view your account’s order
+        history. New orders placed while signed in are linked to your account;
+        existing guest orders are not automatically linked. Disconnect through
+        your agent to revoke access. Sign-in requests expire in minutes, and
+        account access expires after 30 days unless you sign in again.
       </p>
       <h3>Questions or deletion requests</h3>
       <p>

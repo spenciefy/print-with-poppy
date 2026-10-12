@@ -21,7 +21,9 @@ import {
   type Session,
   type Order,
 } from "./types.js";
+import { requireAccount } from "./accounts.js";
 export async function propose(body: unknown, session: Session, key: string) {
+  if (session.accountId) requireAccount(session, "poppy:write");
   if (!session.extensions)
     throw new HttpError(
       403,
@@ -39,6 +41,20 @@ export async function propose(body: unknown, session: Session, key: string) {
   const requestKey = `${session.id}:${key}`;
   const existing = get("proposal_key", requestKey);
   if (existing) {
+    const previous = requireRecord<Operation>(
+      "operation",
+      existing.operationId,
+      session.id,
+    );
+    if (
+      previous.terms.accountId &&
+      requireAccount(session, "poppy:write") !== previous.terms.accountId
+    )
+      throw new HttpError(
+        403,
+        "sign_in_required",
+        "Sign in to the account that proposed this order.",
+      );
     if (existing.request !== JSON.stringify(p))
       throw new HttpError(
         409,
@@ -63,6 +79,7 @@ export async function propose(body: unknown, session: Session, key: string) {
     ...price,
     id: id("quote"),
     owner: session.id,
+    accountId: session.accountId,
     created,
     expires: created + 15 * 60000,
     currency: "USD",
@@ -130,6 +147,7 @@ export function operationView(op: Operation) {
     terms: {
       ...view.terms,
       owner: undefined,
+      accountId: undefined,
     },
   };
 }
@@ -157,6 +175,7 @@ export function confirm(
       id: id("ord"),
       owner,
       operationId: opId,
+      accountId: op.terms.accountId,
       quote: op.terms,
       created: Date.now(),
       status: "awaiting_payment",
@@ -231,6 +250,7 @@ export function orderView(o: Order) {
       ...o.quote,
       owner: undefined,
       taxCalculationId: undefined,
+      accountId: undefined,
       previews: o.quote.previews.map((p) => ({
         ...p,
         url: mediaUrl(p.photoId, mediaVariant(o.quote.product, p.fit)),

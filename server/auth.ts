@@ -9,6 +9,12 @@ import type { Request } from "express";
 import { config } from "./config.js";
 import { get, put, once, id, hash, HttpError } from "./store.js";
 import type { Session } from "./types.js";
+import {
+  activeGrant,
+  sessionToken,
+  refreshAccount,
+  exchangeCode,
+} from "./accounts.js";
 const cache = new Map<string, { expires: number; metadata: any; keys: any }>();
 const bad = (message = "Invalid agent identity.") =>
   new HttpError(401, "invalid_client", message);
@@ -27,7 +33,11 @@ export async function client(clientId: string) {
     const key = get("demo-key", "identity");
     if (key)
       return {
-        metadata: { extensions: { operations: { version: "1" } } },
+        metadata: {
+          client_name: "Demo Personal Agent",
+          redirect_uris: [`${config.origin}/api/demo/callback`],
+          extensions: { operations: { version: "1" } },
+        },
         keys: createLocalJWKSet({ keys: [key.public] }),
       };
   }
@@ -143,11 +153,17 @@ export async function dpop(
 }
 export async function issueToken(req: Request) {
   const b = req.body;
-  if (b.grant_type !== "urn:ietf:params:oauth:grant-type:jwt-bearer")
+  if (
+    ![
+      "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      "refresh_token",
+      "authorization_code",
+    ].includes(b.grant_type)
+  )
     throw new HttpError(
       400,
       "unsupported_grant_type",
-      "Only guest JWT bearer sessions are supported.",
+      "Unsupported token grant.",
     );
   if (
     b.client_assertion_type !==
@@ -164,19 +180,36 @@ export async function issueToken(req: Request) {
       b.client_id,
       audience,
     );
-    sa = await verifyAssertion(
-      b.assertion,
-      c.keys,
-      b.client_id,
-      audience,
-      true,
-    );
+    if (b.grant_type === "urn:ietf:params:oauth:grant-type:jwt-bearer") {
+      sa = await verifyAssertion(
+        b.assertion,
+        c.keys,
+        b.client_id,
+        audience,
+        true,
+      );
+    }
   } catch {
     throw bad();
   }
   const thumb = await dpop(req.get("DPoP"), "POST", audience);
-  if (!sa.sub || sa.sub.length > 256) throw bad();
   once(`assertion:${b.client_id}:${ca.jti}`, ca.exp! * 1000);
+  if (b.resource)
+    throw new HttpError(
+      400,
+      "invalid_target",
+      "Resource-specific tokens are not supported.",
+    );
+  if (b.grant_type === "refresh_token")
+    return refreshAccount(b, thumb, c.metadata);
+  if (b.grant_type === "authorization_code") return exchangeCode(b, thumb);
+  if (b.scope)
+    throw new HttpError(
+      400,
+      "invalid_scope",
+      "Account scopes require sign-in.",
+    );
+  if (!sa?.sub || sa.sub.length > 256) throw bad();
   once(`assertion:${b.client_id}:${sa.jti}`, sa.exp! * 1000);
   let session: Session | undefined = b.session_id
     ? get("session", b.session_id)
@@ -200,20 +233,13 @@ export async function issueToken(req: Request) {
     };
     put("session", session.id, session);
   }
-  const access = id("tok");
-  put("token", hash(access), {
-    sessionId: session.id,
-    thumb,
-    expires: Date.now() + 3600000,
-  });
-  return {
-    access_token: access,
-    token_type: "DPoP",
-    expires_in: 3600,
-    scope: "",
-    session_id: session.id,
-    signed_in: false,
-  };
+  if (activeGrant(session.grantId))
+    throw new HttpError(
+      400,
+      "invalid_grant",
+      "Renew a signed-in session with its Account Token.",
+    );
+  return sessionToken(session, thumb);
 }
 export function compatibilitySession() {
   const token = id("guest");
@@ -286,5 +312,17 @@ export async function authenticate(req: Request): Promise<Session> {
     );
   const session = get<Session>("session", record.sessionId);
   if (!session) throw new HttpError(401, "invalid_token", "Session not found.");
-  return session;
+  // A signed-out token never inherits a later sign-in. Revocation takes effect now.
+  const grant =
+    record.grantId === session.grantId
+      ? activeGrant(record.grantId)
+      : undefined;
+  return {
+    ...session,
+    accountId: grant ? record.accountId : undefined,
+    scopes: grant
+      ? record.scopes.filter((scope: string) => grant.scopes.includes(scope))
+      : [],
+    proofThumb: thumb,
+  };
 }

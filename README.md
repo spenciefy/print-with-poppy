@@ -72,7 +72,7 @@ Automated integration tests exercise the real Express API and temporary SQLite d
 7. Start with `APP_MODE=sandbox`. Prodigi sandbox never prints; Stripe test mode never charges. The startup checks reject test/live Stripe key mismatches and incomplete provider configuration. Use separate keys and storage for live.
 8. Validate one sandbox order, email delivery and the webhook lifecycle. Then switch to live credentials, order a physical sample with explicit purchase authorization, and check print/crop/color quality and delivered price before inviting customers.
 
-Poppy operations v1 is required for ordering. Guest sessions need no customer login. There are no account-token, MCP, company-chatbot or browser-session capabilities advertised. `revocation_endpoint` is present for metadata compliance but this service never issues account tokens. An approved operation succeeds when checkout has been prepared; payment and fulfillment are separate order states.
+Poppy operations v1 is required for ordering. Guest sessions need no customer login. Optional customer accounts support native Poppy direct sign-in (email OTP, consent and PKCE) and mediated sign-in (email, then OTP). Account tokens support refresh and immediate revocation. MCP, company-chatbot and browser-session capabilities are not advertised. See [Customer accounts](docs/ACCOUNTS.md) for the flow and security boundaries. An approved operation succeeds when checkout has been prepared; payment and fulfillment are separate order states.
 
 The card stays at **Stripe-hosted Checkout**. An agent with an authorized card may complete the page. Issuer authentication can require the user. No raw-card or direct-charge endpoint exists.
 

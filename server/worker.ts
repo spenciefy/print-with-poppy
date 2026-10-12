@@ -11,6 +11,7 @@ import {
 import { paid } from "./commerce.js";
 import { emailFor, safeUrl } from "./email.js";
 import type { Order, Operation, Photo, Shipment } from "./types.js";
+import { cleanupSignIns } from "./accounts.js";
 let running = false;
 export function syncProvider(orderId: string, provider: any) {
   db.transaction(() => {
@@ -234,6 +235,7 @@ export async function tick() {
   }
 }
 export async function housekeeping() {
+  cleanupSignIns();
   for (const o of all<Order>("order")) {
     if (o.checkoutId && !o.paidAt && o.status === "awaiting_payment")
       enqueue(

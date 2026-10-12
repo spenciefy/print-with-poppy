@@ -1,4 +1,4 @@
-import { test, before, after } from "node:test";
+import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -13,7 +13,11 @@ process.env.APP_MODE = "demo";
 process.env.DATA_DIR = temp;
 process.env.NO_LISTEN = "1";
 process.env.PUBLIC_URL = "http://localhost:8791";
-const { app } = await import("../server/index.js");
+const { app, limiter, oauthLimiter } = await import("../server/index.js");
+beforeEach(() => {
+  limiter.resetKey("127.0.0.1");
+  oauthLimiter.resetKey("127.0.0.1");
+});
 const store = await import("../server/store.js");
 const commerce = await import("../server/commerce.js");
 const worker = await import("../server/worker.js");
@@ -49,12 +53,15 @@ async function makeAgent(user = randomUUID()) {
       .setJti(randomUUID())
       .sign(pair.privateKey);
   }
-  async function assertion(subject: string) {
+  async function assertion(
+    subject: string,
+    audience = origin + "/oauth/token",
+  ) {
     return new SignJWT({})
       .setProtectedHeader({ alg: "ES256", kid: "demo" })
       .setIssuer(clientId)
       .setSubject(subject)
-      .setAudience(origin + "/oauth/token")
+      .setAudience(audience)
       .setIssuedAt()
       .setExpirationTime("60s")
       .setJti(randomUUID())
@@ -89,7 +96,7 @@ async function makeAgent(user = randomUUID()) {
         Authorization: `DPoP ${session.access_token}`,
         DPoP: await proof(
           init.method || "GET",
-          origin + route,
+          origin + new URL(route, origin).pathname,
           session.access_token,
         ),
         ...init.headers,
@@ -97,7 +104,7 @@ async function makeAgent(user = randomUUID()) {
     });
     return { status: r.status, body: await r.json() };
   }
-  return { session, request, proof, token };
+  return { session, request, proof, token, assertion };
 }
 const address = {
   name: "Test Recipient",
@@ -910,14 +917,21 @@ test("discovery stays native while compatibility is documented separately", asyn
   for (const path of Object.values(native.paths) as any[]) {
     for (const operation of Object.values(path) as any[]) {
       for (const parameter of operation.parameters ?? []) {
-        assert.ok(!["dpop", "authorization"].includes(parameter.name.toLowerCase()));
+        assert.ok(
+          !["dpop", "authorization"].includes(parameter.name.toLowerCase()),
+        );
       }
     }
   }
-  assert.ok(native.paths["/api/orders"].post.parameters.some(
-    (p: any) => p.name === "Idempotency-Key" && p.required,
-  ));
-  assert.match(native.info.description, /No user account or interactive sign-in is needed/);
+  assert.ok(
+    native.paths["/api/orders"].post.parameters.some(
+      (p: any) => p.name === "Idempotency-Key" && p.required,
+    ),
+  );
+  assert.match(
+    native.info.description,
+    /No user account or interactive sign-in is needed/,
+  );
   const compat = await (
     await fetch(origin + "/api/compat/openapi.json")
   ).json();
@@ -948,4 +962,485 @@ test("discovery stays native while compatibility is documented separately", asyn
   } finally {
     config.compatibility = old;
   }
+});
+
+async function oauth(
+  a: Awaited<ReturnType<typeof makeAgent>>,
+  body: Record<string, string>,
+  route = "/oauth/token",
+) {
+  const r = await fetch(origin + route, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      DPoP: await a.proof("POST", origin + route),
+    },
+    body: new URLSearchParams({
+      ...body,
+      client_id: clientId,
+      client_assertion_type:
+        "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+      client_assertion: await a.assertion(clientId, origin + route),
+    }),
+  });
+  return {
+    status: r.status,
+    body: route === "/oauth/revoke" ? await r.text() : await r.json(),
+  };
+}
+const postJson = (body: unknown): RequestInit => ({
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+function otpFor(challenge: string) {
+  return store
+    .get("demo-signin-email", challenge)
+    .text.match(/code is (\d{6})/)[1];
+}
+async function login(
+  a: Awaited<ReturnType<typeof makeAgent>>,
+  email = `${randomUUID()}@example.com`,
+  scope = "poppy:read poppy:write",
+) {
+  const started = await a.request(
+    "/api/poppy/sign-in",
+    postJson({ scope, credentials: { email } }),
+  );
+  assert.equal(started.status, 200, JSON.stringify(started.body));
+  assert.equal(started.body.status, "code_required");
+  const code = otpFor(started.body.sign_in_id);
+  assert.ok(!JSON.stringify(started.body).includes(code));
+  const done = await a.request(
+    `/api/poppy/sign-in/${started.body.sign_in_id}`,
+    postJson({ code }),
+  );
+  assert.equal(done.body.status, "complete", JSON.stringify(done.body));
+  assert.equal(done.body.signed_in, true);
+  assert.equal(done.body.session_id, a.session.session_id);
+  return { ...done.body, challenge: started.body.sign_in_id, code };
+}
+
+test("email OTP signs in; token snapshots, account history, scopes, refresh and immediate revocation", async () => {
+  const f = await fixture(),
+    a = f.a,
+    oldToken = a.session.access_token;
+  assert.equal(
+    (await a.request("/api/account/orders")).body.error,
+    "sign_in_required",
+  );
+  const signed = await login(a);
+  // Merely signing in elsewhere in the session must not upgrade an old token.
+  assert.equal(
+    (await a.request("/api/account/orders")).body.error,
+    "sign_in_required",
+  );
+  a.session.access_token = signed.access_token;
+  assert.equal((await a.request("/api/account/orders")).body.orders.length, 0);
+  assert.equal(
+    (
+      await a.request(
+        `/api/poppy/sign-in/${signed.challenge}`,
+        postJson({ code: signed.code }),
+      )
+    ).body.status,
+    "failed",
+  );
+  const proposed = await a.request("/api/orders", {
+    ...postJson(f.proposal),
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": randomUUID(),
+    },
+  });
+  assert.equal(proposed.status, 202);
+  const confirmed = await a.request(
+    `/api/operations/${proposed.body.operation.operation_id}/confirm`,
+    postJson({ revision: 1, approved_by: "user" }),
+  );
+  assert.equal(confirmed.status, 200);
+  const orderId = confirmed.body.orderId;
+  const list = await a.request("/api/account/orders");
+  assert.equal(list.body.orders.length, 1);
+  assert.equal(list.body.orders[0].id, orderId);
+  assert.equal(list.body.orders[0].checkoutUrl, undefined);
+  const other = await makeAgent();
+  const otherSigned = await login(other);
+  other.session.access_token = otherSigned.access_token;
+  assert.equal(
+    (await other.request("/api/account/orders")).body.orders.length,
+    0,
+  );
+  assert.equal((await other.request(`/api/orders/${orderId}`)).status, 404);
+  const badSession = await oauth(other, {
+    grant_type: "refresh_token",
+    refresh_token: signed.refresh_token,
+    session_id: other.session.session_id,
+  });
+  assert.equal(badSession.body.error, "invalid_session");
+  const narrowed = await oauth(a, {
+    grant_type: "refresh_token",
+    refresh_token: signed.refresh_token,
+    scope: "poppy:read",
+  });
+  assert.equal(narrowed.body.signed_in, true);
+  assert.notEqual(narrowed.body.session_id, a.session.session_id);
+  a.session.access_token = narrowed.body.access_token;
+  assert.equal((await a.request(`/api/orders/${orderId}`)).status, 200);
+  assert.equal((await a.request("/api/account/orders")).body.orders.length, 1);
+  assert.equal(
+    (await a.request("/api/orders", postJson({}))).body.error,
+    "insufficient_scope",
+  );
+  const excessive = await oauth(a, {
+    grant_type: "refresh_token",
+    refresh_token: signed.refresh_token,
+    scope: "admin",
+  });
+  assert.equal(excessive.body.error, "invalid_scope");
+  assert.equal(
+    (await oauth(a, { token: signed.refresh_token }, "/oauth/revoke")).status,
+    200,
+  );
+  assert.equal(
+    (await a.request("/api/account/orders")).body.error,
+    "sign_in_required",
+  );
+  a.session.access_token = signed.access_token;
+  assert.equal(
+    (await a.request(`/api/orders/${orderId}`)).body.error,
+    "sign_in_required",
+  );
+  assert.equal(
+    (await a.request(`/api/operations/${proposed.body.operation.operation_id}`))
+      .body.error,
+    "sign_in_required",
+  );
+  assert.equal(
+    (
+      await oauth(a, {
+        grant_type: "refresh_token",
+        refresh_token: signed.refresh_token,
+      })
+    ).body.error,
+    "invalid_grant",
+  );
+  a.session.access_token = oldToken;
+  const guest = await a.token(a.session.session_id);
+  assert.equal(guest.signed_in, false);
+});
+
+test("OTP isolation, wrong-code limits, expiration, account mismatch and no token escalation", async () => {
+  const a = await makeAgent(),
+    b = await makeAgent();
+  const started = await a.request(
+    "/api/poppy/sign-in",
+    postJson({
+      scope: "poppy:read",
+      credentials: { email: `${randomUUID()}@example.com` },
+    }),
+  );
+  const route = `/api/poppy/sign-in/${started.body.sign_in_id}`;
+  assert.equal(
+    (
+      await b.request(
+        route,
+        postJson({ code: otpFor(started.body.sign_in_id) }),
+      )
+    ).status,
+    404,
+  );
+  const right = otpFor(started.body.sign_in_id),
+    wrong = right === "000000" ? "111111" : "000000";
+  for (let n = 0; n < 5; n++)
+    assert.equal(
+      (await a.request(route, postJson({ code: wrong }))).body.status,
+      n === 4 ? "failed" : "code_required",
+    );
+  assert.equal(
+    (await a.request(route, postJson({ code: right }))).body.status,
+    "failed",
+  );
+  const expired = await a.request(
+    "/api/poppy/sign-in",
+    postJson({
+      scope: "poppy:read",
+      credentials: { email: `${randomUUID()}@example.com` },
+    }),
+  );
+  const c = store.get("signin-code", expired.body.sign_in_id);
+  store.put("signin-code", c.id, { ...c, expires: 0 }, a.session.session_id);
+  assert.equal(
+    (
+      await a.request(
+        `/api/poppy/sign-in/${c.id}`,
+        postJson({ code: otpFor(c.id) }),
+      )
+    ).body.status,
+    "expired",
+  );
+  const signed = await login(a, `${randomUUID()}@example.com`, "poppy:read");
+  a.session.access_token = signed.access_token;
+  assert.equal(
+    (
+      await oauth(a, {
+        grant_type: "refresh_token",
+        refresh_token: signed.refresh_token,
+        scope: "poppy:read poppy:write",
+      })
+    ).body.error,
+    "invalid_scope",
+  );
+  const mismatch = await a.request(
+    "/api/poppy/sign-in",
+    postJson({
+      scope: "poppy:read",
+      credentials: { email: `${randomUUID()}@example.com` },
+    }),
+  );
+  assert.equal(
+    (
+      await a.request(
+        `/api/poppy/sign-in/${mismatch.body.sign_in_id}`,
+        postJson({ code: otpFor(mismatch.body.sign_in_id) }),
+      )
+    ).body.error,
+    "account_mismatch",
+  );
+  // Account-token expiry also removes account access from unexpired session tokens.
+  const grantId = store.hash(signed.refresh_token),
+    grant = store.get("account-token", grantId);
+  store.put("account-token", grantId, { ...grant, expires: 0 });
+  assert.equal(
+    (await a.request("/api/account")).body.error,
+    "sign_in_required",
+  );
+  assert.equal(
+    (
+      await oauth(a, {
+        grant_type: "refresh_token",
+        refresh_token: signed.refresh_token,
+      })
+    ).body.error,
+    "invalid_grant",
+  );
+});
+
+test("discovery advertises direct and mediated account access; compatibility cannot sign in", async () => {
+  const d = await (await fetch(origin + "/.well-known/poppy.json")).json();
+  assert.deepEqual(d.auth.direct.scopes, ["poppy:read", "poppy:write"]);
+  assert.equal(d.auth.mediated.endpoint, origin + "/api/poppy/sign-in");
+  const guest = await (
+    await fetch(origin + "/api/agent-sessions", postJson({}))
+  ).json();
+  const r = await fetch(origin + "/api/poppy/sign-in", {
+    ...postJson({
+      scope: "poppy:read",
+      credentials: { email: "test@example.com" },
+    }),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${guest.access_token}`,
+    },
+  });
+  assert.equal(r.status, 403);
+});
+
+test("direct sign-in requires cookie/CSRF, email OTP, explicit consent, exact callback and single-use PKCE code", async () => {
+  const a = await makeAgent(),
+    verifier = store.id("verifier") + store.id("more"),
+    state = randomUUID();
+  const q = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: origin + "/api/demo/callback",
+    scope: "poppy:read poppy:write",
+    state,
+    code_challenge: store.hash(verifier),
+    code_challenge_method: "S256",
+  });
+  const bad = new URLSearchParams(q);
+  bad.set("redirect_uri", "https://evil.example/callback");
+  assert.equal(
+    (await fetch(origin + "/oauth/authorize?" + bad, { redirect: "manual" }))
+      .status,
+    400,
+  );
+  const start = await fetch(origin + "/oauth/authorize?" + q);
+  assert.equal(start.headers.get("referrer-policy"), "same-origin");
+  const cookie = start.headers.get("set-cookie")!.split(";")[0];
+  const html = await start.text();
+  const flow = html.match(/name="flow" value="([^"]+)"/)![1],
+    csrf = html.match(/name="csrf" value="([^"]+)"/)![1];
+  async function browser(
+    route: string,
+    values: Record<string, string>,
+    useCookie = true,
+  ) {
+    return fetch(origin + route, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Origin: origin,
+        ...(useCookie ? { Cookie: cookie } : {}),
+      },
+      body: new URLSearchParams({ flow, csrf, ...values }),
+    });
+  }
+  assert.equal(
+    (
+      await browser(
+        "/oauth/authorize/email",
+        { email: "test@example.com" },
+        false,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await browser("/oauth/authorize/approve", {
+        decision: "approve",
+        scopes: "poppy:read",
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await browser("/oauth/authorize/email", {
+        email: `${randomUUID()}@example.com`,
+      })
+    ).status,
+    200,
+  );
+  const challenge = store.get("browser-signin", flow).challengeId;
+  const verified = await browser("/oauth/authorize/verify", {
+    code: otpFor(challenge),
+  });
+  assert.match(await verified.text(), /Allow access/);
+  const approval = await browser("/oauth/authorize/approve", {
+    decision: "approve",
+    scopes: "poppy:read",
+  });
+  assert.equal(approval.status, 303);
+  const callback = new URL(approval.headers.get("location")!);
+  assert.equal(callback.searchParams.get("state"), state);
+  assert.equal(callback.searchParams.get("iss"), origin);
+  const fields = {
+    grant_type: "authorization_code",
+    code: callback.searchParams.get("code")!,
+    redirect_uri: origin + "/api/demo/callback",
+    code_verifier: verifier,
+    session_id: a.session.session_id,
+  };
+  assert.equal(
+    (await oauth(a, { ...fields, code_verifier: "wrong" })).body.error,
+    "invalid_grant",
+  );
+  const token = await oauth(a, fields);
+  assert.equal(token.body.signed_in, true);
+  assert.equal(token.body.scope, "poppy:read");
+  assert.equal((await oauth(a, fields)).body.error, "invalid_grant");
+  assert.equal(
+    (
+      await browser("/oauth/authorize/approve", {
+        decision: "approve",
+        scopes: "poppy:read",
+      })
+    ).status,
+    403,
+  );
+  a.session.access_token = token.body.access_token;
+  assert.equal((await a.request("/api/account")).status, 200);
+});
+
+test("history pagination retains orders with identical timestamps and never matches email", async () => {
+  const a = await makeAgent(),
+    signed = await login(a);
+  a.session.access_token = signed.access_token;
+  const grant = store.get("account-token", store.hash(signed.refresh_token));
+  const sample = store.all<any>("order")[0];
+  for (let n = 0; n < 52; n++) {
+    const oid = `ord_history_${String(n).padStart(3, "0")}`;
+    store.put(
+      "order",
+      oid,
+      {
+        ...sample,
+        id: oid,
+        created: 1234,
+        accountId: grant.accountId,
+        checkoutUrl: "https://example.com/private-checkout",
+      },
+      "other-session",
+    );
+  }
+  const p1 = (await a.request("/api/account/orders")).body;
+  assert.equal(p1.orders.length, 50);
+  assert.ok(p1.next_cursor);
+  const p2 = (await a.request(`/api/account/orders?cursor=${p1.next_cursor}`))
+    .body;
+  assert.equal(p2.orders.length, 2);
+  assert.equal(p2.next_cursor, null);
+  assert.equal(new Set([...p1.orders, ...p2.orders].map((o) => o.id)).size, 52);
+  assert.ok(p1.orders.every((o: any) => !o.checkoutUrl));
+  assert.equal(
+    (await a.request("/api/account/orders?cursor=invalid")).status,
+    400,
+  );
+  const email = store.get("account", grant.accountId).email;
+  const guest = {
+    ...sample,
+    id: "ord_guest_unclaimed",
+    accountId: undefined,
+    quote: { ...sample.quote, email },
+  };
+  store.put("order", guest.id, guest, a.session.session_id);
+  assert.equal((await a.request("/api/account/orders")).body.orders.length, 50);
+});
+
+test("OTP email delivery failures and per-email rate limits fail closed", async () => {
+  const a = await makeAgent(),
+    email = `${randomUUID()}@example.com`;
+  const { config } = await import("../server/config.js");
+  const { startCode } = await import("../server/accounts.js");
+  const originalFetch = globalThis.fetch;
+  try {
+    config.demo = false;
+    globalThis.fetch = async () => new Response("Unavailable", { status: 503 });
+    await assert.rejects(
+      () => startCode(a.session.session_id, email, ["poppy:read"], clientId),
+      (e: any) => e.code === "email_unavailable",
+    );
+  } finally {
+    config.demo = true;
+    globalThis.fetch = originalFetch;
+  }
+  const failed = store.all<any>("signin-code", a.session.session_id)[0];
+  assert.equal(failed.used, true);
+  assert.equal(store.get("demo-signin-email", failed.id), undefined);
+  for (let n = 0; n < 4; n++) {
+    const b = await makeAgent();
+    assert.equal(
+      (
+        await b.request(
+          "/api/poppy/sign-in",
+          postJson({ scope: "poppy:read", credentials: { email } }),
+        )
+      ).status,
+      200,
+    );
+  }
+  const b = await makeAgent();
+  assert.equal(
+    (
+      await b.request(
+        "/api/poppy/sign-in",
+        postJson({ scope: "poppy:read", credentials: { email } }),
+      )
+    ).status,
+    429,
+  );
 });

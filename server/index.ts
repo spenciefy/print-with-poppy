@@ -42,6 +42,8 @@ import { stripe } from "./providers.js";
 import { tick, housekeeping, syncProvider } from "./worker.js";
 import { openapi, agentInstructions } from "./openapi.js";
 import type { Session, Order } from "./types.js";
+import { accountRoutes } from "./signin.js";
+import { accountScopes, requireAccount, revokeAccount } from "./accounts.js";
 export const app = express();
 app.disable("x-powered-by");
 app.use(
@@ -62,14 +64,15 @@ app.use(
     crossOriginEmbedderPolicy: false,
   }),
 );
-const limiter = rateLimit({
+export const limiter = rateLimit({
   windowMs: 60000,
   limit: 180,
   standardHeaders: "draft-8",
   legacyHeaders: false,
 });
 app.use("/api", limiter);
-app.use("/oauth", rateLimit({ windowMs: 60000, limit: 30 }));
+export const oauthLimiter = rateLimit({ windowMs: 60000, limit: 30 });
+app.use("/oauth", oauthLimiter);
 app.post(
   "/api/webhooks/stripe",
   express.raw({ type: "application/json", limit: "1mb" }),
@@ -175,7 +178,15 @@ app.get("/.well-known/poppy.json", (_req, res) =>
       name: "Print with Poppy",
       domain: new URL(config.origin).hostname,
     },
-    auth: { issuer: config.origin },
+    auth: {
+      issuer: config.origin,
+      direct: { scopes: accountScopes },
+      mediated: {
+        endpoint: `${config.origin}/api/poppy/sign-in`,
+        fields: [{ name: "email", label: "Email", secret: false }],
+        scopes: accountScopes,
+      },
+    },
     apis: [
       {
         type: "openapi",
@@ -195,7 +206,15 @@ app.get("/.well-known/oauth-authorization-server", (_req, res) =>
     token_endpoint: `${config.origin}/oauth/token`,
     revocation_endpoint: `${config.origin}/oauth/revoke`,
     poppy_domains: [new URL(config.origin).hostname],
-    grant_types_supported: ["urn:ietf:params:oauth:grant-type:jwt-bearer"],
+    authorization_endpoint: `${config.origin}/oauth/authorize`,
+    grant_types_supported: [
+      "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      "authorization_code",
+      "refresh_token",
+    ],
+    response_types_supported: ["code"],
+    code_challenge_methods_supported: ["S256"],
+    scopes_supported: accountScopes,
     token_endpoint_auth_methods_supported: ["private_key_jwt"],
     dpop_signing_alg_values_supported: ["ES256", "RS256", "EdDSA"],
   }),
@@ -230,8 +249,10 @@ app.post("/oauth/revoke", async (req, res) => {
     `assertion:${req.body.client_id}:${assertion.jti}`,
     assertion.exp! * 1000,
   );
+  revokeAccount(req.body.token, req.body.client_id);
   res.sendStatus(200);
 });
+accountRoutes(app);
 app.get("/media/:id/:fit", (req, res) => {
   const photoId = String(req.params.id),
     fit = String(req.params.fit),
@@ -406,14 +427,41 @@ app.post("/api/orders", async (req, res) =>
 );
 app.get("/api/operations/:id", (req, res) => {
   const op = readOperation(String(req.params.id), res.locals.session.id);
+  if (
+    op.terms.accountId &&
+    requireAccount(res.locals.session) !== op.terms.accountId
+  )
+    throw new HttpError(404, "not_found", "Not found.");
   if (op.state === "in_progress") res.set("Retry-After", "2");
-  res.json(operationView(op));
+  const view = operationView(op);
+  if (
+    op.terms.accountId &&
+    !res.locals.session.scopes?.includes("poppy:write") &&
+    view.result?.data
+  )
+    view.result = {
+      ...view.result,
+      data: { order_id: view.result.data.order_id },
+    };
+  res.json(view);
 });
 app.post("/api/operations/:id/confirm", (req, res) => {
   const b = z
     .object({ revision: z.number().int(), approved_by: z.string() })
     .strict()
     .parse(req.body);
+  const pending = readOperation(String(req.params.id), res.locals.session.id);
+  if (pending.terms.accountId) {
+    if (
+      requireAccount(res.locals.session, "poppy:write") !==
+      pending.terms.accountId
+    )
+      throw new HttpError(
+        403,
+        "sign_in_required",
+        "Sign in to the account that proposed this order.",
+      );
+  }
   const op = confirm(
     String(req.params.id),
     res.locals.session.id,
@@ -424,20 +472,28 @@ app.post("/api/operations/:id/confirm", (req, res) => {
   res.json(operationView(op));
   void tick();
 });
-app.post("/api/operations/:id/cancel", (req, res) =>
-  res.json(operationView(cancel(String(req.params.id), res.locals.session.id))),
-);
-app.get("/api/orders/:id", (req, res) =>
-  res.json(
-    orderView(
-      requireRecord<Order>(
-        "order",
-        String(req.params.id),
-        res.locals.session.id,
-      ),
-    ),
-  ),
-);
+app.post("/api/operations/:id/cancel", (req, res) => {
+  const op = readOperation(String(req.params.id), res.locals.session.id);
+  if (
+    op.terms.accountId &&
+    requireAccount(res.locals.session, "poppy:write") !== op.terms.accountId
+  )
+    throw new HttpError(404, "not_found", "Not found.");
+  res.json(operationView(cancel(String(req.params.id), res.locals.session.id)));
+});
+app.get("/api/orders/:id", (req, res) => {
+  const session: Session = res.locals.session;
+  const order = requireRecord<Order>("order", String(req.params.id));
+  if (order.accountId) {
+    if (requireAccount(session) !== order.accountId)
+      throw new HttpError(404, "not_found", "Not found.");
+  } else if (order.owner !== session.id)
+    throw new HttpError(404, "not_found", "Not found.");
+  const view = orderView(order);
+  if (order.accountId && !session.scopes?.includes("poppy:write"))
+    view.checkoutUrl = undefined;
+  res.json(view);
+});
 app.use(["/api", "/oauth", "/media"], (_req, res) =>
   res.status(404).json({ error: "not_found", message: "Endpoint not found." }),
 );
@@ -488,8 +544,15 @@ app.use(
       return;
     }
     if (e instanceof HttpError) {
-      if (e.status === 401)
-        res.set("WWW-Authenticate", `DPoP error="${e.code}"`);
+      if (
+        e.status === 401 ||
+        ["sign_in_required", "insufficient_scope"].includes(e.code)
+      )
+        res.set(
+          "WWW-Authenticate",
+          `DPoP error="${e.code}"${e.extra.scope ? `, scope="${e.extra.scope}"` : ""}`,
+        );
+      if (e.status === 429) res.set("Retry-After", "3600");
       res
         .status(e.status)
         .json({ error: e.code, message: e.message, ...e.extra });

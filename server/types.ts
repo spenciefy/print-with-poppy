@@ -48,6 +48,11 @@ export interface Session {
   extensions: boolean;
   demo?: boolean;
   compatibility?: boolean;
+  accountBinding?: string; // Immutable once this session has signed in.
+  grantId?: string;
+  accountId?: string; // Effective token account; never inferred from session state.
+  scopes?: string[];
+  proofThumb?: string;
   created: number;
 }
 export interface Photo {
@@ -61,6 +66,7 @@ export interface Photo {
   deleted?: boolean;
 }
 export interface Quote extends Proposal {
+  accountId?: string;
   id: string;
   owner: string;
   created: number;
@@ -114,6 +120,7 @@ export interface Shipment {
   dispatchDate?: string;
 }
 export interface Order {
+  accountId?: string;
   id: string;
   owner: string;
   operationId: string;
