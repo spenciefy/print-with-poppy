@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useId } from "react";
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 import { productOf } from "./offer";
@@ -25,16 +26,34 @@ function Brand() {
     </a>
   );
 }
-function Header() {
-  const agents = window.location.pathname === "/for-agents";
+function Header({
+  route,
+  navigate,
+}: {
+  route: string;
+  navigate: (event: React.MouseEvent<HTMLAnchorElement>, path: string) => void;
+}) {
+  const agents = route === "/for-agents";
   return (
     <header>
       <Brand />
-      <nav className="audience-toggle" aria-label="Choose a view">
-        <a href="/" aria-current={!agents ? "page" : undefined}>
+      <nav
+        className="audience-toggle"
+        data-agents={agents}
+        aria-label="Choose a view"
+      >
+        <a
+          href="/"
+          onClick={(e) => navigate(e, "/")}
+          aria-current={!agents ? "page" : undefined}
+        >
           For humans
         </a>
-        <a href="/for-agents" aria-current={agents ? "page" : undefined}>
+        <a
+          href="/for-agents"
+          onClick={(e) => navigate(e, "/for-agents")}
+          aria-current={agents ? "page" : undefined}
+        >
           For Personal Agents
         </a>
       </nav>
@@ -65,27 +84,119 @@ function CopyIcon({ copied }: { copied: boolean }) {
     </svg>
   );
 }
+function Faq({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  const id = useId();
+  return (
+    <div className="faq-item" data-open={open}>
+      <h3>
+        <button
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen(!open)}
+        >
+          {title}
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path d="m4 6 4 4 4-4" />
+          </svg>
+        </button>
+      </h3>
+      <div className="faq-reveal" id={id} inert={!open} aria-hidden={!open}>
+        <div className="faq-content">{children}</div>
+      </div>
+    </div>
+  );
+}
+function DiscoveryBox() {
+  const [data, setData] = useState<object>();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    api("/.well-known/poppy.json", { signal: controller.signal })
+      .then(setData)
+      .catch(() => {
+        if (!controller.signal.aborted) setFailed(true);
+      });
+    return () => controller.abort();
+  }, []);
+  return (
+    <div className="discovery-box">
+      <div className="reference-heading">
+        <a href="/.well-known/poppy.json">poppy.json</a>
+        <span>Discovery document</span>
+      </div>
+      <pre aria-label="Published Poppy discovery document">
+        <code>
+          {data
+            ? JSON.stringify(data, null, 2)
+            : failed
+              ? "Unable to load discovery. Open poppy.json using the link above."
+              : "Loading published discovery document…"}
+        </code>
+      </pre>
+    </div>
+  );
+}
 function Footer() {
   return (
     <footer className="protocol-footer">
       <section aria-labelledby="protocol-title">
-        <p className="section-label">THE PROTOCOL BEHIND THE PRINTS</p>
         <h2 id="protocol-title">A small store. A working example of Poppy.</h2>
         <p>
           Personal Agent Protocol gives your agent a way to discover this store,
           identify itself, and use its APIs. You choose the photos and approve
           the order. Your agent handles the steps in between.
         </p>
-        <div className="protocol-links">
-          <a href="/.well-known/poppy.json">poppy.json</a>
-          <a href="/openapi.json">API reference</a>
-          <a href="https://github.com/spenciefy/print-with-poppy">
-            Source code
-          </a>
+        <div className="protocol-reference-grid">
+          <DiscoveryBox />
+          <div className="api-reference">
+            <div className="reference-heading">
+              <a href="/openapi.json">OpenAPI reference</a>
+              <span>Store API</span>
+            </div>
+            <p>
+              The discovery document points agents to these endpoints. The
+              reference describes their inputs, authentication and responses.
+            </p>
+            <dl>
+              {[
+                ["GET", "/api/catalog", "Products, prices and availability"],
+                ["POST", "/api/photos", "Private photo uploads"],
+                ["POST", "/api/orders", "An order proposal for your approval"],
+                [
+                  "POST",
+                  "/api/operations/{id}/confirm",
+                  "Confirm the approved revision",
+                ],
+                ["GET", "/api/orders/{id}", "Payment, printing and tracking"],
+              ].map(([method, path, description]) => (
+                <div key={path}>
+                  <dt>
+                    <span>{method}</span>
+                    <code>{path}</code>
+                  </dt>
+                  <dd>{description}</dd>
+                </div>
+              ))}
+            </dl>
+            <a href="/agent.txt">Read the complete agent instructions</a>
+          </div>
         </div>
         <div className="store-faq">
-          <details>
-            <summary>Does this work with Muse or Instinct?</summary>
+          <Faq title="Does this work with Muse or Instinct?">
             <p>
               There are two integration paths: native Poppy sessions and a plain
               HTTP guest API for agents that can upload files and call APIs. The
@@ -94,9 +205,8 @@ function Footer() {
               have not yet been tested end to end with this store; browser
               access alone does not guarantee compatibility.
             </p>
-          </details>
-          <details>
-            <summary>What’s inside poppy.json?</summary>
+          </Faq>
+          <Faq title="What’s inside poppy.json?">
             <p>
               Our discovery file lists <code>protocol_version</code> (0.1),{" "}
               <code>organization</code> (our name and domain),{" "}
@@ -106,9 +216,8 @@ function Footer() {
               operation-status endpoint). It contains public connection details,
               never customer photos or secret keys.
             </p>
-          </details>
-          <details>
-            <summary>How does my agent place an order?</summary>
+          </Faq>
+          <Faq title="How does my agent place an order?">
             <p>
               It reads the discovery file and{" "}
               <a href="/agent.txt">agent instructions</a>, starts a signed guest
@@ -121,9 +230,8 @@ function Footer() {
               <code>/api/catalog</code> → <code>/api/photos</code> →{" "}
               <code>/api/orders</code> → <code>/api/operations</code>
             </p>
-          </details>
-          <details>
-            <summary>What do I approve, and how is payment handled?</summary>
+          </Faq>
+          <Faq title="What do I approve, and how is payment handled?">
             <p>
               Your agent shows the photos, crop previews, quantities, full
               delivery address, email, estimated delivery and final total
@@ -133,9 +241,8 @@ function Footer() {
               Stripe, never our photo API. Your bank may ask you to
               authenticate.
             </p>
-          </details>
-          <details>
-            <summary>Can I buy directly on this website?</summary>
+          </Faq>
+          <Faq title="Can I buy directly on this website?">
             <p>
               Orders start with a personal agent. There’s no cart or checkout
               button here. Agents can use native Poppy or our HTTP guest API.
@@ -143,18 +250,16 @@ function Footer() {
               not. Your agent needs file upload, API and payment tools;{" "}
               <a href="/for-agents">see the integration guide</a>.
             </p>
-          </details>
-          <details>
-            <summary>When will my prints arrive?</summary>
+          </Faq>
+          <Faq title="When will my prints arrive?">
             <p>
               Allow an estimated 7–12 business days after payment for US home
               delivery. This is a planning estimate, not a guaranteed arrival
               date. We email confirmation and tracking when available. Photo
               prints and larger prints are ordered separately.
             </p>
-          </details>
-          <details>
-            <summary>How does this demonstrate the protocol?</summary>
+          </Faq>
+          <Faq title="How does this demonstrate the protocol?">
             <p>
               This open-source store implements discovery, signed guest
               sessions, authenticated APIs and the operations extension for
@@ -166,12 +271,13 @@ function Footer() {
               , rather than every optional protocol feature. Ordering
               availability is shown above.
             </p>
-          </details>
+          </Faq>
         </div>
       </section>
       <div className="footer-bottom">
         <Brand />
         <a href="/privacy">Photo privacy</a>
+        <a href="https://github.com/spenciefy/print-with-poppy">Source code</a>
         <a href="https://personalagentprotocol.org/">Personal Agent Protocol</a>
       </div>
     </footer>
@@ -207,9 +313,6 @@ function Home({ config }: { config: Config }) {
               </div>
               <p className="product-spec">4 × 6 inches · Lustre finish</p>
               <p>Five prints included. Each extra print is 50¢.</p>
-              <p className="product-note">
-                Have fewer than five? The minimum is still $12.
-              </p>
             </article>
             <article className="store-product">
               <div className="product-title">
@@ -218,9 +321,6 @@ function Home({ config }: { config: Config }) {
               </div>
               <p className="product-spec">12 × 16 inches · Matte · Unframed</p>
               <p>One photo, printed on heavyweight 200gsm paper.</p>
-              <p className="product-note">
-                Ships rolled. Choose a frame when it arrives.
-              </p>
             </article>
           </div>
           <p className="store-delivery">
@@ -723,10 +823,38 @@ function App() {
         setConfig((current) => ({ ...current, mode: "unavailable" })),
       );
   }, []);
-  const route = window.location.pathname;
+  const [route, setRoute] = useState(window.location.pathname);
+  useEffect(() => {
+    const onPop = () => setRoute(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  function navigate(event: React.MouseEvent<HTMLAnchorElement>, path: string) {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    event.preventDefault();
+    if (route === path) return;
+    const update = () => {
+      window.history.pushState({}, "", path);
+      flushSync(() => setRoute(path));
+      window.scrollTo({ top: 0, behavior: "instant" });
+    };
+    if (
+      document.startViewTransition &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      document.startViewTransition(update);
+    else update();
+  }
   return (
     <>
-      <Header />
+      <Header route={route} navigate={navigate} />
       {route === "/for-agents" ? (
         <Guide config={config} />
       ) : route === "/privacy" ? (
