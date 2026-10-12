@@ -62,3 +62,23 @@ Next product recommendation: one 8×10 enlargement at $25 delivered. Consider a 
 - [Stripe standard pricing](https://stripe.com/pricing)
 
 Supplier names are omitted from customer-facing website copy. Privacy copy still discloses sharing with our printing/shipping partner. Internal implementation and research retain actual provider names.
+
+## Smaller minimum and one poster — proposed revision
+
+Fresh authenticated Budget quotes: five distinct 4×6 photos cost $1.25 + $6.70 delivery = $7.95; ten cost $2.50 + $6.70 = $9.20. Supplier sales tax is excluded. Evidence: `research/4x6-budget-5.json` and `research/4x6-budget-10.json`.
+
+Recommend a **$12 minimum covering up to five prints, then 50¢ per extra print**, US delivery included, customer tax extra. This lowers selection effort without introducing packages. Fewer than five photos remain possible at the same minimum; never add duplicates without approval.
+
+| Quantity | Proposed retail | Print + delivery cost | Card fee | Contribution before other costs |
+|---:|---:|---:|---:|---:|
+| 5 | $12.00 | $7.95 | $0.65 | $3.40 |
+| 10 | $14.50 | $9.20 | $0.72 | $4.58 |
+| 20 | $19.50 | $11.70 | $0.87 | $6.93 |
+
+Five is a viable entry offer but leaves limited room for paid acquisition or support. A 10% supplier-tax allowance and 5% retail reserve reduce the five-print contribution to about $2.01 before hosting, email, Stripe Tax and other costs. A $14 minimum is the safer alternative if paid advertising is central. Fees use standard US domestic cards, 2.9% + 30¢; actual account fees may differ.
+
+For one larger option, prefer **one unframed 12×16 matte poster for $35 delivered**. `GLOBAL-FAP-12X16`, EMA 200gsm, live US Budget quote: $14 print + $7.10 shipping = $21.10. Card fee $1.32 leaves $12.58 before supplier tax, overhead and reserves. Evidence: `research/12x16-matte-budget.json`. An 8×10 enlargement could instead be $25 delivered (previous $10.70 cost), but offer only one large size to avoid a size menu.
+
+The [official matte catalog](https://www.prodigi.com/products/prints-and-posters/art-prints/enhanced-matte-art/) confirms 12×16, 200gsm paper, 24–72-hour production and rolled shipping for US sizes above A4. The API gives no arrival SLA. Keep delivery labeled an estimate; validate samples before promising a poster arrival window. At 300dpi, the product API requests 3600×4800 pixels; agent should check source resolution and show crop/border approval. Mixed small-print/poster orders require their own combined quote and pricing policy, because fulfillment can split.
+
+These prices and the poster are recommendations only. Current orderable catalog and $20/20-print minimum remain unchanged pending the product decision. The abstract logo replacement is implemented independently.

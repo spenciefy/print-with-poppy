@@ -1,0 +1,81 @@
+{
+  "request": {
+    "shippingMethod": "Budget",
+    "destinationCountryCode": "US",
+    "currencyCode": "USD",
+    "items": [
+      {
+        "sku": "GLOBAL-FAP-12X16",
+        "copies": 1,
+        "attributes": {
+          "paperType": "EMA",
+          "substrateWeight": "200gsm"
+        },
+        "assets": [
+          {
+            "printArea": "default"
+          }
+        ]
+      }
+    ]
+  },
+  "outcome": "CreatedWithIssues",
+  "issues": [
+    {
+      "objectId": null,
+      "errorCode": "destinationCountryCode.UsSalesTaxWarning",
+      "description": "Please note: Quote does not include sales tax, which may apply"
+    }
+  ],
+  "quotes": [
+    {
+      "costSummary": {
+        "items": {
+          "amount": "14.00",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "7.10",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "21.10",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipmentMethod": "Budget",
+      "shipments": [
+        {
+          "carrier": {
+            "name": "UPS",
+            "service": "UPS Mail Innovations"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "prodigi_us"
+          },
+          "cost": {
+            "amount": "7.10",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    }
+  ]
+}

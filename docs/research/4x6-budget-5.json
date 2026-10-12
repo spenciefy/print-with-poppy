@@ -1,0 +1,33 @@
+{
+  "quantity": 5,
+  "method": "Budget",
+  "cost": {
+    "items": {
+      "amount": "1.25",
+      "currency": "USD"
+    },
+    "shipping": {
+      "amount": "6.70",
+      "currency": "USD"
+    },
+    "branding": {
+      "amount": "0.00",
+      "currency": "USD"
+    },
+    "totalCost": {
+      "amount": "7.95",
+      "currency": "USD"
+    },
+    "totalTax": {
+      "amount": "0.00",
+      "currency": "USD"
+    }
+  },
+  "issues": [
+    {
+      "objectId": null,
+      "errorCode": "destinationCountryCode.UsSalesTaxWarning",
+      "description": "Please note: Quote does not include sales tax, which may apply"
+    }
+  ]
+}

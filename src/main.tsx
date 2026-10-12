@@ -18,7 +18,7 @@ const Arrow = () => <span aria-hidden="true">↗</span>;
 function Brand() {
   return (
     <a className="brand" href="/" aria-label="Print with Poppy home">
-      <img src="/poppy-photo.png" alt="" />
+      <img src="/poppy-photo-abstract.png" alt="" />
       <span>
         print with <strong>poppy</strong>
       </span>
@@ -808,7 +808,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
         <div>
           {checkout ? (
             <section className="checkout-demo">
-              <img src="/poppy-photo.png" alt="" />
+              <img src="/poppy-photo-abstract.png" alt="" />
               <h2>
                 Make-believe payment.
                 <br />
