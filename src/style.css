@@ -1921,16 +1921,17 @@ header {
   border-color: transparent;
 }
 .instructions-actions button.instructions-copy {
+  background: transparent;
+  color: var(--ink);
+  border-color: color-mix(in oklch, var(--ink) 28%, transparent);
+}
+.instructions-actions a.instructions-copy {
   background: var(--orange);
   color: var(--ink);
 }
-.instructions-actions a.instructions-copy {
-  background: var(--ink);
-  color: var(--paper);
-}
 .instructions-actions button.instructions-copy:hover {
-  background: color-mix(in oklch, var(--orange) 90%, var(--ink));
+  background: color-mix(in oklch, var(--ink) 4%, transparent);
 }
 .instructions-actions a.instructions-copy:hover {
-  background: color-mix(in oklch, var(--ink) 88%, var(--paper));
+  background: color-mix(in oklch, var(--orange) 90%, var(--ink));
 }
