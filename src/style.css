@@ -1338,53 +1338,18 @@ nav > a:first-child {
   align-items: start;
 }
 .faq-item {
-  border-top: 1px solid var(--line);
   min-width: 0;
+  margin-top: 28px;
 }
 .faq-item h3 {
-  margin: 0;
-}
-.faq-item h3 button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 0;
-  background: transparent;
-  text-align: left;
-  font-size: 14px;
+  margin: 0 0 8px;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 1.6;
-}
-.faq-item svg {
-  flex-shrink: 0;
-  transform: rotate(180deg);
-  transition: transform 260ms ease;
-}
-.faq-item[data-open="false"] svg {
-  transform: rotate(0);
-}
-.faq-reveal {
-  display: grid;
-  grid-template-rows: 1fr;
-  opacity: 1;
-  transition:
-    grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 220ms ease;
-}
-.faq-item[data-open="false"] .faq-reveal {
-  grid-template-rows: 0fr;
-  opacity: 0;
-}
-.faq-content {
-  min-height: 0;
-  overflow: hidden;
 }
 .faq-content p {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.85;
-  margin: 0 0 24px;
+  margin: 0 0 12px;
 }
 .audience-toggle {
   position: relative;
@@ -1647,5 +1612,101 @@ header {
   .brand .brand-photo {
     animation: none;
     transition: none;
+  }
+}
+
+/* Store and prompt side by side; the questions remain one reading column. */
+.store-home {
+  display: grid;
+  max-width: 1160px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 56px;
+}
+.store-order {
+  max-width: none;
+  margin: 0;
+}
+.store-product {
+  grid-template-columns: 128px minmax(0, 1fr);
+  column-gap: 20px;
+}
+.poster-preview img {
+  width: 124px;
+}
+.instructions-heading {
+  align-items: flex-start;
+}
+.instructions-heading h2 {
+  max-width: 22ch;
+  line-height: 1.4;
+}
+.protocol-footer {
+  max-width: 1096px;
+}
+.protocol-reference-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+.protocol-step h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.protocol-step > p {
+  font-size: 14px;
+  line-height: 1.8;
+  margin: 0 0 24px;
+}
+.protocol-step a {
+  text-underline-offset: 3px;
+}
+.protocol-approval {
+  max-width: 680px;
+  margin: 40px 0;
+}
+.protocol-footer .store-faq {
+  display: block;
+  max-width: 680px;
+  margin-top: 48px;
+}
+.faq-item {
+  border: 0;
+}
+@media (max-width: 1160px) {
+  .protocol-footer {
+    margin-left: 32px;
+    margin-right: 32px;
+  }
+}
+@media (max-width: 860px) {
+  .store-home {
+    grid-template-columns: 1fr;
+    max-width: 696px;
+    gap: 32px;
+  }
+  .protocol-footer {
+    max-width: 632px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .protocol-reference-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+}
+@media (max-width: 696px) {
+  .protocol-footer {
+    margin-left: 24px;
+    margin-right: 24px;
+  }
+}
+@media (max-width: 480px) {
+  .store-product {
+    grid-template-columns: 100px minmax(0, 1fr);
+    column-gap: 16px;
+  }
+  .poster-preview img {
+    width: 96px;
   }
 }

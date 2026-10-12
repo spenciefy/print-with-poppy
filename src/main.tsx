@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useId } from "react";
+import React, { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "./style.css";
@@ -107,35 +107,14 @@ function Faq({
   title: string;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
-  const id = useId();
   return (
-    <div className="faq-item" data-open={open}>
-      <h3>
-        <button
-          aria-expanded={open}
-          aria-controls={id}
-          onClick={() => setOpen(!open)}
-        >
-          {title}
-          <svg
-            viewBox="0 0 16 16"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path d="m4 6 4 4 4-4" />
-          </svg>
-        </button>
-      </h3>
-      <div className="faq-reveal" id={id} inert={!open} aria-hidden={!open}>
-        <div className="faq-content">{children}</div>
-      </div>
+    <div className="faq-item">
+      <h3>{title}</h3>
+      <div className="faq-content">{children}</div>
     </div>
   );
 }
+
 function DiscoveryBox() {
   const [data, setData] = useState<object>();
   const [failed, setFailed] = useState(false);
@@ -170,48 +149,82 @@ function Footer() {
   return (
     <footer className="protocol-footer">
       <section aria-labelledby="protocol-title">
-        <h2 id="protocol-title">A small store. A working example of Poppy.</h2>
+        <h2 id="protocol-title">How does Print with Poppy work?</h2>
         <p>
-          Personal Agent Protocol gives your agent a way to discover this store,
-          identify itself, and use its APIs. You choose the photos and approve
-          the order. Your agent handles the steps in between.
+          You give your personal agent photos to print. Here’s how it finds the
+          store, prepares your order and gets your approval.
         </p>
         <div className="protocol-reference-grid">
-          <DiscoveryBox />
-          <div className="api-reference">
-            <div className="reference-heading">
-              <a href="/openapi.json">OpenAPI reference</a>
-              <span>Store API</span>
-            </div>
+          <div className="protocol-step">
+            <h3>1. Your agent finds the front door.</h3>
             <p>
-              The discovery document points agents to these endpoints. The
-              reference describes their inputs, authentication and responses.
+              It reads <a href="/.well-known/poppy.json">poppy.json</a>: a small
+              public file that identifies the store and points to
+              authentication, the API reference and order-approval endpoints. No
+              photos or secret keys live here.
             </p>
-            <dl>
-              {[
-                ["GET", "/api/catalog", "Products, prices and availability"],
-                ["POST", "/api/photos", "Private photo uploads"],
-                ["POST", "/api/orders", "An order proposal for your approval"],
-                [
-                  "POST",
-                  "/api/operations/{id}/confirm",
-                  "Confirm the approved revision",
-                ],
-                ["GET", "/api/orders/{id}", "Payment, printing and tracking"],
-              ].map(([method, path, description]) => (
-                <div key={path}>
-                  <dt>
-                    <span>{method}</span>
-                    <code>{path}</code>
-                  </dt>
-                  <dd>{description}</dd>
-                </div>
-              ))}
-            </dl>
-            <a href="/agent.txt">Read the complete agent instructions</a>
+            <DiscoveryBox />
+          </div>
+          <div className="protocol-step">
+            <h3>2. The API tells it what to do next.</h3>
+            <p>
+              The linked <a href="/openapi.json">OpenAPI reference</a> describes
+              each request and response. Your agent starts a session, checks the
+              catalog, uploads your photos and asks for an order proposal.
+            </p>
+            <div className="api-reference">
+              <div className="reference-heading">
+                <a href="/openapi.json">OpenAPI reference</a>
+                <span>Store API</span>
+              </div>
+              <dl>
+                {[
+                  ["GET", "/api/catalog", "Products, prices and availability"],
+                  ["POST", "/api/photos", "Private photo uploads"],
+                  [
+                    "POST",
+                    "/api/orders",
+                    "An order proposal for your approval",
+                  ],
+                  [
+                    "POST",
+                    "/api/operations/{id}/confirm",
+                    "Confirm the approved revision",
+                  ],
+                  ["GET", "/api/orders/{id}", "Payment, printing and tracking"],
+                ].map(([method, path, description]) => (
+                  <div key={path}>
+                    <dt>
+                      <span>{method}</span>
+                      <code>{path}</code>
+                    </dt>
+                    <dd>{description}</dd>
+                  </div>
+                ))}
+              </dl>
+              <a href="/agent.txt">Read the complete agent instructions</a>
+            </div>
           </div>
         </div>
+        <div className="protocol-approval protocol-step">
+          <h3>3. You approve. Your agent takes it from there.</h3>
+          <p>
+            You see the photos, crop, quantity, full delivery address and total
+            with tax before approving. Your agent confirms that exact order and
+            pays through Stripe. We send it to print and email confirmation and
+            tracking when available.
+          </p>
+          <p>
+            This is a real store and an open-source example of{" "}
+            <a href="https://personalagentprotocol.org/docs/spec">
+              Personal Agent Protocol
+            </a>
+            : discovery connects your agent to the APIs; the operations
+            extension gives approval a defined place in the flow.
+          </p>
+        </div>
         <div className="store-faq">
+          <h2>A few more details</h2>
           <Faq title="Does this work with Muse or Instinct?">
             <p>
               There are two integration paths: native Poppy sessions and a plain
@@ -222,31 +235,7 @@ function Footer() {
               access alone does not guarantee compatibility.
             </p>
           </Faq>
-          <Faq title="What’s inside poppy.json?">
-            <p>
-              Our discovery file lists <code>protocol_version</code> (0.1),{" "}
-              <code>organization</code> (our name and domain),{" "}
-              <code>auth.issuer</code> (where to discover authentication),{" "}
-              <code>apis</code> (our OpenAPI document), and{" "}
-              <code>extensions.operations</code> (the approval and
-              operation-status endpoint). It contains public connection details,
-              never customer photos or secret keys.
-            </p>
-          </Faq>
-          <Faq title="How does my agent place an order?">
-            <p>
-              It reads the discovery file and{" "}
-              <a href="/agent.txt">agent instructions</a>, starts a signed guest
-              session, then follows the OpenAPI descriptions to read the
-              catalog, upload photos and propose an order. Requests carry a
-              session token and DPoP proof. The store offers APIs directly; it
-              doesn’t need a store chatbot.
-            </p>
-            <p>
-              <code>/api/catalog</code> → <code>/api/photos</code> →{" "}
-              <code>/api/orders</code> → <code>/api/operations</code>
-            </p>
-          </Faq>
+
           <Faq title="What do I approve, and how is payment handled?">
             <p>
               Your agent shows the photos, crop previews, quantities, full
@@ -273,19 +262,6 @@ function Footer() {
               delivery. This is a planning estimate, not a guaranteed arrival
               date. We email confirmation and tracking when available. Photo
               prints and larger prints are ordered separately.
-            </p>
-          </Faq>
-          <Faq title="How does this demonstrate the protocol?">
-            <p>
-              This open-source store implements discovery, signed guest
-              sessions, authenticated APIs and the operations extension for
-              explicit approval. Printing, pricing and Stripe payment are
-              store-specific integrations. It demonstrates these parts of{" "}
-              <a href="https://personalagentprotocol.org/docs/spec">
-                Poppy draft 0.1
-              </a>
-              , rather than every optional protocol feature. Ordering
-              availability is shown above.
             </p>
           </Faq>
         </div>
@@ -329,8 +305,8 @@ function Home({ config }: { config: Config }) {
                 role="img"
                 aria-label="Example 4 by 6 photo prints with white borders"
               >
-                <img src="/photos/mountain.jpg" alt="" />
-                <img src="/photos/lake.jpg" alt="" />
+                <img src="/photos/poppy-field-close.png" alt="" />
+                <img src="/photos/poppy-field-wide.png" alt="" />
               </div>
               <div className="product-copy">
                 <div className="product-title">
@@ -344,8 +320,8 @@ function Home({ config }: { config: Config }) {
             <article className="store-product">
               <div className="product-preview poster-preview">
                 <img
-                  src="/photos/lake.jpg"
-                  alt="Example unframed 12 by 16 landscape print with white borders"
+                  src="/photos/poppy-field-wide.png"
+                  alt="Example unframed 12 by 16 poppy-field print with white borders"
                 />
               </div>
               <div className="product-copy">
@@ -378,7 +354,9 @@ function Home({ config }: { config: Config }) {
         <section className="store-order" aria-labelledby="instructions-label">
           <div className="agent-instructions">
             <div className="instructions-heading">
-              <h2 id="instructions-label">Send this to your agent</h2>
+              <h2 id="instructions-label">
+                Copy prompt for your personal agent
+              </h2>
               <button className="instructions-copy" onClick={copy}>
                 <CopyIcon copied={copied} />
                 {copied ? "Copied" : "Copy"}
