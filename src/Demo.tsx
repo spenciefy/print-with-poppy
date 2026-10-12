@@ -46,14 +46,14 @@ export default function Demo() {
   const shipping = shippingPrice(subtotal),
     total = subtotal + shipping;
   const count = product === "prints" ? 3 : 1;
-  const gate = step === 2 || step === 6;
-  const finished = step === 11;
-  const phase = step < 2 ? 0 : step < 6 ? 1 : step < 8 ? 2 : step < 9 ? 3 : 4;
+  const gate = step === 4 || step === 8;
+  const finished = step === 13;
+  const phase = step < 4 ? 0 : step < 8 ? 1 : step < 10 ? 2 : step < 11 ? 3 : 4;
   useEffect(() => {
     if (!playing || gate || finished) return;
     const timer = window.setTimeout(
       () => setStep((s) => s + 1),
-      step < 0 ? 150 : step === 8 ? 2200 : 1900,
+      step < 0 ? 150 : step === 10 ? 2200 : 1900,
     );
     return () => clearTimeout(timer);
   }, [playing, step, gate, finished]);
@@ -73,7 +73,7 @@ export default function Demo() {
   }
   function choose(value: "prints" | "poster") {
     setProduct(value);
-    setStep(3);
+    setStep(5);
     setPlaying(true);
   }
   const receipt = (
@@ -121,15 +121,15 @@ export default function Demo() {
   const messages: { side: "you" | "agent"; content: React.ReactNode }[] = [
     {
       side: "you",
-      content: (
-        <>
-          <PhotoStrip />
-          <p>
-            I want to order these photos from Print with Poppy using Personal
-            Agent Protocol.
-          </p>
-        </>
-      ),
+      content: <p>can you help me order photo prints with www.printwithpoppy.com?</p>,
+    },
+    {
+      side: "agent",
+      content: <p>Of course. Send me the photos you’d like to print.</p>,
+    },
+    {
+      side: "you",
+      content: <><PhotoStrip /><p>These three, please.</p></>,
     },
     {
       side: "agent",
@@ -152,7 +152,7 @@ export default function Demo() {
             a 12×16 poster at $35, with shipping included.
           </p>
           <small>Tax is shown before approval. Which would you like?</small>
-          {step === 2 && (
+          {step === 4 && (
             <div className="demo-choices">
               <button onClick={() => choose("prints")}>
                 3 photo prints <span>$12</span>
@@ -216,11 +216,11 @@ export default function Demo() {
             guaranteed. Payment sends the order to production; cancellation may
             not be possible.
           </small>
-          {step === 6 && (
+          {step === 8 && (
             <button
               className="demo-approve"
               onClick={() => {
-                setStep(7);
+                setStep(9);
                 setPlaying(true);
               }}
             >
@@ -355,7 +355,7 @@ export default function Demo() {
             {messages.slice(0, step + 1).map((m, i) => (
               <div
                 className={`demo-message ${m.side}`}
-                key={`${i}-${i > 2 ? product : ""}`}
+                key={`${i}-${i > 4 ? product : ""}`}
               >
                 <span className="demo-speaker">
                   {m.side === "you" ? "You" : "Agent"}
@@ -390,7 +390,7 @@ export default function Demo() {
             <button
               onClick={() => {
                 setPlaying(false);
-                setStep((s) => Math.min(s + 1, 11));
+                setStep((s) => Math.min(s + 1, 13));
               }}
               disabled={gate || finished}
               aria-label="Next message"
@@ -408,14 +408,14 @@ export default function Demo() {
               How it works
             </button>
             <button
-              disabled={step < 9}
+              disabled={step < 11}
               aria-pressed={detail === "order"}
               onClick={() => setDetail("order")}
             >
               Order
             </button>
             <button
-              disabled={step < 11}
+              disabled={step < 13}
               aria-pressed={detail === "email"}
               onClick={() => setDetail("email")}
             >
