@@ -5,7 +5,7 @@ import "./style.css";
 import Demo from "./Demo";
 import { orderSubtitle } from "./order-copy";
 import { productOf, shippingSummary } from "./offer";
-type Config = { mode: string; origin: string; support: string };
+type Config = { environment?: string; mode: string; origin: string; support: string };
 const money = (c: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
     c / 100,
@@ -360,7 +360,8 @@ function VariantIndex() {
 function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
-  const prompt = `I want to order photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and the catalog. Only if you do not support native Poppy sessions, read /api/compat/instructions for HTTP compatibility access. Help me choose 4×6 prints or one 12×16 matte print. Show me the photos, crops, full shipping address, email, delivery estimate and total including tax for approval. Only after I approve, and if the store is accepting live orders, pay with your authorized card.`;
+  const sandbox = config.environment === "agent-sandbox";
+  const prompt = sandbox ? `I want to test ordering photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and verify /api/config says environment=agent-sandbox. Ask me for sample photos and use fictional shipping details and a synthetic email. Show the proposal and ask for approval, then use simulatePayment and simulateShipment and show the captured confirmation and shipping emails. No real card, prints or emails. Keep all requests and session tokens on this sandbox origin.` : `I want to order photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and the catalog. Only if you do not support native Poppy sessions, read /api/compat/instructions for HTTP compatibility access. Help me choose 4×6 prints or one 12×16 matte print. Show me the photos, crops, full shipping address, email, delivery estimate and total including tax for approval. Only after I approve, and if the store is accepting live orders, pay with your authorized card.`;
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -416,10 +417,10 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
       <p className="store-delivery">
         {shippingSummary} Tax shown before approval.
         <br />
-        Estimated delivery: 7–12 business days after payment.
+        {sandbox ? "Illustrative prices and delivery estimates only. Nothing will be printed or shipped." : "Estimated delivery: 7–12 business days after payment."}
       </p>
       <p className="home-status" role="status">
-        {config.mode === "live"
+        {sandbox ? "Ready for sample orders through personal agents." : config.mode === "live"
           ? "Accepting orders through personal agents."
           : config.mode === "loading"
             ? "Checking ordering availability…"
@@ -488,12 +489,12 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
 }
 
 function Guide({ config }: { config: Config }) {
+  const sandbox = config.environment === "agent-sandbox";
   return (
     <main className="agent-document">
       <h1>Print with Poppy — agent instructions</h1>
       <p>
-        Order photo prints for your user. US home delivery only. Prices are in
-        USD.
+        {sandbox ? <>Test the full ordering flow with sample photos and fictional US addresses. No card, physical prints or outbound email. <a href="/sandbox">Sandbox testing guide</a>.</> : <>Order photo prints for your user. US home delivery only. Prices are in USD.</>}
       </p>
       <ul className="agent-references">
         <li>
@@ -546,22 +547,22 @@ function Guide({ config }: { config: Config }) {
         metadata URLs require registration with{" "}
         <a href={`mailto:${config.support}`}>{config.support}</a>.
       </p>
-      <p>
+      {!sandbox && <p>
         <strong>Without native Poppy support:</strong> read the separate{" "}
         <a href="/api/compat/instructions">HTTP compatibility instructions</a>{" "}
         and <a href="/api/compat/openapi.json">compatibility API reference</a>.
         This path does not verify agent identity and is not protected by the
         native client allowlist. Native Poppy agents should use the session
         above. Muse and Instinct have not yet been verified end to end.
-      </p>
+      </p>}
       <h3>Optional: sign in to save and view orders</h3>
-      <p>
+      {sandbox ? <p>Use <code>auth.mediated</code> with a unique @example.com, @example.org or @example.net email. Retrieve the captured OTP with <code>getSandboxSignInEmail</code> in the same session, then complete sign-in. Request <code>poppy:read poppy:write</code> to save and view orders. No email is sent.</p> : <p>
         Use <code>auth.direct</code> for a browser sign-in with email OTP and
         consent, or <code>auth.mediated</code> to enter an email and then the
         code through your agent. Request <code>poppy:read</code> for history and
         <code>poppy:write</code> to save new orders. Get the user’s permission
         first.
-      </p>
+      </p>}
       <p>
         Read <code>GET /api/account/orders</code> with a signed-in session. Keep
         the Account Token private and use it to renew sessions at
@@ -596,18 +597,17 @@ function Guide({ config }: { config: Config }) {
         approved <code>revision</code> and <code>approved_by: "user"</code>.
         Poll the operation for <code>result.data.checkout_url</code>.
       </p>
-      <p>
+      {sandbox ? <p>Once checkout is ready, call <code>simulatePayment</code> with the order ID. No card is required. Poll until printing, then call <code>simulateShipment</code>. These are sandbox API operations, not real purchases.</p> : <p>
         Use the authorized card at the returned Stripe-hosted checkout. Never
         send card numbers or CVC to this API. Ask the user for help if the bank
         requires authentication. Successful operation status means checkout was
         created; it does not mean payment or printing succeeded.
-      </p>
+      </p>}
       <h2>6. Verify and track</h2>
       <p>
         <code>GET /api/orders/&#123;order_id&#125;</code> to check payment,
         print submission and shipment. Save the private order-status link.
-        Confirmation and shipment emails go to the approved email address;
-        tracking is included when available.
+        {sandbox ? <>Use <code>getSandboxEmails</code> to preview the captured confirmation and shipment messages. Nothing is delivered; tracking is synthetic.</> : <>Confirmation and shipment emails go to the approved email address; tracking is included when available.</>}
       </p>
       <p>
         Retry the same request or operation after a timeout. Never start another
@@ -1026,6 +1026,7 @@ function App() {
   const variant = variants.find((v) => route === `/variants/${v.id}`)?.id;
   return (
     <>
+      {config.environment === "agent-sandbox" && <aside className="sandbox-banner" aria-label="Sandbox environment"><strong>Sandbox environment</strong><span>Sample orders only. No real payments, prints or emails.</span><a href="/sandbox">Testing guide ↗</a></aside>}
       <Header route={route} navigate={navigate} />
       {route === "/demo" ? (
         <Demo />

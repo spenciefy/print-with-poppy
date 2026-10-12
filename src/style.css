@@ -1949,3 +1949,6 @@ header {
 @media (max-width: 760px) {
   header { padding-inline: 24px; }
 }
+
+.sandbox-banner { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 20px; padding: 12px 24px; background: #ffead6; color: #71320d; border-bottom: 1px solid #e8c6a6; font-size: 14px; text-align: center; }
+.sandbox-banner a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }

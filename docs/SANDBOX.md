@@ -10,6 +10,8 @@ Use **https://sandbox.printwithpoppy.com** to test a personal-agent implementati
 
 Before testing, GET `/api/config` on your target. Require `environment: "agent-sandbox"` and `mode: "demo"`. Never switch to the production origin during a sandbox flow. Only use sample images, fictional shipping details, and synthetic email addresses. Test data may be reset; do not store anything you need to keep.
 
+The live `poppy.json` links to sandbox discovery in its API description. This is an informational link, not an automatic protocol redirect: agents must discover the sandbox domain and create a separate session. The sandbox homepage uses the same storefront as production with a persistent sandbox banner and a simulation-specific agent prompt. `/sandbox` contains the testing guide.
+
 ## Connect an agent
 
 1. Publish your HTTPS Poppy client metadata and JWKS with your own public signing key, and advertise Operations v1. Keep the private key in your agent.

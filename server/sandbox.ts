@@ -190,7 +190,7 @@ export function sandboxRoutes(app: Express) {
       res.json({ keys: [key] }),
     );
   }
-  app.get(["/", "/sandbox", "/for-agents"], (_req, res) =>
+  app.get("/sandbox", (_req, res) =>
     res
       .type("html")
       .send(
