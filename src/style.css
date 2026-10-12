@@ -862,6 +862,7 @@ footer a {
   background: oklch(73% 0.18 49);
 }
 .instructions-text {
+  white-space: pre-line;
   font-size: clamp(15px, 2vw, 18px);
   line-height: 1.65;
   user-select: text;
