@@ -1891,3 +1891,16 @@ header {
 .docs-reference-link:hover svg { transform: translate(2px, -2px); }
 .docs-reference-link .docs-link-label { font-size: 12px; font-weight: 400; color: var(--muted, #756657); }
 @media (prefers-reduced-motion: reduce) { .docs-reference-link svg { transition: none; } }
+
+.instructions-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 28px;
+}
+.instructions-actions .instructions-copy {
+  justify-content: center;
+  text-decoration: none;
+  min-width: 0;
+}

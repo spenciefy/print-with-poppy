@@ -525,18 +525,6 @@
   padding-top: 15px;
   border-top: 1px solid #e6e0d6;
 }
-.home-demo-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 18px;
-  color: #ac4109;
-  text-decoration: none;
-  font-size: 14px;
-}
-.home-demo-link:hover {
-  text-decoration: underline;
-}
 @keyframes demo-message-in {
   from {
     opacity: 0;

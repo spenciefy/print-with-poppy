@@ -408,19 +408,19 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
       <div className="agent-instructions">
         <div className="instructions-heading">
           <h2 id="instructions-label">Copy prompt for your personal agent</h2>
-          <button className="instructions-copy" onClick={copy}>
+        </div>
+        <p className="instructions-text">{prompt}</p>
+        <div className="instructions-actions">
+          <button className="instructions-copy" onClick={copy} aria-live="polite">
             <CopyIcon copied={copied} />
             {copied ? "Copied" : "Copy"}
           </button>
+          <a className="instructions-copy" href="/demo">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11L13 8z" /></svg>
+            Play demo
+          </a>
         </div>
-        <p className="instructions-text">{prompt}</p>
-        <a className="home-demo-link" href="/demo"><span aria-hidden="true">▶</span> Play demo</a>
-        <p className="instructions-feedback" aria-live="polite">
-          {error ||
-            (copied
-              ? "Copied to clipboard."
-              : "Paste into your agent, then attach your photos.")}
-        </p>
+        {error && <p className="instructions-feedback" role="alert">{error}</p>}
       </div>
     </section>
   );
