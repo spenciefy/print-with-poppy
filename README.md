@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://printwithpoppy.com">
-    <img src="public/photos/poppy-email-logo.png" alt="Print with Poppy — orange, red and yellow poppy photo stack" width="112" height="112" />
+    <img src="public/photos/poppy-logo-transparent.png" alt="Print with Poppy — orange, red and yellow poppy photo stack" width="112" height="112" />
   </a>
 </p>
 
