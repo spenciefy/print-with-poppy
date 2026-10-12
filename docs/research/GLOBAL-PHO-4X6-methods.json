@@ -1,0 +1,212 @@
+{
+  "sku": "GLOBAL-PHO-4X6",
+  "attributes": {
+    "finish": "lustre"
+  },
+  "pageCount": null,
+  "quotes": [
+    {
+      "method": "Budget",
+      "cost": {
+        "items": {
+          "amount": "5.00",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "6.70",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "11.70",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "UPS",
+            "service": "UPS - Mail Innovations"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "us4"
+          },
+          "cost": {
+            "amount": "6.70",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "method": "Standard",
+      "cost": {
+        "items": {
+          "amount": "5.00",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "10.75",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "15.75",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "UPS",
+            "service": "UPS - Mail Innovations"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "us4"
+          },
+          "cost": {
+            "amount": "10.75",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "method": "Express",
+      "cost": {
+        "items": {
+          "amount": "5.00",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "23.75",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "28.75",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "UPS",
+            "service": "UPS 2-day Shipping"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "us4"
+          },
+          "cost": {
+            "amount": "23.75",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "method": "Overnight",
+      "cost": {
+        "items": {
+          "amount": "5.00",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "33.45",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "38.45",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "UPS",
+            "service": "UPS Overnight"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "us4"
+          },
+          "cost": {
+            "amount": "33.45",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "objectId": null,
+      "errorCode": "destinationCountryCode.UsSalesTaxWarning",
+      "description": "Please note: Quote does not include sales tax, which may apply"
+    }
+  ]
+}

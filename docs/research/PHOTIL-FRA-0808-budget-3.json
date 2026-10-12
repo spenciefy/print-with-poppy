@@ -1,0 +1,69 @@
+{
+  "sku": "PHOTIL-FRA-0808",
+  "quantity": 3,
+  "method": "Budget",
+  "attributes": {
+    "color": "black",
+    "paperType": "LPP",
+    "substrateWeight": "240gsm"
+  },
+  "quotes": [
+    {
+      "cost": {
+        "items": {
+          "amount": "27.00",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "28.00",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "55.00",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "USPS",
+            "service": "USPS Priority Mail"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "prodigi_us"
+          },
+          "cost": {
+            "amount": "28.00",
+            "currency": "USD"
+          },
+          "items": [
+            "1",
+            "2",
+            "3"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "objectId": null,
+      "errorCode": "destinationCountryCode.UsSalesTaxWarning",
+      "description": "Please note: Quote does not include sales tax, which may apply"
+    }
+  ]
+}

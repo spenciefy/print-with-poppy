@@ -1,0 +1,15 @@
+{
+  "sku": "GLOBAL-PHO-4X6",
+  "description": "C-Type, Silver Halide, 10.2x15.2cm / 4x6\"",
+  "attributes": {
+    "finish": [
+      "gloss",
+      "lustre"
+    ]
+  },
+  "productDimensions": {
+    "width": 10.2,
+    "height": 15.2,
+    "units": "cm"
+  }
+}

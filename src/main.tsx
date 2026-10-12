@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { offer } from "./offer";
 type Config = { mode: string; origin: string; support: string };
 const money = (c: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -17,7 +18,7 @@ const Arrow = () => <span aria-hidden="true">↗</span>;
 function Brand() {
   return (
     <a className="brand" href="/" aria-label="Print with Poppy home">
-      <img src="/poppy.png" alt="" />
+      <img src="/poppy-photo.png" alt="" />
       <span>
         print with <strong>poppy</strong>
       </span>
@@ -64,8 +65,8 @@ function Home({ config }: { config: Config }) {
   const [error, setError] = useState("");
   const prompt =
     config.mode === "demo"
-      ? `Try the photo-printing demo at ${config.origin}. Follow its Personal Agent Protocol instructions. Use sample photos and fictional shipping details. Show me the photos, crops, full shipping address, email, delivery estimate and total for approval, then simulate checkout. This demo does not charge cards or print photos. Never enter real card details.`
-      : `Use ${config.origin} to order my photos as 4×6 prints delivered to my home. Follow its Personal Agent Protocol instructions. Show me the photos, crop choices, full shipping address, email, delivery estimate and total including shipping and tax for approval. After I approve, use your authorized card at checkout.`;
+      ? `Try the photo-printing demo at ${config.origin}. Up to 20 prints cost $20 delivered, then 50¢ per extra print, plus tax. Follow its Personal Agent Protocol instructions. Use sample photos and fictional shipping details. Show me the photos, crops, full shipping address, email, delivery estimate and total for approval, then simulate checkout. This demo does not charge cards or print photos. Never enter real card details.`
+      : `Use ${config.origin} to order my photos as 4×6 prints delivered to my home. Up to 20 prints cost $20 delivered, then 50¢ per extra print, plus tax. Follow its Personal Agent Protocol instructions. Show me the photos, crop choices, full shipping address, email, delivery estimate and total including shipping and tax for approval. After I approve, use your authorized card at checkout.`;
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -82,7 +83,8 @@ function Home({ config }: { config: Config }) {
         <section className="home-intro" aria-labelledby="home-title">
           <h1 id="home-title">Photo prints, ordered by your agent.</h1>
           <p className="home-description">
-            4 × 6 inches. Printed by Prodigi. Delivered to your home.
+            Up to {offer.includedPrints} prints for ${offer.baseCents / 100}. US
+            delivery included.
           </p>
           <div
             className="agent-instructions"
@@ -134,15 +136,19 @@ function Home({ config }: { config: Config }) {
           id="how-it-works"
           aria-labelledby="process-title"
         >
-          <h2 id="process-title">Before we print.</h2>
+          <h2 id="process-title">4 × 6 prints. One lustre finish.</h2>
+          <p className="offer-details">
+            50¢ per extra print · US shipping included · Tax added before
+            approval
+          </p>
+          <p className="offer-delivery">{offer.delivery}</p>
           <div>
-            <p>
-              Your agent shows you the photos, crops, shipping address and
-              total. You approve the order, then pay by card.
+            <p className="small">
+              The $20 minimum covers 1–20 prints. Only your approved photos and
+              quantities are printed.
             </p>
             <p>
-              Prodigi prints and ships. We email your confirmation and tracking
-              when it’s available.
+              We email your order confirmation and tracking when it’s available.
             </p>
             <a className="text-link" href="/for-agents">
               Built on Personal Agent Protocol <Arrow />
@@ -249,9 +255,9 @@ function Privacy({ config }: { config: Config }) {
       </p>
       <h3>Where your photos go</h3>
       <p>
-        Photos are stored privately and shared with Prodigi through temporary
-        links for printing. We remove image metadata when preparing print files.
-        We don't publish your uploaded photos.
+        Photos are stored privately and shared with our print partner through
+        temporary links for printing. We remove image metadata when preparing
+        print files. We don't publish your uploaded photos.
       </p>
       <h3>When we delete them</h3>
       <p>
@@ -261,9 +267,9 @@ function Privacy({ config }: { config: Config }) {
       </p>
       <h3>Payments and emails</h3>
       <p>
-        Stripe handles card details. Prodigi receives the delivery information
-        it needs to fulfill your order. Resend delivers order and shipment
-        emails. We retain order and transaction records to support your
+        Stripe handles card details. Our print partner receives the delivery
+        information it needs to fulfill your order. Resend delivers order and
+        shipment emails. We retain order and transaction records to support your
         purchase.
       </p>
       <h3>Questions or deletion requests</h3>
@@ -670,7 +676,7 @@ function OrderSummary({ quote: q }: { quote: any }) {
         </div>
         <div>
           <dt>Home delivery</dt>
-          <dd>{money(q.shipping)}</dd>
+          <dd>{q.shipping === 0 ? "Included" : money(q.shipping)}</dd>
         </div>
         <div>
           <dt>Sales tax</dt>
@@ -802,7 +808,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
         <div>
           {checkout ? (
             <section className="checkout-demo">
-              <img src="/poppy.png" alt="" />
+              <img src="/poppy-photo.png" alt="" />
               <h2>
                 Make-believe payment.
                 <br />

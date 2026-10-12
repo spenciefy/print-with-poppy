@@ -38,3 +38,7 @@ A reference agent completes discovery → signed session → photo upload → qu
 Prodigi API key and verified finish/shipping quote; Stripe test/live keys, webhook signing secret and Tax configuration; verified Resend sender; public HTTPS domain and persistent storage. Validate a physical sample and delivered economics before public live ordering.
 
 References: https://personalagentprotocol.org/docs/spec · https://personalagentprotocol.org/docs/extensions/operations · https://www.prodigi.com/print-api/docs/reference/ · https://docs.stripe.com/checkout/fulfillment
+
+## Pricing and brand update
+
+One public offer: $20 for 1–20 4×6 lustre prints, US Budget delivery included, then $0.50 per additional print up to 100. Customer tax is added before approval; only approved quantities are printed. Shared site/server pricing; reject unexpected supplier costs instead of changing published terms. Arrival is a provisional 7–12-business-day estimate, subject to delivered-sample validation. See docs/PRICING-RESEARCH.md. Supplier names stay in implementation/research, not customer copy. Square poppy-field instant-photo logo replaces the flower-only mark.

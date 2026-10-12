@@ -9,8 +9,6 @@ const env = z
     PORT: z.coerce.number().default(8787),
     PUBLIC_URL: z.url().default("http://localhost:5173"),
     DATA_DIR: z.string().default(".data"),
-    PRICE_MULTIPLIER: z.coerce.number().min(1).default(2),
-    MINIMUM_SUBTOTAL_CENTS: z.coerce.number().int().min(0).default(500),
   })
   .parse(process.env);
 const secretPath = path.resolve(env.DATA_DIR, "demo-secret");
@@ -45,7 +43,7 @@ export const config = {
       ? "https://api.prodigi.com/v4.0"
       : "https://api.sandbox.prodigi.com/v4.0",
   finish: process.env.PRODIGI_FINISH || "lustre",
-  shipping: process.env.PRODIGI_SHIPPING_METHOD || "Standard",
+  shipping: process.env.PRODIGI_SHIPPING_METHOD || "Budget",
   allowedClients: (process.env.AGENT_CLIENT_IDS || "")
     .split(",")
     .map((s) => s.trim())

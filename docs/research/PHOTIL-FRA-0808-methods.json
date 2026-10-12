@@ -1,0 +1,214 @@
+{
+  "sku": "PHOTIL-FRA-0808",
+  "attributes": {
+    "color": "black",
+    "paperType": "LPP",
+    "substrateWeight": "240gsm"
+  },
+  "pageCount": null,
+  "quotes": [
+    {
+      "method": "Budget",
+      "cost": {
+        "items": {
+          "amount": "9.00",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "14.00",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "23.00",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "USPS",
+            "service": "USPS Priority Mail"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "prodigi_us"
+          },
+          "cost": {
+            "amount": "14.00",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "method": "Standard",
+      "cost": {
+        "items": {
+          "amount": "9.00",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "21.55",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "30.55",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "UPS",
+            "service": "UPS Ground Shipping"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "prodigi_us"
+          },
+          "cost": {
+            "amount": "21.55",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "method": "Express",
+      "cost": {
+        "items": {
+          "amount": "9.00",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "36.70",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "45.70",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "UPS",
+            "service": "UPS 3 Day Select"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "prodigi_us"
+          },
+          "cost": {
+            "amount": "36.70",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "method": "Overnight",
+      "cost": {
+        "items": {
+          "amount": "9.00",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "53.95",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "62.95",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "FedEx",
+            "service": "Fedex Standard Overnight"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "prodigi_us"
+          },
+          "cost": {
+            "amount": "53.95",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "objectId": null,
+      "errorCode": "destinationCountryCode.UsSalesTaxWarning",
+      "description": "Please note: Quote does not include sales tax, which may apply"
+    }
+  ]
+}

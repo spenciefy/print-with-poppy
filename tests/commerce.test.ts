@@ -429,7 +429,7 @@ test("provider contracts preserve approved terms and use stable idempotency keys
           outcome: "Created",
           quotes: [
             {
-              shipmentMethod: "Standard",
+              shipmentMethod: "Budget",
               costSummary: {
                 items: { amount: "2.00", currency: "USD" },
                 shipping: { amount: "4.95", currency: "USD" },
@@ -459,8 +459,8 @@ test("provider contracts preserve approved terms and use stable idempotency keys
       taxParams = params;
       return {
         id: "taxcalc_contract",
-        amount_total: 1082,
-        tax_amount_exclusive: 87,
+        amount_total: 2175,
+        tax_amount_exclusive: 175,
       };
     }) as any;
     stripe.checkout.sessions.create = (async (params: any, options: any) => {
@@ -472,8 +472,12 @@ test("provider contracts preserve approved terms and use stable idempotency keys
       };
     }) as any;
     const price = await providers.getPrice(f.proposal as any);
-    assert.equal(price.total, 1082);
-    assert.equal(price.tax, 87);
+    assert.equal(price.total, 2175);
+    assert.equal(price.subtotal, 2000);
+    assert.equal(price.shipping, 0);
+    assert.equal(taxParams.line_items[0].amount, 2000);
+    assert.equal(taxParams.shipping_cost.amount, 0);
+    assert.equal(price.tax, 175);
     assert.equal(taxParams.customer_details.address.line2, "Unit 9");
     assert.equal(taxParams.customer_details.address_source, "shipping");
     const checkout = await providers.checkout(order);
@@ -508,6 +512,18 @@ test("provider contracts preserve approved terms and use stable idempotency keys
       "mail-contract-key",
     );
     assert.equal(calls.at(-1)!.headers["Idempotency-Key"], "mail-contract-key");
+    const normalQuoteFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: any, init: any) => {
+      const response = await normalQuoteFetch(input, init);
+      if (!String(input).endsWith("/quotes")) return response;
+      const body = await response.json();
+      body.quotes[0].costSummary.shipping.amount = "30.00";
+      return new Response(JSON.stringify(body));
+    }) as any;
+    await assert.rejects(
+      providers.getPrice(f.proposal as any),
+      /published price/,
+    );
   } finally {
     config.demo = true;
     globalThis.fetch = originalFetch;

@@ -1,0 +1,77 @@
+{
+  "quantity": 20,
+  "distinctPhotos": 20,
+  "method": "Budget",
+  "cost": {
+    "items": {
+      "amount": "5.00",
+      "currency": "USD"
+    },
+    "shipping": {
+      "amount": "6.70",
+      "currency": "USD"
+    },
+    "branding": {
+      "amount": "0.00",
+      "currency": "USD"
+    },
+    "totalCost": {
+      "amount": "11.70",
+      "currency": "USD"
+    },
+    "totalTax": {
+      "amount": "0.00",
+      "currency": "USD"
+    }
+  },
+  "shipments": [
+    {
+      "carrier": {
+        "name": "UPS",
+        "service": "UPS - Mail Innovations"
+      },
+      "fulfillmentLocation": {
+        "countryCode": "US",
+        "labCode": "us4"
+      },
+      "cost": {
+        "amount": "6.70",
+        "currency": "USD"
+      },
+      "items": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20"
+      ],
+      "brandingItems": [],
+      "tax": {
+        "amount": "0.00",
+        "currency": "USD"
+      }
+    }
+  ],
+  "issues": [
+    {
+      "objectId": null,
+      "errorCode": "destinationCountryCode.UsSalesTaxWarning",
+      "description": "Please note: Quote does not include sales tax, which may apply"
+    }
+  ]
+}

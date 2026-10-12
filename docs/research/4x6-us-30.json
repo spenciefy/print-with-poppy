@@ -1,0 +1,37 @@
+{
+  "quantity": 30,
+  "method": "Standard",
+  "cost": {
+    "items": {
+      "amount": "7.50",
+      "currency": "USD"
+    },
+    "shipping": {
+      "amount": "10.75",
+      "currency": "USD"
+    },
+    "branding": {
+      "amount": "0.00",
+      "currency": "USD"
+    },
+    "totalCost": {
+      "amount": "18.25",
+      "currency": "USD"
+    },
+    "totalTax": {
+      "amount": "0.00",
+      "currency": "USD"
+    }
+  },
+  "carrier": {
+    "name": "UPS",
+    "service": "UPS - Mail Innovations"
+  },
+  "issues": [
+    {
+      "objectId": null,
+      "errorCode": "destinationCountryCode.UsSalesTaxWarning",
+      "description": "Please note: Quote does not include sales tax, which may apply"
+    }
+  ]
+}

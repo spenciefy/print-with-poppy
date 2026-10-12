@@ -1,0 +1,66 @@
+{
+  "sku": "GLOBAL-PHO-4X6-PRO",
+  "attributes": {
+    "finish": "lustre",
+    "paperType": "Archival professional",
+    "substrateWeight": "240gsm"
+  },
+  "quotes": [
+    {
+      "method": "Standard",
+      "cost": {
+        "items": {
+          "amount": "0.50",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "10.75",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "11.25",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "USPS",
+            "service": "USPS First Class Post"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "US",
+            "labCode": "us2"
+          },
+          "cost": {
+            "amount": "10.75",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "objectId": null,
+      "errorCode": "destinationCountryCode.UsSalesTaxWarning",
+      "description": "Please note: Quote does not include sales tax, which may apply"
+    }
+  ]
+}

@@ -14,7 +14,7 @@ The customer pays Print with Poppy through Stripe Checkout. A verified paid even
 ## Current behavior and operational work
 
 - The agent must show the full address, photos/crops, email and complete price before requesting approval. Card details go through hosted Stripe Checkout.
-- Pricing currently uses twice the quoted Prodigi item cost, with a $5 item subtotal minimum, plus quoted shipping and calculated customer tax. Review profitability including payment fees, supplier tax, refunds and reprints before launch.
+- Pricing is $20 for 1–20 prints, then $0.50 per additional print through 100, including US Budget delivery; customer tax is added before approval. See PRICING-RESEARCH.md for cost evidence. Review profitability including payment fees, supplier tax, refunds and reprints before launch.
 - Successful payment queues print submission with stable idempotency keys. Confirmation and shipment emails run through Resend; tracking is included when supplied by Prodigi.
 - Failed fulfillment remains retryable. Refunds, reprints and cancellations require operator action in the provider dashboards.
 - Before live launch, configure and verify client-IP handling behind Vercel/Railway. The current conservative proxy configuration can share rate limits across visitors.

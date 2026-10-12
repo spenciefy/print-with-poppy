@@ -930,3 +930,17 @@ nav > a:first-child {
     flex-wrap: wrap;
   }
 }
+
+.brand img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  aspect-ratio: 1;
+}
+.offer-details {
+  color: var(--ink);
+}
+.home-process .offer-delivery {
+  color: var(--muted);
+  font-size: 13px;
+}

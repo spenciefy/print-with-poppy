@@ -35,7 +35,7 @@ Automated integration tests exercise the real Express API and temporary SQLite d
 
 ## Connect accounts (sandbox first)
 
-1. **Prodigi:** create an account and obtain the sandbox API key. Validate `GLOBAL-PHO-4X6`, the exact supported finish value (default `lustre`), and `Standard` shipping through their product/quote APIs. The server checks the finish rather than silently substituting it. Quote 10, 25 and 50 distinct photos together to validate economics.
+1. **Prodigi:** create an account and obtain the sandbox API key. Validate `GLOBAL-PHO-4X6`, the exact supported finish value (default `lustre`), and `Budget` shipping through their product/quote APIs. The server checks the finish rather than silently substituting it. Quote 10, 25 and 50 distinct photos together to validate economics.
 2. **Stripe:** use test keys and configure Stripe Tax business settings/registrations. The Tax Calculation API uses the **approved shipping address** before user approval. Checkout charges the frozen subtotal, shipping and calculated tax as fixed line items; it does not recollect or change the shipping address, recalculate tax, accept coupons or enable currency conversion. A background job creates the tax transaction after payment. This is a custom Stripe Tax integration, not Checkout automatic tax.
 3. Register `https://YOUR_HOST/api/webhooks/stripe` for `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Supply its signing secret. A server-side reconciliation job also checks unpaid sessions periodically in case callbacks are missed.
 4. **Resend:** create an account, verify `printwithpoppy.com` with the requested DNS records, and set `EMAIL_FROM=Print with Poppy <orders@printwithpoppy.com>`. Confirm the support mailbox actually works. Sandbox sends real emails to the supplied recipient: use your own test inbox.
@@ -51,10 +51,10 @@ The card stays at **Stripe-hosted Checkout**. An agent with an authorized card m
 ## Prices, email and delivery
 
 - US/USD only, 4×6 prints, maximum 100 prints per order.
-- Item retail price = supplier item cost × `PRICE_MULTIPLIER`, with `MINIMUM_SUBTOTAL_CENTS`. Supplier shipping is passed through. Supplier tax is absorbed in margin; customer sales tax is calculated separately by Stripe Tax.
+- $20 for 1–20 prints, then $0.50 per additional print through 100. US Budget shipping is included; customer tax is added before approval. Shared constants in `src/offer.ts` power the site and quotes. Unexpected supplier costs above 80% of the advertised pre-tax amount stop the quote instead of silently increasing the price. See [pricing research](docs/PRICING-RESEARCH.md).
 - Quotes expire in 15 minutes. The approved checkout expires roughly one hour after creation. Changing address/photos/quantities requires a new proposal and fresh approval.
 - Payment confirmation email contains the full shipping address, total, order link and available estimate. Every shipped package gets a shipment email; newly available tracking generates an update. All packages remain visible on the order page.
-- Prodigi's documented 2–3-day production window is labeled as **printing time**, not a delivery promise. Arrival estimates are omitted by default. Configure `DELIVERY_MIN_BUSINESS_DAYS` / `DELIVERY_MAX_BUSINESS_DAYS` only after measuring the chosen service. Carrier tracking is included only when Prodigi provides it. The app never infers delivery from shipment.
+- The initial 7–12-business-day arrival window is explicitly our planning estimate, not a provider guarantee or measured delivery performance. Validate it with physical samples. Carrier tracking is included only when supplied. The app never infers delivery from shipment.
 
 ## Hosted example
 

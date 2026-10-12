@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { offer, printSubtotal } from "../src/offer.js";
 import { config, sku } from "./config.js";
 import { HttpError, mediaUrl } from "./store.js";
 import type { Proposal, Quote, Order } from "./types.js";
@@ -51,14 +52,11 @@ const cents = (m: any) => {
   return Math.round(Number(m.amount) * 100);
 };
 export async function getPrice(p: Proposal) {
+  const subtotal = printSubtotal(p.items.reduce((n, i) => n + i.quantity, 0));
+  const shipping = 0;
   if (config.demo) {
-    const subtotal = Math.max(
-      500,
-      p.items.reduce((n, i) => n + i.quantity, 0) * 45,
-    );
-    const shipping = 495;
-    const tax = Math.round((subtotal + shipping) * 0.0875);
-    return { subtotal, shipping, tax, total: subtotal + shipping + tax };
+    const tax = Math.round(subtotal * 0.0875);
+    return { subtotal, shipping, tax, total: subtotal + tax };
   }
   // Verify the exact finish is available for the selected SKU/destination, rather than guessing attributes.
   const product = await prodigi(`/products/${sku}`);
@@ -89,11 +87,22 @@ export async function getPrice(p: Proposal) {
       "shipping_unavailable",
       "No shipping quote is available for this destination.",
     );
-  const subtotal = Math.max(
-    config.MINIMUM_SUBTOTAL_CENTS,
-    Math.ceil(cents(candidate.costSummary.items) * config.PRICE_MULTIPLIER),
-  );
-  const shipping = cents(candidate.costSummary.shipping);
+  // Keep the advertised price fixed. Stop quoting instead of passing on an unexpected supplier increase.
+  const fulfillmentCost =
+    cents(candidate.costSummary.items) +
+    cents(candidate.costSummary.shipping) +
+    (candidate.costSummary.totalTax
+      ? cents(candidate.costSummary.totalTax)
+      : 0) +
+    (candidate.costSummary.branding
+      ? cents(candidate.costSummary.branding)
+      : 0);
+  if (fulfillmentCost > subtotal * 0.8)
+    throw new HttpError(
+      503,
+      "pricing_unavailable",
+      "This delivery cannot currently be offered at our published price. Please try again later.",
+    );
   const calculation = await stripe!.tax.calculations.create({
     currency: "usd",
     customer_details: {
@@ -126,11 +135,7 @@ export async function getPrice(p: Proposal) {
   };
 }
 export function deliveryEstimate() {
-  const min = Number(process.env.DELIVERY_MIN_BUSINESS_DAYS),
-    max = Number(process.env.DELIVERY_MAX_BUSINESS_DAYS);
-  if (min > 0 && max >= min)
-    return `Estimated arrival in ${min}–${max} business days after payment. This is our estimate, not a guaranteed delivery date.`;
-  return "Printing typically takes 2–3 days. An arrival date is not available yet; we will email shipment updates.";
+  return offer.delivery;
 }
 export async function checkout(order: Order) {
   if (config.demo)

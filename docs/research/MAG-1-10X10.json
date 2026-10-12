@@ -1,0 +1,62 @@
+{
+  "sku": "MAG-1-10X10",
+  "attributes": {},
+  "quotes": [
+    {
+      "method": "Standard",
+      "cost": {
+        "items": {
+          "amount": "5.29",
+          "currency": "USD"
+        },
+        "shipping": {
+          "amount": "32.96",
+          "currency": "USD"
+        },
+        "branding": {
+          "amount": "0.00",
+          "currency": "USD"
+        },
+        "totalCost": {
+          "amount": "38.25",
+          "currency": "USD"
+        },
+        "totalTax": {
+          "amount": "0.00",
+          "currency": "USD"
+        }
+      },
+      "shipments": [
+        {
+          "carrier": {
+            "name": "DHL Express",
+            "service": "DHL Express Worldwide"
+          },
+          "fulfillmentLocation": {
+            "countryCode": "GB",
+            "labCode": "prodigi_gb2"
+          },
+          "cost": {
+            "amount": "32.96",
+            "currency": "USD"
+          },
+          "items": [
+            "1"
+          ],
+          "brandingItems": [],
+          "tax": {
+            "amount": "0.00",
+            "currency": "USD"
+          }
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "objectId": null,
+      "errorCode": "destinationCountryCode.UsSalesTaxWarning",
+      "description": "Please note: Quote does not include sales tax, which may apply"
+    }
+  ]
+}
