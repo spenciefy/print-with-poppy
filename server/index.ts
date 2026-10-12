@@ -144,7 +144,12 @@ app.get("/api/catalog", (_req, res) =>
   res.json({
     products: catalog,
     currency: "USD",
-    shippingIncluded: true,
+    shippingIncluded: false,
+    shipping: {
+      flatRate: offer.shippingCents,
+      freeAtSubtotal: offer.freeShippingMinimumCents,
+      thresholdIncludesTax: false,
+    },
     country: "US",
     tax: "Added before approval",
     deliveryEstimate: offer.delivery,

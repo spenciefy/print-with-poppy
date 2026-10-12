@@ -41,7 +41,7 @@ References: https://personalagentprotocol.org/docs/spec · https://personalagent
 
 ## Pricing and brand update
 
-Two public offers: one 12×16 matte print for $35, or $12 for 1–5 4×6 lustre prints, US Budget delivery included, then $0.50 per additional print up to 100. Customer tax is added before approval; only approved quantities are printed. Shared site/server pricing; reject unexpected supplier costs instead of changing published terms. Arrival is a provisional 7–12-business-day estimate, subject to delivered-sample validation. See docs/PRICING-RESEARCH.md. Supplier names stay in implementation/research, not customer copy. Square poppy-field instant-photo logo replaces the flower-only mark.
+Two public offers: one 12×16 matte print for $35, or $12 for 1–5 4×6 lustre prints, then $0.50 per additional print up to 100. US Budget shipping is $5 below $25 in merchandise, free at $25 or more before tax, per order. Customer tax is added before approval; only approved quantities are printed. Shared site/server pricing; reject unexpected supplier costs instead of changing published terms. Arrival is a provisional 7–12-business-day estimate, subject to delivered-sample validation. See docs/PRICING-RESEARCH.md. Supplier names stay in implementation/research, not customer copy. Square poppy-field instant-photo logo replaces the flower-only mark.
 
 ## Agent-only storefront
 

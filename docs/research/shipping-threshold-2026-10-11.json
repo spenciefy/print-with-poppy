@@ -1,0 +1,45 @@
+{
+  "source": "Authenticated production Prodigi quotes; US Budget; distinct items; USD. No purchase. Supplier quoted totalTax=0; allowance modeled separately.",
+  "rows": [
+    {
+      "product": "prints",
+      "quantity": 5,
+      "supplierBeforeTaxCents": 795,
+      "subtotalCents": 1200,
+      "customerShippingCents": 500,
+      "conservativeContributionCents": 525
+    },
+    {
+      "product": "prints",
+      "quantity": 30,
+      "supplierBeforeTaxCents": 1420,
+      "subtotalCents": 2450,
+      "customerShippingCents": 500,
+      "conservativeContributionCents": 1004
+    },
+    {
+      "product": "prints",
+      "quantity": 31,
+      "supplierBeforeTaxCents": 1445,
+      "subtotalCents": 2500,
+      "customerShippingCents": 0,
+      "conservativeContributionCents": 557
+    },
+    {
+      "product": "prints",
+      "quantity": 100,
+      "supplierBeforeTaxCents": 3170,
+      "subtotalCents": 5950,
+      "customerShippingCents": 0,
+      "conservativeContributionCents": 1878
+    },
+    {
+      "product": "poster",
+      "quantity": 1,
+      "supplierBeforeTaxCents": 2110,
+      "subtotalCents": 3500,
+      "customerShippingCents": 0,
+      "conservativeContributionCents": 758
+    }
+  ]
+}

@@ -459,7 +459,7 @@ test("provider contracts preserve approved terms and use stable idempotency keys
       taxParams = params;
       return {
         id: "taxcalc_contract",
-        amount_total: 1305,
+        amount_total: 1805,
         tax_amount_exclusive: 105,
       };
     }) as any;
@@ -472,11 +472,11 @@ test("provider contracts preserve approved terms and use stable idempotency keys
       };
     }) as any;
     const price = await providers.getPrice(f.proposal as any);
-    assert.equal(price.total, 1305);
+    assert.equal(price.total, 1805);
     assert.equal(price.subtotal, 1200);
-    assert.equal(price.shipping, 0);
+    assert.equal(price.shipping, 500);
     assert.equal(taxParams.line_items[0].amount, 1200);
-    assert.equal(taxParams.shipping_cost.amount, 0);
+    assert.equal(taxParams.shipping_cost.amount, 500);
     assert.equal(price.tax, 105);
     assert.equal(taxParams.customer_details.address.line2, "Unit 9");
     assert.equal(taxParams.customer_details.address_source, "shipping");

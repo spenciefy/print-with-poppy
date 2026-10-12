@@ -1,7 +1,9 @@
 import Stripe from "stripe";
+import { contributionBudget } from "./pricing.js";
 import {
   offer,
   printSubtotal,
+  shippingPrice,
   posterPrice,
   productOf,
   mediaVariant,
@@ -63,10 +65,10 @@ export async function getPrice(p: Proposal) {
     p.product === "poster"
       ? posterPrice
       : printSubtotal(p.items.reduce((n, i) => n + i.quantity, 0));
-  const shipping = 0;
+  const shipping = shippingPrice(subtotal);
   if (config.demo) {
-    const tax = Math.round(subtotal * 0.0875);
-    return { subtotal, shipping, tax, total: subtotal + tax };
+    const tax = Math.round((subtotal + shipping) * 0.0875);
+    return { subtotal, shipping, tax, total: subtotal + shipping + tax };
   }
   // Verify the exact finish is available for the selected SKU/destination, rather than guessing attributes.
   const product = await prodigi(`/products/${selected.sku}`);
@@ -102,21 +104,27 @@ export async function getPrice(p: Proposal) {
       "No shipping quote is available for this destination.",
     );
   // Keep the advertised price fixed. Stop quoting instead of passing on an unexpected supplier increase.
-  const fulfillmentCost =
+  const supplierBase =
     cents(candidate.costSummary.items) +
     cents(candidate.costSummary.shipping) +
-    (candidate.costSummary.totalTax
-      ? cents(candidate.costSummary.totalTax)
-      : 0) +
     (candidate.costSummary.branding
       ? cents(candidate.costSummary.branding)
       : 0);
-  if (fulfillmentCost > subtotal * 0.8)
-    throw new HttpError(
-      503,
-      "pricing_unavailable",
-      "This delivery cannot currently be offered at our published price. Please try again later.",
-    );
+  const supplierTax = candidate.costSummary.totalTax
+    ? cents(candidate.costSummary.totalTax)
+    : 0;
+  const checkMargin = (tax: number) => {
+    if (
+      contributionBudget(subtotal + shipping, tax, supplierBase, supplierTax) <
+      0
+    )
+      throw new HttpError(
+        503,
+        "pricing_unavailable",
+        "This delivery cannot currently be offered at our published price. Please try again later.",
+      );
+  };
+  checkMargin(0);
   const calculation = await stripe!.tax.calculations.create({
     currency: "usd",
     customer_details: {
@@ -140,6 +148,7 @@ export async function getPrice(p: Proposal) {
     ],
     shipping_cost: { amount: shipping, tax_behavior: "exclusive" },
   });
+  checkMargin(calculation.tax_amount_exclusive);
   return {
     subtotal,
     shipping,

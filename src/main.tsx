@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "./style.css";
-import { productOf } from "./offer";
+import { productOf, shippingSummary } from "./offer";
 type Config = { mode: string; origin: string; support: string };
 const money = (c: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -208,8 +208,8 @@ function Footer() {
         <div className="protocol-approval protocol-step">
           <h3>3. You approve. Your agent takes it from there.</h3>
           <p>
-            After you approve the photos, delivery address and final total,
-            your agent pays and we email confirmation and tracking when available.
+            After you approve the photos, delivery address and final total, your
+            agent pays and we email confirmation and tracking when available.
           </p>
         </div>
         <div className="store-faq">
@@ -326,7 +326,7 @@ function Home({ config }: { config: Config }) {
             </article>
           </div>
           <p className="store-delivery">
-            US shipping included · Tax shown before approval
+            {shippingSummary} Tax shown before approval.
             <br />
             Estimated delivery: 7–12 business days after payment.
           </p>

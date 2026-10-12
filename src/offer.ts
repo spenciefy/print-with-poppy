@@ -4,6 +4,8 @@ export const offer = {
   baseCents: 1200,
   extraPrintCents: 50,
   maxPrints: 100,
+  shippingCents: 500,
+  freeShippingMinimumCents: 2500,
   delivery:
     "Estimated delivery: 7–12 business days after payment. This is our estimate, not a guaranteed arrival date.",
 } as const;
@@ -15,8 +17,14 @@ export function printSubtotal(quantity: number) {
     Math.max(0, quantity - offer.includedPrints) * offer.extraPrintCents
   );
 }
-export const priceSummary =
-  "Up to 5 prints for $12, US delivery included. Additional prints 50¢ each, up to 100 total. Tax added before approval. Orders with fewer than 5 prints still cost $12; we print only the quantity you approve.";
+export function shippingPrice(subtotal: number) {
+  if (!Number.isSafeInteger(subtotal) || subtotal < 0)
+    throw new RangeError("Invalid subtotal.");
+  return subtotal >= offer.freeShippingMinimumCents ? 0 : offer.shippingCents;
+}
+export const shippingSummary =
+  "$5 US shipping; free on orders of $25 or more before tax.";
+export const priceSummary = `Up to 5 prints for $12, plus shipping. Additional prints 50¢ each, up to 100 total. ${shippingSummary} Tax added before approval. Orders with fewer than 5 prints still cost $12; we print only the quantity you approve.`;
 
 export const products = {
   prints: {

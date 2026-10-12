@@ -1,3 +1,29 @@
+# Current shipping policy — 2026-10-11
+
+$12 for up to five 4×6 prints, 50¢ each extra; one 12×16 print remains $35. **$5 US shipping below $25; free at $25 or more in merchandise, before tax, per order.** Different products remain separate orders. The threshold is inclusive, so 31 small prints qualify; the wall print always qualifies.
+
+Fresh authenticated production quotes confirmed 25¢ per small print + $6.70 Budget delivery (5, 30, 31 and 100 distinct items), and $14 + $7.10 for the wall print. No payment or fulfillment was submitted. Snapshot: `research/shipping-threshold-2026-10-11.json`.
+
+| Order | Merchandise | Customer shipping | Supplier printing + shipping | Conservative remainder |
+|---|---:|---:|---:|---:|
+| 5 prints | $12 | $5 | $7.95 | $5.25 |
+| 30 prints | $24.50 | $5 | $14.20 | $10.04 |
+| 31 prints | $25 | Free | $14.45 | $5.57 |
+| 100 prints | $59.50 | Free | $31.70 | $18.78 |
+| Wall print | $35 | Free | $21.10 | $7.58 |
+
+Conservative remainder deducts: supplier base costs plus a 10% supplier-tax allowance; 6% of the customer charge including a modeled 12% customer tax plus 30¢ payment fee; 55¢ for Stripe Tax transaction/calculation; and $1 operating reserve. Customer tax is pass-through, not revenue. These are budgeting assumptions, not verified account-specific fees or a net-profit guarantee. At these assumptions, five prints need about $11.37 total pre-tax revenue to break even; the wall print about $26.87. $25 is a simple free-shipping threshold with cushion for every supported small-print quantity and the $35 wall print.
+
+The free-shipping cliff means 31 prints cost less delivered than 30 ($25 versus $29.50); never add photos or copies without approval. This is the deliberate promotion the threshold creates.
+
+Every new live quote checks actual provider base costs, the greater of quoted supplier tax or a 10% allowance, payment fees on the actual tax-inclusive charge, the Tax API allowance and the operating reserve. Negative modeled contribution fails closed before approval/payment. Existing approved quotes retain their original prices. Supplier quotes are country-level and final fulfillment charges can vary; no pricing formula guarantees against refunds, chargebacks, reprints, unconverted/repeated API calls, acquisition costs or fixed hosting at low order volume.
+
+Sources checked: [Stripe US card pricing](https://stripe.com/en-us/pricing) (2.9% + 30¢ domestic, with possible international, FX and manual-entry uplifts); [Stripe Tax API pricing](https://stripe.com/tax/pricing) (50¢ transaction including 10 calculation calls, 5¢ additional calculation). Actual account terms may differ.
+
+---
+
+The following notes are historical research and are superseded by the current policy above.
+
 > Current implementation: the smaller $12/5-print offer and $35 poster below now replace the original $20/20 offer. Both are supported by the API; live ordering still requires deployment activation. Historical comparisons remain below.
 
 # Pricing and product decisions — 2026-10-11
