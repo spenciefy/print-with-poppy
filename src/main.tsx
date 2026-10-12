@@ -22,12 +22,12 @@ function Brand() {
       <span className="brand-stack" aria-hidden="true">
         <img
           className="brand-photo back"
-          src="/photos/poppy-abstract-close.webp"
+          src="/photos/poppy-abstract-yellow.webp"
           alt=""
         />
         <img
           className="brand-photo middle"
-          src="/photos/poppy-abstract-portrait.webp"
+          src="/photos/poppy-abstract-red.webp"
           alt=""
         />
         <img
@@ -356,7 +356,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
             role="img"
             aria-label="Example 4 by 6 photo prints with white borders"
           >
-            <img src="/photos/poppy-abstract-close.webp" alt="" />
+            <img src="/photos/poppy-abstract-red.webp" alt="" />
             <img src="/photos/poppy-abstract-cluster.webp" alt="" />
           </div>
           <div className="product-copy">
@@ -371,8 +371,8 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
         <article className="store-product">
           <div className="product-preview poster-preview">
             <img
-              src="/photos/poppy-abstract-portrait.webp"
-              alt="Example vertical 12 by 16 wall print of abstract orange poppies"
+              src="/photos/poppy-abstract-red.webp"
+              alt="Example vertical 12 by 16 wall print of abstract red poppies"
             />
           </div>
           <div className="product-copy">
@@ -750,17 +750,17 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
               <span className="brand-stack" aria-hidden="true">
                 <img
                   className="brand-photo back"
-                  src="/photos/poppy-abstract-close.webp"
+                  src="/photos/poppy-abstract-yellow.webp"
                   alt=""
                 />
                 <img
                   className="brand-photo middle"
-                  src="/photos/poppy-abstract-close.webp"
+                  src="/photos/poppy-abstract-red.webp"
                   alt=""
                 />
                 <img
                   className="brand-photo front"
-                  src="/photos/poppy-abstract-close.webp"
+                  src="/photos/poppy-abstract-cluster.webp"
                   alt=""
                 />
               </span>
