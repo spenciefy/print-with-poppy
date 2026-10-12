@@ -160,19 +160,16 @@ function Footer() {
           <div className="protocol-step">
             <h3>1. Your agent finds the front door.</h3>
             <p>
-              It reads <a href="/.well-known/poppy.json">poppy.json</a>: a small
-              public file that identifies the store and points to
-              authentication, the API reference and order-approval endpoints. No
-              photos or secret keys live here.
+              <a href="/.well-known/poppy.json">poppy.json</a> points your agent
+              to the store’s identity, authentication and APIs.
             </p>
             <DiscoveryBox />
           </div>
           <div className="protocol-step">
             <h3>2. The API tells it what to do next.</h3>
             <p>
-              The linked <a href="/openapi.json">OpenAPI reference</a> describes
-              each request and response. Your agent starts a session, checks the
-              catalog, uploads your photos and asks for an order proposal.
+              The <a href="/openapi.json">API reference</a> shows your agent how
+              to browse products, upload photos and prepare an order.
             </p>
             <div className="api-reference">
               <div className="reference-heading">
@@ -211,18 +208,8 @@ function Footer() {
         <div className="protocol-approval protocol-step">
           <h3>3. You approve. Your agent takes it from there.</h3>
           <p>
-            You see the photos, crop, quantity, full delivery address and total
-            with tax before approving. Your agent confirms that exact order and
-            pays through Stripe. We send it to print and email confirmation and
-            tracking when available.
-          </p>
-          <p>
-            This is a real store and an open-source example of{" "}
-            <a href="https://personalagentprotocol.org/docs/spec">
-              Personal Agent Protocol
-            </a>
-            : discovery connects your agent to the APIs; the operations
-            extension gives approval a defined place in the flow.
+            After you approve the photos, delivery address and final total,
+            your agent pays and we email confirmation and tracking when available.
           </p>
         </div>
         <div className="store-faq">

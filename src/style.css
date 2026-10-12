@@ -682,9 +682,6 @@ footer a {
   .order-paper {
     padding: 22px;
   }
-  footer p {
-    display: none;
-  }
 }
 @media (max-width: 760px) {
   header {
