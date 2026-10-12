@@ -1896,11 +1896,41 @@ header {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin-top: auto;
-  padding-top: 28px;
+  margin-top: 0;
+  padding-top: 20px;
 }
 .instructions-actions .instructions-copy {
   justify-content: center;
   text-decoration: none;
   min-width: 0;
+}
+
+.agent-instructions { aspect-ratio: auto; }
+.instructions-heading { margin-bottom: 20px; }
+.instructions-heading h2 {
+  max-width: none;
+  font-size: clamp(16px, 1.65vw, 20px);
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+.instructions-actions .instructions-copy {
+  min-height: 46px;
+  box-shadow: none;
+  font-weight: 600;
+  border-color: transparent;
+}
+.instructions-actions button.instructions-copy {
+  background: var(--orange);
+  color: var(--ink);
+}
+.instructions-actions a.instructions-copy {
+  background: var(--ink);
+  color: var(--paper);
+}
+.instructions-actions button.instructions-copy:hover {
+  background: color-mix(in oklch, var(--orange) 90%, var(--ink));
+}
+.instructions-actions a.instructions-copy:hover {
+  background: color-mix(in oklch, var(--ink) 88%, var(--paper));
 }
