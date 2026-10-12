@@ -96,7 +96,7 @@ The public example uses Vercel for the React website and same-origin rewrites to
 
 `vercel.json` contains the example backend's **public URL only**. Forks must replace that URL with their own Railway service. Set provider credentials only on Railway; Vercel needs no provider secrets. Keep one backend replica and mount the persistent volume before deploying. In Railway service settings, connect the `main` branch, use the detected Dockerfile, set the health check to `/api/health`, and keep serverless sleeping disabled. New services no longer support Railway config-as-code. Railway mounts volumes as root: this deployment sets `RAILWAY_RUN_UID=0` so the service can write its private volume.
 
-New installations default to `APP_MODE=demo`: payments, prints and emails are simulated. The public store can accept real orders; check `/api/catalog` for its current mode and availability. Deploying a fork does not enable live transactions. Use separate credentials and storage when switching from demo to live.
+New installations default to `APP_MODE=demo`: payments, prints and emails are simulated. Agent Sandbox can optionally send real, clearly labeled order emails through Resend; see [the sandbox guide](docs/SANDBOX.md#real-sandbox-order-emails). The public store can accept real orders; check `/api/catalog` for its current mode and availability. Deploying a fork does not enable live transactions. Use separate credentials and storage when switching from demo to live.
 
 ## Deployment and operations
 

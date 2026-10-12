@@ -38,6 +38,7 @@ export const config = {
   dataDir: path.resolve(env.DATA_DIR),
   secret: appSecret || "",
   demo: env.APP_MODE === "demo",
+  sandboxEmailDelivery: process.env.SANDBOX_EMAIL_DELIVERY === "true",
   agentSandbox: process.env.AGENT_SANDBOX === "true",
   prodigiBase:
     env.APP_MODE === "live"
@@ -97,7 +98,9 @@ if (
   [
     process.env.STRIPE_SECRET_KEY,
     process.env.PRODIGI_API_KEY,
-    process.env.RESEND_API_KEY,
   ].some(Boolean)
 )
-  throw new Error("Do not install provider credentials in the Agent Sandbox.");
+  throw new Error("Do not install payment or print provider credentials in the Agent Sandbox.");
+
+if (config.sandboxEmailDelivery && (!config.agentSandbox || !process.env.RESEND_API_KEY || !process.env.EMAIL_FROM)) throw new Error("Sandbox email delivery requires Agent Sandbox, Resend credentials, EMAIL_FROM.");
+export const sandboxEmailEnabled = () => config.agentSandbox && config.sandboxEmailDelivery;

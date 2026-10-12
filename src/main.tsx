@@ -361,7 +361,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const sandbox = config.environment === "agent-sandbox";
-  const prompt = sandbox ? `I want to test ordering photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and verify /api/config says environment=agent-sandbox. Ask me for sample photos and use fictional shipping details and a synthetic email. Show the proposal and ask for approval, then use simulatePayment and simulateShipment and show the captured confirmation and shipping emails. No real card, prints or emails. Keep all requests and session tokens on this sandbox origin.` : `I want to order photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and the catalog. Only if you do not support native Poppy sessions, read /api/compat/instructions for HTTP compatibility access. Help me choose 4×6 prints or one 12×16 matte print. Show me the photos, crops, full shipping address, email, delivery estimate and total including tax for approval. Only after I approve, and if the store is accepting live orders, pay with your authorized card.`;
+  const prompt = sandbox ? `I want to test ordering photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and verify /api/config says environment=agent-sandbox. Ask me for sample photos and use fictional shipping details and my email address for test emails. Show the proposal and ask for approval, then use simulatePayment and simulateShipment and show the captured confirmation and shipping emails. No real card or prints. Order emails may be sent to the order email address. Keep all requests and session tokens on this sandbox origin.` : `I want to order photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and the catalog. Only if you do not support native Poppy sessions, read /api/compat/instructions for HTTP compatibility access. Help me choose 4×6 prints or one 12×16 matte print. Show me the photos, crops, full shipping address, email, delivery estimate and total including tax for approval. Only after I approve, and if the store is accepting live orders, pay with your authorized card.`;
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -494,7 +494,7 @@ function Guide({ config }: { config: Config }) {
     <main className="agent-document">
       <h1>Print with Poppy — agent instructions</h1>
       <p>
-        {sandbox ? <>Test the full ordering flow with sample photos and fictional US addresses. No card, physical prints or outbound email. <a href="/sandbox">Sandbox testing guide</a>.</> : <>Order photo prints for your user. US home delivery only. Prices are in USD.</>}
+        {sandbox ? <>Test the full ordering flow with sample photos and fictional US addresses. No card or physical prints. Order emails may be sent to the order email address. <a href="/sandbox">Sandbox testing guide</a>.</> : <>Order photo prints for your user. US home delivery only. Prices are in USD.</>}
       </p>
       <ul className="agent-references">
         <li>
@@ -607,7 +607,7 @@ function Guide({ config }: { config: Config }) {
       <p>
         <code>GET /api/orders/&#123;order_id&#125;</code> to check payment,
         print submission and shipment. Save the private order-status link.
-        {sandbox ? <>Use <code>getSandboxEmails</code> to preview the captured confirmation and shipment messages. Nothing is delivered; tracking is synthetic.</> : <>Confirmation and shipment emails go to the approved email address; tracking is included when available.</>}
+        {sandbox ? <>Use <code>getSandboxEmails</code> to preview the captured confirmation and shipment messages. Emails are captured, or submitted to Resend for the order email address. Tracking is synthetic.</> : <>Confirmation and shipment emails go to the approved email address; tracking is included when available.</>}
       </p>
       <p>
         Retry the same request or operation after a timeout. Never start another
@@ -933,7 +933,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
                   <h3>Follow the whole journey.</h3>
                   <p>
                     Advance the demo shipment and inspect the emails this order
-                    would send.
+                    generated.
                   </p>
                   <button
                     className="outline"
@@ -1026,7 +1026,7 @@ function App() {
   const variant = variants.find((v) => route === `/variants/${v.id}`)?.id;
   return (
     <>
-      {config.environment === "agent-sandbox" && <aside className="sandbox-banner" aria-label="Sandbox environment"><strong>Sandbox environment</strong><span>Sample orders only. No real payments, prints or emails.</span><a href="/sandbox">Testing guide ↗</a></aside>}
+      {config.environment === "agent-sandbox" && <aside className="sandbox-banner" aria-label="Sandbox environment"><strong>Sandbox environment</strong><span>Sample orders only. No real payments or prints. Test emails are sent to your order email address when enabled.</span><a href="/sandbox">Testing guide ↗</a></aside>}
       <Header route={route} navigate={navigate} />
       {route === "/demo" ? (
         <Demo />

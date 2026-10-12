@@ -160,12 +160,14 @@ app.get("/api/catalog", (_req, res) =>
     oneProductPerOrder: true,
     mode: config.APP_MODE,
     environment: config.agentSandbox ? "agent-sandbox" : config.APP_MODE,
+    sandboxEmailDelivery: config.agentSandbox && config.sandboxEmailDelivery,
   }),
 );
 app.get("/api/config", (_req, res) =>
   res.json({
     mode: config.APP_MODE,
     environment: config.agentSandbox ? "agent-sandbox" : config.APP_MODE,
+    sandboxEmailDelivery: config.agentSandbox && config.sandboxEmailDelivery,
     origin: config.origin,
     support: config.support,
   }),

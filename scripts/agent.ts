@@ -145,7 +145,7 @@ const { operation } = await call("/api/orders", {
     "Idempotency-Key": randomUUID(),
   },
   body: JSON.stringify({
-    email: "demo@example.com",
+    email: process.env.SANDBOX_TEST_EMAIL || "demo@example.com",
     address: {
       name: "Demo Recipient",
       line1: "123 Market Street",

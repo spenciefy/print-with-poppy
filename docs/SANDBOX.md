@@ -1,6 +1,6 @@
 # Agent Sandbox
 
-Use **https://sandbox.printwithpoppy.com** to test a personal-agent implementation without cards, purchases, physical printing, or outbound email. This is a separate deployment and database from the real store.
+Use **https://sandbox.printwithpoppy.com** to test a personal-agent implementation without cards, purchases, or physical printing. This is a separate deployment and database from the real store.
 
 | Surface | Purpose |
 | --- | --- |
@@ -8,7 +8,7 @@ Use **https://sandbox.printwithpoppy.com** to test a personal-agent implementati
 | `https://printwithpoppy.com/demo` | Scripted visual walkthrough; no API calls |
 | `https://sandbox.printwithpoppy.com` | Real Poppy API integration with simulated providers |
 
-Before testing, GET `/api/config` on your target. Require `environment: "agent-sandbox"` and `mode: "demo"`. Never switch to the production origin during a sandbox flow. Only use sample images, fictional shipping details, and synthetic email addresses. Test data may be reset; do not store anything you need to keep.
+Before testing, GET `/api/config` on your target. Require `environment: "agent-sandbox"` and `mode: "demo"`. Never switch to the production origin during a sandbox flow. Use sample images and fictional shipping details. Use your own email address for order emails; optional account sign-in still uses test email addresses. Test data may be reset; do not store anything you need to keep.
 
 The live `poppy.json` links to sandbox discovery in its API description. This is an informational link, not an automatic protocol redirect: agents must discover the sandbox domain and create a separate session. The sandbox homepage uses the same storefront as production with a persistent sandbox banner and a simulation-specific agent prompt. `/sandbox` contains the testing guide.
 
@@ -39,13 +39,13 @@ Keep one session for the whole order. These are OpenAPI operation IDs (your agen
 4. Show the returned summary, photos/crops, address and illustrative total. Get approval, then confirm that revision through the Operations extension. Poll the operation until `succeeded`; `result.data.order_id` is the order to simulate. Success here means checkout prepared, not payment.
 5. `simulatePayment`: POST `/api/sandbox/orders/{id}/pay`, no body or card required. Your client may request approval for this write. Poll `getOrder` until `printing`.
 6. `simulateShipment`: POST `/api/sandbox/orders/{id}/ship`. Poll until `shipped`.
-7. `getSandboxEmails`: GET `/api/sandbox/orders/{id}/emails` until confirmation and shipment previews are present. `delivered: false` is intentional: these messages never reached an inbox.
+7. `getSandboxEmails`: GET `/api/sandbox/orders/{id}/emails` until confirmation and shipment previews are present. Each email has `delivery: "captured"` or `"submitted"` and, after Resend acceptance, a `providerId`. Submitted means accepted by Resend, not confirmed inbox delivery.
 
 Payment and shipment simulation are safe to repeat on the same order. Controls require the originating authenticated session; another session gets 404. Payment requires a prepared, unexpired checkout following approval. Shipping requires simulated payment and fulfillment. Carrier names and tracking numbers are explicitly synthetic. The returned `status_url` and `checkout_url` show the order and a no-charge simulation UI.
 
 A suggested agent prompt:
 
-> Test ordering five sample photo prints using https://sandbox.printwithpoppy.com via Personal Agent Protocol. Verify environment=agent-sandbox first. Ask me for sample photos, use fictional recipient details, show the proposal and ask for approval, then simulate payment and shipment and show the captured emails. Never use the production store or a real card.
+> Test ordering five sample photo prints using https://sandbox.printwithpoppy.com via Personal Agent Protocol. Verify environment=agent-sandbox first. Ask me for sample photos, use fictional recipient details, show the proposal and ask for approval, then simulate payment and shipment and show the order emails. Never use the production store or a real card.
 
 ## Optional customer-account test
 
@@ -65,7 +65,7 @@ APP_MODE=demo AGENT_SANDBOX=true ALLOW_COMPAT_AGENT_SESSIONS=false \
   HOST=0.0.0.0 npm start
 ```
 
-Use a separate service, volume and origin. Do **not** install Stripe, Prodigi or Resend credentials: startup rejects them in Agent Sandbox. `APP_MODE=demo` supplies simulated providers; `AGENT_SANDBOX=true` exposes native authenticated simulation controls and the sandbox landing page. The older `APP_MODE=sandbox` setting means provider integration tests using Stripe test keys and Prodigi sandbox; it is **not** this no-card Agent Sandbox. Plain `APP_MODE=demo` without the flag is local development and retains local demo helpers.
+Use a separate service, volume and origin. Do **not** install Stripe or Prodigi credentials: startup rejects them in Agent Sandbox. Resend is optional. `APP_MODE=demo` supplies simulated providers; `AGENT_SANDBOX=true` exposes native authenticated simulation controls and the sandbox landing page. The older `APP_MODE=sandbox` setting means provider integration tests using Stripe test keys and Prodigi sandbox; it is **not** this no-card Agent Sandbox. Plain `APP_MODE=demo` without the flag is local development and retains local demo helpers.
 
 Local reference test: start the app in ordinary `APP_MODE=demo`, then `npm run test:e2e` using the same `PUBLIC_URL` and `DATA_DIR`.
 
@@ -85,3 +85,9 @@ The private JWK stays local and should have a `kid` matching its published publi
 ## What passing proves
 
 The sandbox exercises actual discovery, JWT/DPoP authentication, image processing, pricing, operation approval, checkout preparation, order state changes, and email rendering. Provider responses are simulated. It does not prove Stripe charging, physical print quality, production tax calculations, carrier delivery, or inbox delivery.
+
+## Real sandbox order emails
+
+Set `SANDBOX_EMAIL_DELIVERY=true`, `RESEND_API_KEY` and `EMAIL_FROM` on the sandbox service to deliver confirmation and simulated-shipment emails through Resend. Any recipient address supplied in the approved order is supported; use the tester's own email. There is no recipient allowlist. Payment and printing remain simulated, and every email has a `[SANDBOX]` subject, clear test wording and a link to the sandbox order page. The same messages remain available as previews. With delivery disabled, messages are captured only. `/api/config` reports `sandboxEmailDelivery`.
+
+OTP sign-in remains captured-only with synthetic accounts. Enabling order email does not expose real OTPs. To run the reference order with inbox delivery, add `SANDBOX_TEST_EMAIL=your@email.example` to the hosted test command. Check Resend events or the recipient inbox separately: API submission alone does not prove delivery.

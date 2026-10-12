@@ -8,7 +8,7 @@ import { tick, syncProvider } from "./worker.js";
 import type { Order } from "./types.js";
 
 export const sandboxDescription =
-  "AGENT SANDBOX: real Poppy sessions and approval flow; simulated payments, fulfillment and shipping. No card, physical prints or outbound emails. Use synthetic data and sample images only. This is separate from the /demo visual walkthrough.";
+  "AGENT SANDBOX: real Poppy sessions and approval flow; simulated payments, fulfillment and shipping. No card or physical prints. Order emails may be delivered to the order email address; all other emails are captured only. Use fictional shipping details, sample images and your own email address. This is separate from the /demo visual walkthrough.";
 export const sandboxInstructions = () => `# Print with Poppy — Agent Sandbox
 
 ${sandboxDescription}
@@ -18,7 +18,7 @@ Origin: ${config.origin}. Test guide: ${config.origin}/sandbox. Read /api/config
 2. Read getCatalog. Upload sample JPEG/PNG/WebP images with uploadPhoto (multipart field photo). Use only synthetic recipient details and US addresses for test quotes.
 3. Call proposeOrder with a JSON object, an Idempotency-Key, email, address, items and optional product. Show the returned summary and obtain explicit approval through your interface. Confirm the operation through the Operations extension with the approved revision; poll until succeeded. This means checkout is prepared, not paid.
 4. Call simulatePayment with result.data.order_id. No card details, Stripe visit or real payment. Poll getOrder until printing.
-5. Call simulateShipment with the same order ID, then poll getOrder and getSandboxEmails until shipped and two captured emails are available. Carrier and tracking are simulated. No mail reaches an inbox. Payment/shipment simulation is safe to repeat on the same order.
+5. Call simulateShipment with the same order ID, then poll getOrder and getSandboxEmails until shipped and two captured emails are available. Carrier and tracking are simulated. Order emails reach only the order email address when delivery is enabled; otherwise they are captured only. Payment/shipment simulation is safe to repeat on the same order.
 6. Optional account flow: use mediated sign-in with a unique synthetic @example.com, @example.org or @example.net email and requested scopes. Use getSandboxSignInEmail with the returned challenge id to retrieve your session's captured code, complete the challenge, and exchange the account token for a signed-in session token. Place a new order while signed in, then read listAccountOrders. This simulates email ownership, not real identity verification. Browser direct sign-in is not advertised in the sandbox.
 The /demo route is a scripted visual walkthrough, not this API test environment. Production at https://printwithpoppy.com is live. Never send sandbox tokens or test calls there. Test data may be reset.
 `;
@@ -61,7 +61,7 @@ export const sandboxPaths = {
   "/api/sandbox/orders/{id}/emails": {
     get: action(
       "getSandboxEmails",
-      "Read captured confirmation and shipment emails for your sandbox order. Nothing was delivered to an inbox.",
+      "Read captured confirmation and shipment emails for your sandbox order. Delivery is captured-only or submitted to Resend for the order email address; submission does not prove inbox delivery.",
     ),
   },
   "/api/sandbox/sign-in/{id}/email": {
@@ -148,8 +148,9 @@ export function sandboxRoutes(app: Express) {
     const order = await owned(req);
     res.json({
       simulated: true,
-      delivered: false,
-      emails: all<any>("email", order.id).map(({ subject, html, text }) => ({
+      emails: all<any>("email", order.id).map(({ subject, html, text, delivery, providerId }) => ({
+        delivery: delivery || "captured",
+        providerId,
         subject,
         html,
         text,

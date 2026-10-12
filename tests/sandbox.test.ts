@@ -205,7 +205,7 @@ test("sandbox exposes simulation only with native sessions and approval, isolate
     );
   await worker.tick();
   const emails = await a.request(`/api/sandbox/orders/${oid}/emails`);
-  assert.equal(emails.body.delivered, false);
+  assert.ok(emails.body.emails.every((e: any) => e.delivery === "captured"));
   assert.equal(emails.body.emails.length, 2);
   assert.equal(
     (await b.request(`/api/sandbox/orders/${oid}/emails`)).status,
@@ -246,4 +246,33 @@ test("sandbox OTP is restricted to the requesting session and synthetic accounts
     (await a.request(`/api/sandbox/sign-in/${id}/email`)).status,
     404,
   );
+});
+
+
+test("sandbox order email delivery uses Resend with test labeling and stays captured when disabled", async () => {
+  const { config } = await import("../server/config.js");
+  const { sendMail } = await import("../server/providers.js");
+  const { emailFor } = await import("../server/email.js");
+  const order = store.all<any>("order").find(o => o.paidAt);
+  const message = emailFor(order, "email-confirmation");
+  assert.match(message.subject, /^\[SANDBOX\]/);
+  assert.match(message.text, /No money was charged/);
+  assert.match(message.html, /sandbox.printwithpoppy.com|localhost:8797/);
+  await assert.rejects(sendMail(message, "sandbox-test"), /disabled/);
+  const originalFetch = globalThis.fetch;
+  const calls: any[] = [];
+  config.sandboxEmailDelivery = true;
+  globalThis.fetch = (async (url: any, init: any) => {
+    assert.equal(url, "https://api.resend.com/emails");
+    calls.push(JSON.parse(init.body));
+    return Response.json({ id: "resend-test" });
+  }) as typeof fetch;
+  try {
+    const result = await sendMail({ ...message, to: "tester@any-domain.test" }, "sandbox-test");
+    assert.equal(result.id, "resend-test");
+    assert.equal(calls[0].to, "tester@any-domain.test");
+  } finally {
+    globalThis.fetch = originalFetch;
+    config.sandboxEmailDelivery = false;
+  }
 });

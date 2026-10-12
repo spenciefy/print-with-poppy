@@ -11,7 +11,7 @@ For no-card API integration tests, use the separate [Agent Sandbox](SANDBOX.md).
 
 ## Evidence boundary
 
-Demo fulfillment and payment are simulations, and emails are captured locally. Provider-contract tests intercept HTTP/SDK calls. No real Stripe transaction, Prodigi sandbox/live order, external email delivery or delivered print has been verified. These need completed account activation, credentials and the launch steps in README.md.
+Demo fulfillment and payment are simulations. Emails are captured unless Agent Sandbox explicitly enables Resend delivery (see docs/SANDBOX.md). Provider-contract tests intercept HTTP/SDK calls. No real Stripe transaction, Prodigi sandbox/live order, external email delivery or delivered print has been verified. These need completed account activation, credentials and the launch steps in README.md.
 
 ## Hosted example
 

@@ -8,7 +8,7 @@ import {
   productOf,
   mediaVariant,
 } from "../src/offer.js";
-import { config } from "./config.js";
+import { config, sandboxEmailEnabled } from "./config.js";
 import { HttpError, mediaUrl } from "./store.js";
 import type { Proposal, Quote, Order } from "./types.js";
 export const stripe = process.env.STRIPE_SECRET_KEY
@@ -275,6 +275,7 @@ export async function sendMail(
   message: { to: string; subject: string; html: string; text: string },
   key: string,
 ) {
+  if (config.demo && !sandboxEmailEnabled()) throw new Error("Email delivery is disabled in this demo environment.");
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {

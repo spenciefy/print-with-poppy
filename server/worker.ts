@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { config } from "./config.js";
+import { config, sandboxEmailEnabled } from "./config.js";
 import { db, get, put, all, requireRecord, enqueue } from "./store.js";
 import {
   checkout,
@@ -176,7 +176,8 @@ export async function runJob(job: any) {
       },
       o.id,
     );
-    const result = config.demo
+    const captureOnly = config.demo && !sandboxEmailEnabled();
+    const result = captureOnly
       ? { id: job.id }
       : await sendMail(message, job.id);
     put(
@@ -185,7 +186,8 @@ export async function runJob(job: any) {
       {
         ...message,
         orderId: o.id,
-        providerId: result.id,
+        providerId: captureOnly ? undefined : result.id,
+        delivery: captureOnly ? "captured" : "submitted",
         sent: true,
         sentAt: Date.now(),
         demo: config.demo,
