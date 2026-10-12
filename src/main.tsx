@@ -70,6 +70,7 @@ function Home({ config }: { config: Config }) {
     try {
       await navigator.clipboard.writeText(prompt);
       setCopied(true);
+      setError("");
       setTimeout(() => setCopied(false), 3000);
     } catch {
       setError("Select and copy the instructions below.");
@@ -79,31 +80,40 @@ function Home({ config }: { config: Config }) {
     <>
       <main className="home-minimal">
         <section className="home-intro" aria-labelledby="home-title">
-          <p className="home-label">4 × 6 photo prints · Home delivery</p>
-          <h1 id="home-title">
-            Print out your
-            <br />
-            <em>memories.</em>
-          </h1>
+          <h1 id="home-title">Photo prints, ordered by your agent.</h1>
           <p className="home-description">
-            Send your photos to your personal agent.
-            <br />
-            We’ll print them and ship them to you.
+            4 × 6 inches. Printed by Prodigi. Delivered to your home.
           </p>
-          <button
-            className="primary home-copy"
-            onClick={copy}
-            disabled={
-              config.mode === "loading" || config.mode === "unavailable"
-            }
+          <div
+            className="agent-instructions"
+            aria-labelledby="instructions-label"
           >
-            <span>
-              {copied
-                ? "Instructions copied"
-                : "Copy instructions for your agent"}
-            </span>
-            <Arrow />
-          </button>
+            <div className="instructions-heading">
+              <h2 id="instructions-label">Send this to your agent</h2>
+              <button
+                className="instructions-copy"
+                onClick={copy}
+                disabled={
+                  config.mode === "loading" || config.mode === "unavailable"
+                }
+              >
+                {copied ? "Copied ✓" : "Copy ↗"}
+              </button>
+            </div>
+            <p className="instructions-text">
+              {config.mode === "loading"
+                ? "Loading instructions…"
+                : config.mode === "unavailable"
+                  ? "Instructions unavailable. Please refresh to try again."
+                  : prompt}
+            </p>
+            <p className="instructions-feedback" aria-live="polite">
+              {error ||
+                (copied
+                  ? "Copied to clipboard."
+                  : "Paste into your agent, then attach your photos.")}
+            </p>
+          </div>
           <div className="home-status" aria-live="polite">
             {config.mode === "demo" ? (
               <>
@@ -118,11 +128,6 @@ function Home({ config }: { config: Config }) {
               "4 × 6 inches · Lustre finish · Ships within the US"
             )}
           </div>
-          <details className="prompt-details" open={!!error}>
-            <summary>View instructions</summary>
-            <p>{prompt}</p>
-            {error && <p role="alert">{error}</p>}
-          </details>
         </section>
         <section
           className="home-process"

@@ -809,63 +809,96 @@ footer a {
   }
 }
 
-/* Homepage: one action, followed by ordering details. */
+/* Compact ordering page with a visible, selectable instruction sheet. */
 .home-minimal {
-  max-width: 1080px;
+  max-width: 592px;
   margin: 0 auto;
-  padding: 0 48px;
+  padding: 0 32px;
 }
 .home-intro {
-  padding: 96px 0 72px;
-}
-.home-label {
-  font-size: 14px;
-  color: var(--muted);
-  margin-bottom: 28px;
+  padding: 40px 0 32px;
 }
 .home-intro h1 {
-  font-size: clamp(48px, 6.5vw, 80px);
-  line-height: 1.12;
-  letter-spacing: -0.055em;
-}
-.home-intro h1 em {
-  font-style: normal;
-  color: var(--rust);
+  font-family: Hanken, sans-serif;
+  font-weight: 600;
+  font-size: clamp(24px, 4vw, 30px);
+  line-height: 1.25;
+  letter-spacing: -0.035em;
 }
 .home-description {
-  font-size: 20px;
-  line-height: 1.6;
-  margin: 28px 0 32px;
+  font-size: 15px;
+  color: var(--muted);
+  margin: 12px 0 28px;
 }
-.home-copy {
-  gap: 28px;
+.agent-instructions {
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 32px;
+  border: 1px solid var(--line);
+  background: oklch(95% 0.022 65);
+  display: flex;
+  flex-direction: column;
+}
+.instructions-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.instructions-heading h2 {
+  font-family: Hanken, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.instructions-copy {
+  background: var(--orange);
+  color: var(--ink);
+  padding: 10px 16px;
+  border-radius: 3px;
+  min-height: 44px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.instructions-copy:hover:not(:disabled) {
+  background: oklch(73% 0.18 49);
+}
+.instructions-text {
+  font-size: clamp(15px, 2vw, 18px);
+  line-height: 1.65;
+  user-select: text;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.instructions-feedback {
+  font-size: 12px;
+  color: var(--muted);
+  margin: auto 0 0;
+  padding-top: 24px;
 }
 .home-status {
   font-size: 13px;
   color: var(--muted);
-  margin: 18px 0 12px;
+  margin-top: 16px;
   line-height: 1.6;
 }
 .home-status a {
   margin-left: 6px;
 }
-.home-intro .prompt-details {
-  max-width: 560px;
-}
 .home-process {
   border-top: 1px solid var(--line);
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  gap: 64px;
-  padding: 48px 0 64px;
+  padding: 28px 0 40px;
 }
 .home-process h2 {
-  font-size: 28px;
-  letter-spacing: -0.025em;
+  font-family: Hanken, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
 }
 .home-process p {
-  font-size: 16px;
-  max-width: 48ch;
+  font-size: 14px;
 }
 .home-process .text-link {
   font-size: 14px;
@@ -878,25 +911,20 @@ nav > a:first-child {
     padding: 0 24px;
   }
   .home-intro {
-    padding: 64px 0 48px;
+    padding-top: 24px;
   }
-  .home-label {
-    font-size: 12px;
+  .agent-instructions {
+    padding: 20px;
   }
-  .home-description {
-    font-size: 17px;
+  .instructions-heading {
+    gap: 12px;
+    margin-bottom: 24px;
   }
-  .home-copy {
-    font-size: 14px;
-    width: 100%;
-    justify-content: space-between;
-    padding: 18px;
-    gap: 8px;
+  .instructions-heading h2 {
+    font-size: 13px;
   }
-  .home-process {
-    grid-template-columns: 1fr;
-    gap: 24px;
-    padding: 32px 0 48px;
+  .instructions-text {
+    font-size: 16px;
   }
   header {
     flex-wrap: wrap;
