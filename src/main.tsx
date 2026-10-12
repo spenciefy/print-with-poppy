@@ -356,8 +356,8 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
             role="img"
             aria-label="Example 4 by 6 photo prints with white borders"
           >
-            <img src="/photos/poppy-field-close.png" alt="" />
-            <img src="/photos/poppy-field-wide.png" alt="" />
+            <img src="/photos/poppy-abstract-close.webp" alt="" />
+            <img src="/photos/poppy-abstract-cluster.webp" alt="" />
           </div>
           <div className="product-copy">
             <div className="product-title">
@@ -371,8 +371,8 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
         <article className="store-product">
           <div className="product-preview poster-preview">
             <img
-              src="/photos/poppy-meadow-portrait.png"
-              alt="Example vertical 12 by 16 wall print of a distant poppy meadow"
+              src="/photos/poppy-abstract-portrait.webp"
+              alt="Example vertical 12 by 16 wall print of abstract orange poppies"
             />
           </div>
           <div className="product-copy">
