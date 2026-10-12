@@ -56,6 +56,14 @@ The card stays at **Stripe-hosted Checkout**. An agent with an authorized card m
 - Payment confirmation email contains the full shipping address, total, order link and available estimate. Every shipped package gets a shipment email; newly available tracking generates an update. All packages remain visible on the order page.
 - Prodigi's documented 2–3-day production window is labeled as **printing time**, not a delivery promise. Arrival estimates are omitted by default. Configure `DELIVERY_MIN_BUSINESS_DAYS` / `DELIVERY_MAX_BUSINESS_DAYS` only after measuring the chosen service. Carrier tracking is included only when Prodigi provides it. The app never infers delivery from shipment.
 
+## Hosted example
+
+The public example uses Vercel for the React website and same-origin rewrites to a single Railway service. Railway owns the API, background worker, SQLite database and private images on a persistent `/app/.data` volume. `PUBLIC_URL` is the Vercel custom domain, so discovery, DPoP proofs, checkout returns and signed media URLs all use the same origin.
+
+`vercel.json` contains the example backend's **public URL only**. Forks must replace that URL with their own Railway service. Set provider credentials only on Railway; Vercel needs no provider secrets. Keep one backend replica and mount the persistent volume before deploying. `railway.json` configures Docker builds and health checks. Railway mounts volumes as root: this deployment sets `RAILWAY_RUN_UID=0` so the service can write its private volume.
+
+The hosted example starts in `APP_MODE=demo`: payments, prints and emails are simulated. Provider activation is a separate step; deploying the site does not enable live transactions. Use a separate data directory or volume when switching from demo to live.
+
 ## Deployment and operations
 
 Use one long-running Node service with a **persistent disk**, behind HTTPS. `Dockerfile` is provided. Mount `/app/.data` (or set `DATA_DIR`). Do not deploy this implementation onto an ephemeral/serverless filesystem or scale it to multiple replicas: the worker assumes one process. Back up SQLite and private files together; SQLite uses WAL.

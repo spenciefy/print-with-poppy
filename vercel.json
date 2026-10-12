@@ -1,0 +1,47 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://poppy-api-production-da91.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/oauth/:path*",
+      "destination": "https://poppy-api-production-da91.up.railway.app/oauth/:path*"
+    },
+    {
+      "source": "/media/:path*",
+      "destination": "https://poppy-api-production-da91.up.railway.app/media/:path*"
+    },
+    {
+      "source": "/.well-known/:path*",
+      "destination": "https://poppy-api-production-da91.up.railway.app/.well-known/:path*"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "https://poppy-api-production-da91.up.railway.app/openapi.json"
+    },
+    {
+      "source": "/agent.txt",
+      "destination": "https://poppy-api-production-da91.up.railway.app/agent.txt"
+    },
+    {
+      "source": "/((?!assets/|fonts/|photos/|poppy.png).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(api|oauth|media|.well-known)/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        }
+      ]
+    }
+  ]
+}

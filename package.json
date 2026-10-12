@@ -41,5 +41,8 @@
     "@types/react-dom": "19.3.0",
     "prettier": "3.9.10",
     "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
