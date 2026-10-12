@@ -201,6 +201,12 @@ export async function startCode(
   clientId: string,
 ) {
   const email = z.email().max(254).parse(emailInput).trim().toLowerCase();
+  if (config.agentSandbox && !/@example\.(com|org|net)$/.test(email))
+    throw new HttpError(
+      400,
+      "test_email_required",
+      "Agent Sandbox sign-in accepts only synthetic @example.com, @example.org or @example.net accounts. No real email is verified.",
+    );
   throttle(`email:${hash(email)}`, 5, 3600000);
   throttle(`owner:${owner}`, 5, 3600000);
   throttle("all", 200, 3600000);
@@ -247,7 +253,11 @@ function codeRequired(c: any) {
   return {
     status: "code_required",
     sign_in_id: c.id,
-    code: { sent_to: "The email address you supplied" },
+    code: {
+      sent_to: config.agentSandbox
+        ? "Sandbox captured email (not delivered)"
+        : "The email address you supplied",
+    },
     expires_at: new Date(c.expires).toISOString(),
   };
 }

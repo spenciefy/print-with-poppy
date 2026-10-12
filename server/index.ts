@@ -42,6 +42,7 @@ import { stripe } from "./providers.js";
 import { tick, housekeeping, syncProvider } from "./worker.js";
 import { openapi, agentInstructions } from "./openapi.js";
 import type { Session, Order } from "./types.js";
+import { sandboxRoutes, sandboxDescription } from "./sandbox.js";
 import { accountRoutes } from "./signin.js";
 import { accountScopes, requireAccount, revokeAccount } from "./accounts.js";
 export const app = express();
@@ -158,11 +159,13 @@ app.get("/api/catalog", (_req, res) =>
     deliveryEstimate: offer.delivery,
     oneProductPerOrder: true,
     mode: config.APP_MODE,
+    environment: config.agentSandbox ? "agent-sandbox" : config.APP_MODE,
   }),
 );
 app.get("/api/config", (_req, res) =>
   res.json({
     mode: config.APP_MODE,
+    environment: config.agentSandbox ? "agent-sandbox" : config.APP_MODE,
     origin: config.origin,
     support: config.support,
   }),
@@ -175,12 +178,14 @@ app.get("/.well-known/poppy.json", (_req, res) =>
   res.json({
     protocol_version: "0.1",
     organization: {
-      name: "Print with Poppy",
+      name: config.agentSandbox
+        ? "Print with Poppy — Agent Sandbox"
+        : "Print with Poppy",
       domain: new URL(config.origin).hostname,
     },
     auth: {
       issuer: config.origin,
-      direct: { scopes: accountScopes },
+      ...(config.agentSandbox ? {} : { direct: { scopes: accountScopes } }),
       mediated: {
         endpoint: `${config.origin}/api/poppy/sign-in`,
         fields: [{ name: "email", label: "Email", secret: false }],
@@ -191,8 +196,9 @@ app.get("/.well-known/poppy.json", (_req, res) =>
       {
         type: "openapi",
         url: `${config.origin}/openapi.json`,
-        description:
-          "Browse the catalog, upload photos, approve home-delivered prints, pay by card and track orders.",
+        description: config.agentSandbox
+          ? sandboxDescription
+          : "Browse the catalog, upload photos, approve home-delivered prints, pay by card and track orders.",
       },
     ],
     extensions: {
@@ -330,6 +336,12 @@ if (config.demo) {
     res.json({ keys: [key.public] }),
   );
   app.post("/api/demo/session", (_req, res) => {
+    if (config.agentSandbox)
+      throw new HttpError(
+        404,
+        "not_found",
+        "Use a signed native Poppy session.",
+      );
     const s: Session = {
       id: id("ses"),
       clientId: "local-demo",
@@ -494,6 +506,7 @@ app.get("/api/orders/:id", (req, res) => {
     view.checkoutUrl = undefined;
   res.json(view);
 });
+sandboxRoutes(app);
 app.use(["/api", "/oauth", "/media"], (_req, res) =>
   res.status(404).json({ error: "not_found", message: "Endpoint not found." }),
 );

@@ -20,15 +20,27 @@ if (cfg.mode !== "demo")
   throw new Error(
     "This reference script uses a local demo identity. Register your own HTTPS identity for sandbox/live.",
   );
-const db = new Database(`${process.env.DATA_DIR || ".data"}/poppy.sqlite`, {
-  readonly: true,
-});
-const row = db
-  .prepare("SELECT body FROM records WHERE kind='demo-key' AND id='identity'")
-  .get() as any;
-db.close();
-const identity = await importJWK(JSON.parse(row.body).private, "ES256");
-const clientId = `${origin}/api/demo/agent.json`;
+let privateJwk: any;
+if (process.env.AGENT_PRIVATE_JWK_FILE) {
+  privateJwk = JSON.parse(
+    await fs.readFile(process.env.AGENT_PRIVATE_JWK_FILE, "utf8"),
+  );
+} else {
+  if (cfg.environment === "agent-sandbox")
+    throw new Error(
+      "Set AGENT_PRIVATE_JWK_FILE and AGENT_CLIENT_ID for the hosted sandbox.",
+    );
+  const db = new Database(`${process.env.DATA_DIR || ".data"}/poppy.sqlite`, {
+    readonly: true,
+  });
+  const row = db
+    .prepare("SELECT body FROM records WHERE kind='demo-key' AND id='identity'")
+    .get() as any;
+  db.close();
+  privateJwk = JSON.parse(row.body).private;
+}
+const identity = await importJWK(privateJwk, "ES256");
+const clientId = process.env.AGENT_CLIENT_ID || `${origin}/api/demo/agent.json`;
 const proofKey = await generateKeyPair("ES256", { extractable: true });
 const jwk = await exportJWK(proofKey.publicKey);
 const digest = (s: string) =>
@@ -46,7 +58,7 @@ async function proof(method: string, url: string, token?: string) {
 }
 async function assertion(sub: string) {
   return new SignJWT({})
-    .setProtectedHeader({ alg: "ES256", kid: "demo" })
+    .setProtectedHeader({ alg: "ES256", kid: privateJwk.kid || "demo" })
     .setIssuer(clientId)
     .setSubject(sub)
     .setAudience(oauth.token_endpoint)
@@ -86,6 +98,36 @@ async function call(route: string, init: RequestInit = {}) {
   const result = await response.json();
   if (!response.ok) throw new Error(JSON.stringify(result));
   return result;
+}
+const accountTest = process.argv.includes("--sandbox-account");
+if (accountTest) {
+  if (cfg.environment !== "agent-sandbox")
+    throw new Error("--sandbox-account requires the isolated Agent Sandbox.");
+  const post = (body: unknown) => ({
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const challenge = await call(
+    "/api/poppy/sign-in",
+    post({
+      scope: "poppy:read poppy:write",
+      credentials: { email: `reference-${randomUUID()}@example.com` },
+    }),
+  );
+  const captured = await call(
+    `/api/sandbox/sign-in/${challenge.sign_in_id}/email`,
+  );
+  const code = captured.email.text.match(/code is (\d{6})/)?.[1];
+  if (!code) throw new Error("Sandbox code capture missing.");
+  const signed = await call(
+    `/api/poppy/sign-in/${challenge.sign_in_id}`,
+    post({ code }),
+  );
+  if (!signed.signed_in || !signed.access_token)
+    throw new Error("Sandbox sign-in did not complete.");
+  Object.assign(session, signed);
+  console.log("Sandbox mediated sign-in verified (captured email only).");
 }
 const photo = new FormData();
 photo.append(
@@ -139,7 +181,10 @@ if (confirmed.state !== "succeeded")
 const url = new URL(confirmed.result.data.checkout_url);
 const orderId = confirmed.result.data.order_id;
 const headers = { "X-Order-Token": url.hash.slice(1) };
-await fetch(`${origin}/api/demo/pay/${orderId}`, { method: "POST", headers });
+if (cfg.environment === "agent-sandbox")
+  await call(`/api/sandbox/orders/${orderId}/pay`, { method: "POST" });
+else
+  await fetch(`${origin}/api/demo/pay/${orderId}`, { method: "POST", headers });
 let order;
 for (let i = 0; i < 30; i++) {
   order = await call(`/api/orders/${orderId}`);
@@ -148,7 +193,13 @@ for (let i = 0; i < 30; i++) {
 }
 if (order.status !== "printing")
   throw new Error("Demo fulfillment did not complete.");
-await fetch(`${origin}/api/demo/ship/${orderId}`, { method: "POST", headers });
+if (cfg.environment === "agent-sandbox")
+  await call(`/api/sandbox/orders/${orderId}/ship`, { method: "POST" });
+else
+  await fetch(`${origin}/api/demo/ship/${orderId}`, {
+    method: "POST",
+    headers,
+  });
 let view;
 for (let i = 0; i < 30; i++) {
   view = await (
@@ -162,4 +213,10 @@ if (view.status !== "shipped" || view.emails?.length !== 2)
 console.log(
   "\nVerified: approved → demo paid → submitted → shipped → 2 captured emails.",
 );
+if (accountTest) {
+  const history = await call("/api/account/orders");
+  if (!history.orders.some((o: any) => o.id === orderId))
+    throw new Error("Signed-in order missing from account history.");
+  console.log("Signed-in account order history verified.");
+}
 console.log(`View order: ${origin}/order/${orderId}${url.hash}`);

@@ -281,7 +281,7 @@ export async function authenticate(req: Request): Promise<Session> {
       "Guest agent session expired or unknown.",
     );
   }
-  if (config.demo && scheme === "Demo" && token) {
+  if (config.demo && !config.agentSandbox && scheme === "Demo" && token) {
     const s = get<Session>("session", token);
     if (s?.demo) return s;
   }

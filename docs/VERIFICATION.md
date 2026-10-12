@@ -1,5 +1,7 @@
 # Verification — 2026-10-11
 
+For no-card API integration tests, use the separate [Agent Sandbox](SANDBOX.md). The production `/demo` page is a visual walkthrough only.
+
 - `npm run check`: TypeScript and production Vite build pass; 11 integration/contract tests pass.
 - `npm run test:e2e`: reference personal agent completed Poppy discovery, issuer check, signed client/session assertions, DPoP-authenticated upload, full-address approval, demo checkout/payment, fulfillment, shipment and two captured emails against the running server.
 - Browser: sample uploads, private crop previews, disabled approval until checked, full address/price summary, checkout, payment, shipment tracking and rendered email preview verified.

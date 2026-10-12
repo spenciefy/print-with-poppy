@@ -1,5 +1,7 @@
 # Chat demo
 
+For no-card API integration tests, use the separate [Agent Sandbox](SANDBOX.md). The production `/demo` page is a visual walkthrough only.
+
 `/demo` is a scripted, browser-only walkthrough linked from the homepage. It uses public poppy artwork and fictional recipient details. It never creates sessions, uploads private files, confirms operations, opens Stripe Checkout, submits print orders, or sends email.
 
 Play/pause/next/restart controls move through sharing photos, discovery, product selection, crops/address/price approval, simulated payment, order status and email previews. Product selection and approval are explicit gates. Prices use the shared catalog calculation; $0 tax is labeled as an example. Print and poster paths both work. Reduced-motion preferences disable animated entrances and scrolling.

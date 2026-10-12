@@ -30,6 +30,12 @@ The [interactive demo](https://printwithpoppy.com/demo) walks through the journe
 
 **Built with:** React + Vite · TypeScript · Express · SQLite · Sharp · JOSE · Stripe · Prodigi · Resend
 
+## Test with a personal agent
+
+Use the [Agent Sandbox](https://sandbox.printwithpoppy.com) for real API testing with simulated payment, printing, shipment and captured emails. **No card is needed.** DPA is registered; other agents register their HTTPS metadata URL via hello@printwithpoppy.com. Follow the [sandbox testing guide](docs/SANDBOX.md), including optional account/OTP tests.
+
+The production store at `printwithpoppy.com` accepts real payments. Its `/demo` is only a scripted visual walkthrough. The sandbox is a separate deployment using `APP_MODE=demo` and `AGENT_SANDBOX=true`; it is not the older provider-test `APP_MODE=sandbox` setting.
+
 ## Run locally
 
 Requires Node 22.22+ (or Node 24), npm, and native build support if your platform does not have prebuilt Sharp/SQLite binaries.

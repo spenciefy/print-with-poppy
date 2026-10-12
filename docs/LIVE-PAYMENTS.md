@@ -1,5 +1,7 @@
 # Accepting real payments
 
+For no-card API integration tests, use the separate [Agent Sandbox](SANDBOX.md). The production `/demo` page is a visual walkthrough only.
+
 The customer pays Print with Poppy through Stripe Checkout. A verified paid event queues the approved order for Prodigi. Prodigi bills the store's saved payment method for production and shipping; the app does not transfer the customer's Stripe payment to Prodigi. Keep funds available for fulfillment independently of Stripe payout timing.
 
 ## Remaining setup

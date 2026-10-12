@@ -890,7 +890,7 @@ test("malformed JSON is actionable, not a retryable server error", async () => {
     assert.equal(r.status, 400);
     const error = await r.json();
     assert.equal(error.error, "invalid_request");
-    assert.match(error.message, /valid JSON object/);
+    assert.match(error.message, /body as a JSON object/);
   }
   const oversized = await fetch(origin + "/api/agent-sessions", {
     method: "POST",
@@ -1442,5 +1442,19 @@ test("OTP email delivery failures and per-email rate limits fail closed", async 
       )
     ).status,
     429,
+  );
+});
+
+test("normal deployments do not advertise or expose agent sandbox controls", async () => {
+  const schema = await (await fetch(origin + "/openapi.json")).json();
+  assert.equal(schema.paths["/api/sandbox/orders/{id}/pay"], undefined);
+  assert.equal(
+    (await fetch(origin + "/api/sandbox/orders/test/pay", { method: "POST" }))
+      .status,
+    404,
+  );
+  assert.equal(
+    (await fetch(origin + "/api/sandbox/sign-in/test/email")).status,
+    404,
   );
 });

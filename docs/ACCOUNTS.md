@@ -1,5 +1,7 @@
 # Customer accounts
 
+For no-card API integration tests, use the separate [Agent Sandbox](SANDBOX.md). The production `/demo` page is a visual walkthrough only.
+
 Print with Poppy supports optional accounts through Poppy draft 0.1. Guest ordering stays available. Accounts are created after an email is verified with a six-digit, ten-minute code; no password is stored.
 
 ## Sign-in paths
@@ -40,6 +42,6 @@ Send the Account Token as `token` to `/oauth/revoke`, with the client's assertio
 
 Run `npm run check`. The commerce tests exercise signed-out and signed-in purchase flows, account isolation, stale tokens, refresh, scope reduction, revocation, OTP replay/expiry/attempt limits, browser consent, CSRF, callback validation and PKCE. Provider calls are simulated: passing these tests does not establish real email delivery or DPA UI interoperability.
 
-In `APP_MODE=demo`, code emails are stored privately as `demo-signin-email` records for local verification, never sent. There is no public code-retrieval endpoint. Production always uses Resend.
+In `APP_MODE=demo`, code emails are stored privately as `demo-signin-email` records for local verification, never sent. Plain local demo mode has no public code-retrieval endpoint. Hosted Agent Sandbox exposes a session-owned captured-code endpoint for synthetic accounts only; see [SANDBOX.md](SANDBOX.md). Production always uses Resend.
 
 Spec: https://personalagentprotocol.org/docs/spec (sections 4.4–4.9).

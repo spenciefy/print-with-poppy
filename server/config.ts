@@ -38,6 +38,7 @@ export const config = {
   dataDir: path.resolve(env.DATA_DIR),
   secret: appSecret || "",
   demo: env.APP_MODE === "demo",
+  agentSandbox: process.env.AGENT_SANDBOX === "true",
   prodigiBase:
     env.APP_MODE === "live"
       ? "https://api.prodigi.com/v4.0"
@@ -85,3 +86,18 @@ if (!config.demo) {
     throw new Error("Sandbox requires a Stripe test key.");
 }
 export const sku = "GLOBAL-PHO-4X6";
+
+if (config.agentSandbox && (!config.demo || config.compatibility))
+  throw new Error(
+    "AGENT_SANDBOX requires APP_MODE=demo and ALLOW_COMPAT_AGENT_SESSIONS=false.",
+  );
+
+if (
+  config.agentSandbox &&
+  [
+    process.env.STRIPE_SECRET_KEY,
+    process.env.PRODIGI_API_KEY,
+    process.env.RESEND_API_KEY,
+  ].some(Boolean)
+)
+  throw new Error("Do not install provider credentials in the Agent Sandbox.");
