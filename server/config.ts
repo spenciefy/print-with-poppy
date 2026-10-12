@@ -44,6 +44,9 @@ export const config = {
       : "https://api.sandbox.prodigi.com/v4.0",
   finish: process.env.PRODIGI_FINISH || "lustre",
   shipping: process.env.PRODIGI_SHIPPING_METHOD || "Budget",
+  compatibility:
+    process.env.ALLOW_COMPAT_AGENT_SESSIONS === "true" ||
+    env.APP_MODE === "demo",
   allowedClients: (process.env.AGENT_CLIENT_IDS || "")
     .split(",")
     .map((s) => s.trim())
@@ -58,10 +61,13 @@ if (!config.demo) {
     "STRIPE_WEBHOOK_SECRET",
     "RESEND_API_KEY",
     "EMAIL_FROM",
-    "AGENT_CLIENT_IDS",
   ])
     if (!process.env[k])
       throw new Error(`Missing ${k}; use APP_MODE=demo for local development.`);
+  if (!config.compatibility && !config.allowedClients.length)
+    throw new Error(
+      "Configure native agent identities or enable guest agent compatibility.",
+    );
   if (config.secret.length < 32 || !config.origin.startsWith("https://"))
     throw new Error(
       "External integrations require HTTPS PUBLIC_URL and APP_SECRET of at least 32 characters.",

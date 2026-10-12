@@ -51,7 +51,7 @@ The card stays at **Stripe-hosted Checkout**. An agent with an authorized card m
 ## Prices, email and delivery
 
 - US/USD only, 4×6 prints, maximum 100 prints per order.
-- $20 for 1–20 prints, then $0.50 per additional print through 100. US Budget shipping is included; customer tax is added before approval. Shared constants in `src/offer.ts` power the site and quotes. Unexpected supplier costs above 80% of the advertised pre-tax amount stop the quote instead of silently increasing the price. See [pricing research](docs/PRICING-RESEARCH.md).
+- $12 for 1–5 prints, then $0.50 per additional print through 100. US Budget shipping is included; customer tax is added before approval. Shared constants in `src/offer.ts` power the site and quotes. Unexpected supplier costs above 80% of the advertised pre-tax amount stop the quote instead of silently increasing the price. See [pricing research](docs/PRICING-RESEARCH.md).
 - Quotes expire in 15 minutes. The approved checkout expires roughly one hour after creation. Changing address/photos/quantities requires a new proposal and fresh approval.
 - Payment confirmation email contains the full shipping address, total, order link and available estimate. Every shipped package gets a shipment email; newly available tracking generates an update. All packages remain visible on the order page.
 - The initial 7–12-business-day arrival window is explicitly our planning estimate, not a provider guarantee or measured delivery performance. Validate it with physical samples. Carrier tracking is included only when supplied. The app never infers delivery from shipment.

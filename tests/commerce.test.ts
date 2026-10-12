@@ -459,8 +459,8 @@ test("provider contracts preserve approved terms and use stable idempotency keys
       taxParams = params;
       return {
         id: "taxcalc_contract",
-        amount_total: 2175,
-        tax_amount_exclusive: 175,
+        amount_total: 1305,
+        tax_amount_exclusive: 105,
       };
     }) as any;
     stripe.checkout.sessions.create = (async (params: any, options: any) => {
@@ -472,12 +472,12 @@ test("provider contracts preserve approved terms and use stable idempotency keys
       };
     }) as any;
     const price = await providers.getPrice(f.proposal as any);
-    assert.equal(price.total, 2175);
-    assert.equal(price.subtotal, 2000);
+    assert.equal(price.total, 1305);
+    assert.equal(price.subtotal, 1200);
     assert.equal(price.shipping, 0);
-    assert.equal(taxParams.line_items[0].amount, 2000);
+    assert.equal(taxParams.line_items[0].amount, 1200);
     assert.equal(taxParams.shipping_cost.amount, 0);
-    assert.equal(price.tax, 175);
+    assert.equal(price.tax, 105);
     assert.equal(taxParams.customer_details.address.line2, "Unit 9");
     assert.equal(taxParams.customer_details.address_source, "shipping");
     const checkout = await providers.checkout(order);
@@ -688,4 +688,181 @@ test("operation terms remain byte-for-byte stable on repeated reads", async () =
     ).terms.previews[0].url,
     "https://immutable.example/preview",
   );
+});
+
+test("poster catalog, approval, full-size artwork and fulfillment use the larger product", async () => {
+  const catalog = await (await fetch(origin + "/api/catalog")).json();
+  assert.equal(
+    catalog.products.find((p: any) => p.id === "poster").price,
+    3500,
+  );
+  const f = await fixture();
+  const proposal = {
+    ...f.proposal,
+    product: "poster",
+    items: [{ photoId: f.photo.id, quantity: 1, fit: "contain" }],
+  };
+  const send = (body: unknown) =>
+    f.a.request("/api/orders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": randomUUID(),
+      },
+      body: JSON.stringify(body),
+    });
+  assert.equal(
+    (
+      await send({
+        ...proposal,
+        items: [{ ...proposal.items[0], quantity: 2 }],
+      })
+    ).status,
+    400,
+  );
+  const response = await send(proposal);
+  assert.equal(response.status, 202, JSON.stringify(response.body));
+  const op = response.body.operation;
+  assert.equal(op.terms.subtotal, 3500);
+  assert.match(op.summary, /12 × 16 matte print/);
+  assert.match(op.summary, /low-resolution warning/);
+  assert.match(op.summary, /123 Market Street/);
+  const imageResponse = await fetch(op.terms.previews[0].url);
+  assert.equal(imageResponse.status, 200);
+  const meta = await sharp(
+    Buffer.from(await imageResponse.arrayBuffer()),
+  ).metadata();
+  assert.equal(meta.width, 4800);
+  assert.equal(meta.height, 3600);
+  await f.a.request(`/api/operations/${op.operation_id}/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ revision: 1, approved_by: "user" }),
+  });
+  await worker.tick();
+  const persisted = commerce.readOperation(
+    op.operation_id,
+    f.a.session.session_id,
+  );
+  const order = store.get("order", persisted.orderId!);
+  const { config } = await import("../server/config.js");
+  const providers = await import("../server/providers.js");
+  const originalFetch = globalThis.fetch;
+  const originalTax = providers.stripe!.tax.calculations.create;
+  let sent: any;
+  try {
+    config.demo = false;
+    globalThis.fetch = (async (url: any, init: any) => {
+      if (String(url).endsWith("/products/GLOBAL-FAP-12X16"))
+        return Response.json({
+          outcome: "Ok",
+          product: {
+            attributes: { paperType: ["EMA"], substrateWeight: ["200gsm"] },
+          },
+        });
+      const body = JSON.parse(init.body);
+      assert.equal(body.items[0].sku, "GLOBAL-FAP-12X16");
+      assert.deepEqual(body.items[0].attributes, {
+        paperType: "EMA",
+        substrateWeight: "200gsm",
+      });
+      if (String(url).endsWith("/quotes"))
+        return Response.json({
+          outcome: "Created",
+          quotes: [
+            {
+              shipmentMethod: "Budget",
+              costSummary: {
+                items: { amount: "14", currency: "USD" },
+                shipping: { amount: "7.10", currency: "USD" },
+              },
+            },
+          ],
+        });
+      sent = body;
+      return Response.json({
+        outcome: "Created",
+        order: { id: "poster-contract" },
+      });
+    }) as any;
+    providers.stripe!.tax.calculations.create = (async (params: any) => ({
+      id: "tax_poster",
+      amount_total: params.line_items[0].amount,
+      tax_amount_exclusive: 0,
+    })) as any;
+    assert.equal((await providers.getPrice(proposal as any)).subtotal, 3500);
+    await providers.submitPrint(order);
+    assert.match(sent.items[0].assets[0].url, /poster-contain/);
+    assert.equal(sent.items[0].copies, 1);
+  } finally {
+    config.demo = true;
+    globalThis.fetch = originalFetch;
+    providers.stripe!.tax.calculations.create = originalTax;
+  }
+});
+
+test("HTTP compatibility sessions isolate ownership, expire, and cannot downgrade native Poppy tokens", async () => {
+  const start = async () => {
+    const r = await fetch(origin + "/api/agent-sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    assert.equal(r.status, 201);
+    return r.json();
+  };
+  const a = await start(),
+    b = await start();
+  assert.equal(a.protocol, "http-compatibility");
+  const privatePhoto = await photos.upload(
+    await sharp({
+      create: { width: 1200, height: 1800, channels: 3, background: "orange" },
+    })
+      .jpeg()
+      .toBuffer(),
+    "compat.jpg",
+    a.session_id,
+  );
+  const proposal = {
+    email: "test@example.com",
+    address,
+    items: [{ photoId: privatePhoto.id, quantity: 5, fit: "contain" }],
+  };
+  const send = (token: string) =>
+    fetch(origin + "/api/orders", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": randomUUID(),
+      },
+      body: JSON.stringify(proposal),
+    });
+  assert.equal((await send(b.access_token)).status, 404);
+  const own = await send(a.access_token);
+  assert.equal(own.status, 202);
+  const op = (await own.json()).operation;
+  assert.equal(op.terms.subtotal, 1200);
+  assert.equal(op.confirmation, null);
+  const native = await makeAgent();
+  assert.equal((await send(native.session.access_token)).status, 401);
+  assert.equal(
+    (
+      await fetch(origin + "/api/orders", {
+        method: "POST",
+        headers: {
+          Authorization: `DPoP ${a.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(proposal),
+      })
+    ).status,
+    401,
+  );
+  const hash = store.hash(a.access_token);
+  store.put("compat-token", hash, {
+    sessionId: a.session_id,
+    expires: Date.now() - 1,
+  });
+  assert.equal((await send(a.access_token)).status, 401);
 });

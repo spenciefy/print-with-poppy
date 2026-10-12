@@ -60,6 +60,11 @@ export async function upload(buffer: Buffer, name: string, owner: string) {
       { mode: 0o600 },
     );
   }
+  await fs.writeFile(
+    `${config.dataDir}/photos/${photoId}-original.jpg`,
+    normalized,
+    { mode: 0o600 },
+  );
   const p: Photo = {
     id: photoId,
     owner,
@@ -92,4 +97,22 @@ export function ownedPhoto(photoId: string, owner: string) {
       "This photo has expired. Upload it again.",
     );
   return p;
+}
+
+export async function preparePoster(p: Photo, fit: "contain" | "cover") {
+  const source = `${config.dataDir}/photos/${p.id}-original.jpg`;
+  try {
+    await fs.access(source);
+  } catch {
+    throw new HttpError(
+      422,
+      "reupload_required",
+      "Upload this photo again to prepare the larger print.",
+    );
+  }
+  const [w, h] = p.width >= p.height ? [4800, 3600] : [3600, 4800];
+  await sharp(source)
+    .resize(w, h, { fit, position: "centre", background: "#ffffff" })
+    .jpeg({ quality: 95 })
+    .toFile(`${config.dataDir}/photos/${p.id}-poster-${fit}.jpg`);
 }

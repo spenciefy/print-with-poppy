@@ -1,6 +1,6 @@
 # Print with Poppy — v1
 
-Printwithpoppy.com turns photos shared with a personal agent into physical 4×6 prints, delivered to the user's home. The store demonstrates the Personal Agent Protocol (Poppy draft 0.1). No retail pickup, accounts, catalog, or full manual shopping flow in v1.
+Printwithpoppy.com turns photos shared with a personal agent into physical 4×6 prints or one 12×16 matte print, delivered to the user's home. The store demonstrates the Personal Agent Protocol (Poppy draft 0.1). No retail pickup, accounts or manual shopping flow in v1.
 
 ## Experience and brand
 
@@ -41,4 +41,12 @@ References: https://personalagentprotocol.org/docs/spec · https://personalagent
 
 ## Pricing and brand update
 
-One public offer: $20 for 1–20 4×6 lustre prints, US Budget delivery included, then $0.50 per additional print up to 100. Customer tax is added before approval; only approved quantities are printed. Shared site/server pricing; reject unexpected supplier costs instead of changing published terms. Arrival is a provisional 7–12-business-day estimate, subject to delivered-sample validation. See docs/PRICING-RESEARCH.md. Supplier names stay in implementation/research, not customer copy. Square poppy-field instant-photo logo replaces the flower-only mark.
+Two public offers: one 12×16 matte print for $35, or $12 for 1–5 4×6 lustre prints, US Budget delivery included, then $0.50 per additional print up to 100. Customer tax is added before approval; only approved quantities are printed. Shared site/server pricing; reject unexpected supplier costs instead of changing published terms. Arrival is a provisional 7–12-business-day estimate, subject to delivered-sample validation. See docs/PRICING-RESEARCH.md. Supplier names stay in implementation/research, not customer copy. Square poppy-field instant-photo logo replaces the flower-only mark.
+
+## Agent-only storefront
+
+Show both products and prices, a selectable square agent prompt with a copy icon, then a protocol FAQ with links to discovery, OpenAPI and source. No manual upload/cart/checkout entry point. Catalog endpoint exposes product IDs and prices; proposals select one product per order. Poster preparation uses the normalized original at 3600×4800 pixels, with crop preview and size-specific resolution warning before approval. Larger prints are not prepared from the 4×6 derivative. Non-live modes display Ordering opens soon; only live mode claims accepting orders.
+
+## Agent compatibility
+
+Native Poppy remains signed and allowlisted. A separately identified HTTP compatibility path creates a private, hashed-at-rest 24-hour Bearer session via POST /api/agent-sessions, throttled to 10/hour per apparent IP. It uses the same upload, proposal, approval and payment APIs without claiming a verified agent identity. No manual web cart. Agent brand compatibility remains unverified until actual product tests.

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
-import { offer } from "./offer";
+import { productOf } from "./offer";
 type Config = { mode: string; origin: string; support: string };
 const money = (c: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -33,29 +33,142 @@ function Header({ config }: { config: Config }) {
         <a href="/for-agents">
           For agents <Arrow />
         </a>
-        {config.mode === "demo" && (
-          <a className="nav-demo" href="/demo">
-            Try the demo
-          </a>
-        )}
       </nav>
     </header>
   );
 }
+function CopyIcon({ copied }: { copied: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {copied ? (
+        <path d="m5 12 4 4L19 6" />
+      ) : (
+        <>
+          <rect x="8" y="8" width="12" height="12" rx="2" />
+          <path d="M16 8V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4" />
+        </>
+      )}
+    </svg>
+  );
+}
 function Footer() {
   return (
-    <footer>
-      <Brand />
-      <p>4 × 6 photo prints, ordered by your agent.</p>
-      <div>
+    <footer className="protocol-footer">
+      <section aria-labelledby="protocol-title">
+        <p className="section-label">THE PROTOCOL BEHIND THE PRINTS</p>
+        <h2 id="protocol-title">A small store. A working example of Poppy.</h2>
+        <p>
+          Personal Agent Protocol gives your agent a way to discover this store,
+          identify itself, and use its APIs. You choose the photos and approve
+          the order. Your agent handles the steps in between.
+        </p>
+        <div className="protocol-links">
+          <a href="/.well-known/poppy.json">poppy.json</a>
+          <a href="/openapi.json">API reference</a>
+          <a href="https://github.com/spenciefy/print-with-poppy">
+            Source code
+          </a>
+        </div>
+        <div className="store-faq">
+          <details>
+            <summary>Does this work with Muse or Instinct?</summary>
+            <p>
+              There are two integration paths: native Poppy sessions and a plain
+              HTTP guest API for agents that can upload files and call APIs. The
+              guest path uses the same order approval and payment flow, but does
+              not verify the agent’s identity through Poppy. Muse and Instinct
+              have not yet been tested end to end with this store; browser
+              access alone does not guarantee compatibility.
+            </p>
+          </details>
+          <details>
+            <summary>What’s inside poppy.json?</summary>
+            <p>
+              Our discovery file lists <code>protocol_version</code> (0.1),{" "}
+              <code>organization</code> (our name and domain),{" "}
+              <code>auth.issuer</code> (where to discover authentication),{" "}
+              <code>apis</code> (our OpenAPI document), and{" "}
+              <code>extensions.operations</code> (the approval and
+              operation-status endpoint). It contains public connection details,
+              never customer photos or secret keys.
+            </p>
+          </details>
+          <details>
+            <summary>How does my agent place an order?</summary>
+            <p>
+              It reads the discovery file and{" "}
+              <a href="/agent.txt">agent instructions</a>, starts a signed guest
+              session, then follows the OpenAPI descriptions to read the
+              catalog, upload photos and propose an order. Requests carry a
+              session token and DPoP proof. The store offers APIs directly; it
+              doesn’t need a store chatbot.
+            </p>
+            <p>
+              <code>/api/catalog</code> → <code>/api/photos</code> →{" "}
+              <code>/api/orders</code> → <code>/api/operations</code>
+            </p>
+          </details>
+          <details>
+            <summary>What do I approve, and how is payment handled?</summary>
+            <p>
+              Your agent shows the photos, crop previews, quantities, full
+              delivery address, email, estimated delivery and final total
+              including tax. Approval applies to that exact order. After
+              approval, the API returns a hosted Stripe Checkout link for your
+              agent to pay with its authorized card. Payment information goes to
+              Stripe, never our photo API. Your bank may ask you to
+              authenticate.
+            </p>
+          </details>
+          <details>
+            <summary>Can I buy directly on this website?</summary>
+            <p>
+              Orders start with a personal agent. There’s no cart or checkout
+              button here. Use an agent that supports Poppy draft 0.1 and its
+              operations extension. Live agents currently need their client
+              identity registered with the store;{" "}
+              <a href="/for-agents">see the integration guide</a>.
+            </p>
+          </details>
+          <details>
+            <summary>When will my prints arrive?</summary>
+            <p>
+              Allow an estimated 7–12 business days after payment for US home
+              delivery. This is a planning estimate, not a guaranteed arrival
+              date. We email confirmation and tracking when available. Photo
+              prints and larger prints are ordered separately.
+            </p>
+          </details>
+          <details>
+            <summary>How does this demonstrate the protocol?</summary>
+            <p>
+              This open-source store implements discovery, signed guest
+              sessions, authenticated APIs and the operations extension for
+              explicit approval. Printing, pricing and Stripe payment are
+              store-specific integrations. It demonstrates these parts of{" "}
+              <a href="https://personalagentprotocol.org/docs/spec">
+                Poppy draft 0.1
+              </a>
+              , rather than every optional protocol feature. Ordering
+              availability is shown above.
+            </p>
+          </details>
+        </div>
+      </section>
+      <div className="footer-bottom">
+        <Brand />
         <a href="/privacy">Photo privacy</a>
-        <a
-          href="https://personalagentprotocol.org/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Made for Poppy ↗
-        </a>
+        <a href="https://personalagentprotocol.org/">Personal Agent Protocol</a>
       </div>
     </footer>
   );
@@ -63,10 +176,7 @@ function Footer() {
 function Home({ config }: { config: Config }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
-  const prompt =
-    config.mode === "demo"
-      ? `Try the photo-printing demo at ${config.origin}. Up to 20 prints cost $20 delivered, then 50¢ per extra print, plus tax. Follow its Personal Agent Protocol instructions. Use sample photos and fictional shipping details. Show me the photos, crops, full shipping address, email, delivery estimate and total for approval, then simulate checkout. This demo does not charge cards or print photos. Never enter real card details.`
-      : `Use ${config.origin} to order my photos as 4×6 prints delivered to my home. Up to 20 prints cost $20 delivered, then 50¢ per extra print, plus tax. Follow its Personal Agent Protocol instructions. Show me the photos, crop choices, full shipping address, email, delivery estimate and total including shipping and tax for approval. After I approve, use your authorized card at checkout.`;
+  const prompt = `Order my photos from ${config.origin} using Personal Agent Protocol. Read /agent.txt, /.well-known/poppy.json and the catalog. Use the documented guest API if you do not support native Poppy sessions. Help me choose 4×6 prints or one 12×16 matte print. Show me the photos, crops, full shipping address, email, delivery estimate and total including tax for approval. Only after I approve, and if the store is accepting live orders, pay with your authorized card.`;
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -79,80 +189,67 @@ function Home({ config }: { config: Config }) {
   }
   return (
     <>
-      <main className="home-minimal">
-        <section className="home-intro" aria-labelledby="home-title">
-          <h1 id="home-title">Photo prints, ordered by your agent.</h1>
-          <p className="home-description">
-            Up to {offer.includedPrints} prints for ${offer.baseCents / 100}. US
-            delivery included.
+      <main className="home-minimal store-home">
+        <section className="store-products" aria-labelledby="home-title">
+          <div className="store-heading">
+            <h1 id="home-title">Your photos, in print.</h1>
+            <p>Ordered by your personal agent. Delivered to your door.</p>
+          </div>
+          <div className="product-list">
+            <article className="store-product">
+              <div className="product-title">
+                <h2>Photo prints</h2>
+                <span>$12</span>
+              </div>
+              <p className="product-spec">4 × 6 inches · Lustre finish</p>
+              <p>Five prints included. Each extra print is 50¢.</p>
+              <p className="product-note">
+                Have fewer than five? The minimum is still $12.
+              </p>
+            </article>
+            <article className="store-product">
+              <div className="product-title">
+                <h2>One for the wall</h2>
+                <span>$35</span>
+              </div>
+              <p className="product-spec">12 × 16 inches · Matte · Unframed</p>
+              <p>One photo, printed on heavyweight 200gsm paper.</p>
+              <p className="product-note">
+                Ships rolled. Choose a frame when it arrives.
+              </p>
+            </article>
+          </div>
+          <p className="store-delivery">
+            US shipping included · Tax shown before approval
+            <br />
+            Estimated delivery: 7–12 business days after payment.
           </p>
-          <div
-            className="agent-instructions"
-            aria-labelledby="instructions-label"
-          >
+          <p className="home-status" role="status">
+            {config.mode === "live"
+              ? "Accepting orders through personal agents."
+              : config.mode === "loading"
+                ? "Checking ordering availability…"
+                : config.mode === "unavailable"
+                  ? "Ordering availability could not be checked. Please try again shortly."
+                  : "Ordering opens soon. Payments and physical fulfillment are not enabled yet."}
+          </p>
+        </section>
+        <section className="store-order" aria-labelledby="instructions-label">
+          <div className="agent-instructions">
             <div className="instructions-heading">
               <h2 id="instructions-label">Send this to your agent</h2>
-              <button
-                className="instructions-copy"
-                onClick={copy}
-                disabled={
-                  config.mode === "loading" || config.mode === "unavailable"
-                }
-              >
-                {copied ? "Copied ✓" : "Copy ↗"}
+              <button className="instructions-copy" onClick={copy}>
+                <CopyIcon copied={copied} />
+                {copied ? "Copied" : "Copy"}
               </button>
             </div>
-            <p className="instructions-text">
-              {config.mode === "loading"
-                ? "Loading instructions…"
-                : config.mode === "unavailable"
-                  ? "Instructions unavailable. Please refresh to try again."
-                  : prompt}
-            </p>
+            <p className="instructions-text">{prompt}</p>
             <p className="instructions-feedback" aria-live="polite">
               {error ||
                 (copied
                   ? "Copied to clipboard."
                   : "Paste into your agent, then attach your photos.")}
             </p>
-          </div>
-          <div className="home-status" aria-live="polite">
-            {config.mode === "demo" ? (
-              <>
-                Demo only. No payments or prints.{" "}
-                <a href="/demo">Try the demo</a>
-              </>
-            ) : config.mode === "loading" ? (
-              "Checking availability…"
-            ) : config.mode === "unavailable" ? (
-              "Ordering is temporarily unavailable. Please refresh to try again."
-            ) : (
-              "4 × 6 inches · Lustre finish · Ships within the US"
-            )}
-          </div>
-        </section>
-        <section
-          className="home-process"
-          id="how-it-works"
-          aria-labelledby="process-title"
-        >
-          <h2 id="process-title">4 × 6 prints. One lustre finish.</h2>
-          <p className="offer-details">
-            50¢ per extra print · US shipping included · Tax added before
-            approval
-          </p>
-          <p className="offer-delivery">{offer.delivery}</p>
-          <div>
-            <p className="small">
-              The $20 minimum covers 1–20 prints. Only your approved photos and
-              quantities are printed.
-            </p>
-            <p>
-              We email your order confirmation and tracking when it’s available.
-            </p>
-            <a className="text-link" href="/for-agents">
-              Built on Personal Agent Protocol <Arrow />
-            </a>
           </div>
         </section>
       </main>
@@ -183,6 +280,18 @@ function Guide({ config }: { config: Config }) {
           poppy.json ↗
         </a>
       </div>
+      <section>
+        <h2>Without native Poppy support</h2>
+        <p>
+          Read <a href="/agent.txt">the agent instructions</a>. Start a plain
+          HTTP session with <code>POST /api/agent-sessions</code> and an empty
+          JSON object. Send the returned private token as{" "}
+          <code>Authorization: Bearer TOKEN</code>. It expires in 24 hours. This
+          is a compatibility adapter, not signed Poppy authentication. Use the
+          same photo, proposal, explicit approval and payment steps below. Check
+          the catalog’s mode before attempting payment.
+        </p>
+      </section>
       <ol className="guide-steps">
         <li>
           <h3>Introduce yourself</h3>
@@ -205,10 +314,10 @@ function Guide({ config }: { config: Config }) {
         <li>
           <h3>Get the user's approval</h3>
           <p>
-            Propose up to 100 prints with an email and full US shipping address.
-            Present the complete summary and print previews. Explicit approval
-            covers that exact revision—including shipping, tax, crop, and
-            address.
+            Read /api/catalog. Propose up to 100 photo prints, or one 12×16
+            matte print, with an email and full US shipping address. Present the
+            complete summary and print previews. Explicit approval covers that
+            exact revision—including shipping, tax, crop, and address.
           </p>
           <code>POST /api/orders → POST /api/operations/:id/confirm</code>
         </li>
@@ -279,396 +388,14 @@ function Privacy({ config }: { config: Config }) {
     </main>
   );
 }
-const defaultAddress = {
-  name: "Jamie Taylor",
-  line1: "123 Market Street",
-  line2: "Apt 4",
-  city: "San Francisco",
-  state: "CA",
-  postalCode: "94103",
-  country: "US",
-};
-function Demo() {
-  const [token, setToken] = useState(
-    sessionStorage.getItem("poppy-demo") || "",
-  );
-  const [photos, setPhotos] = useState<any[]>([]);
-  const [address, setAddress] = useState(defaultAddress);
-  const [email, setEmail] = useState("jamie@example.com");
-  const [operation, setOperation] = useState<any>();
-  const [busy, setBusy] = useState("");
-  const [error, setError] = useState("");
-  const [approved, setApproved] = useState(false);
-  async function session() {
-    if (token) return token;
-    const r = await api("/api/demo/session", { method: "POST" });
-    sessionStorage.setItem("poppy-demo", r.token);
-    setToken(r.token);
-    return r.token;
-  }
-  async function authFetch(url: string, init: RequestInit = {}) {
-    const t = await session();
-    return api(url, {
-      ...init,
-      headers: { Authorization: `Demo ${t}`, ...init.headers },
-    });
-  }
-  async function add(files: File[]) {
-    setBusy("Preparing your previews…");
-    setError("");
-    try {
-      for (const f of files) {
-        const body = new FormData();
-        body.append("photo", f);
-        const p = await authFetch("/api/photos", { method: "POST", body });
-        setPhotos((prev) => [...prev, { ...p, quantity: 1, fit: "contain" }]);
-      }
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy("");
-    }
-  }
-  async function samples() {
-    setBusy("Finding a few good ones…");
-    try {
-      const files = await Promise.all(
-        ["lake", "summer", "mountain"].map(
-          async (n) =>
-            new File(
-              [await (await fetch(`/photos/${n}.jpg`)).blob()],
-              `${n}.jpg`,
-              { type: "image/jpeg" },
-            ),
-        ),
-      );
-      await add(files);
-    } catch {
-      setError("Could not load sample photos.");
-      setBusy("");
-    }
-  }
-  async function quote(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setBusy("Getting your quote…");
-    try {
-      const r = await authFetch("/api/orders", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
-        },
-        body: JSON.stringify({
-          email,
-          address,
-          items: photos.map((p) => ({
-            photoId: p.id,
-            quantity: p.quantity,
-            fit: p.fit,
-          })),
-        }),
-      });
-      setOperation(r.operation);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy("");
-    }
-  }
-  async function approve() {
-    setBusy("Preparing checkout…");
-    setError("");
-    try {
-      let op = await authFetch(
-        `/api/operations/${operation.operation_id}/confirm`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            revision: operation.revision,
-            approved_by: "user",
-          }),
-        },
-      );
-      for (let i = 0; i < 30 && op.state === "in_progress"; i++) {
-        await new Promise((r) => setTimeout(r, 1000));
-        op = await authFetch(`/api/operations/${operation.operation_id}`);
-      }
-      if (op.state !== "succeeded")
-        throw new Error(
-          "Checkout is still being prepared. Retry this approval to check the same order.",
-        );
-      window.location.assign(op.result.data.checkout_url);
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy("");
-    }
-  }
-  return (
-    <main className="order-shell">
-      <div className="demo-banner">
-        <span>✳ DEMO STUDIO</span> No charge. No prints shipped. No emails sent.
-      </div>
-      <div className="order-heading">
-        <p className="eyebrow">
-          {operation ? "02 / THE GO-AHEAD" : "01 / A FEW FAVORITES"}
-        </p>
-        <h1>
-          {operation ? "Does everything look right?" : "A little practice run."}
-        </h1>
-        <p>
-          {operation
-            ? "This is what your agent asks you to approve before using its card."
-            : "Try the same upload and approval flow your agent uses. Sample photos and prices are for demonstration."}
-        </p>
-      </div>
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-      {operation ? (
-        <div className="review-layout">
-          <div>
-            <PhotoGrid
-              photos={operation.terms.previews.map((p: any) => ({
-                ...p,
-                id: p.photoId,
-                previews: { [p.fit]: p.url },
-              }))}
-            />
-            <div className="approval-summary">
-              <h3>The exact approval summary</h3>
-              <p>{operation.summary}</p>
-            </div>
-          </div>
-          <aside className="order-paper">
-            <OrderSummary quote={operation.terms} />
-            <label className="approval-check">
-              <input
-                type="checkbox"
-                checked={approved}
-                onChange={(e) => setApproved(e.target.checked)}
-              />
-              <span>
-                I approve these photos, crops, full shipping address, email, and
-                total.
-              </span>
-            </label>
-            <button
-              className="primary full"
-              disabled={!approved || !!busy}
-              onClick={approve}
-            >
-              {busy || "Approve & continue to demo checkout"} <Arrow />
-            </button>
-            <button
-              className="text-button"
-              disabled={!!busy}
-              onClick={() => {
-                setOperation(undefined);
-                setApproved(false);
-              }}
-            >
-              ← Edit before approval
-            </button>
-          </aside>
-        </div>
-      ) : (
-        <form onSubmit={quote}>
-          <div className="studio-layout">
-            <div>
-              <div className="upload-zone">
-                <span className="upload-glyph" aria-hidden="true">
-                  ＋
-                </span>
-                <h3>Start with a memory.</h3>
-                <p>JPEG, PNG or WebP · up to 20 MB each</p>
-                <label className="primary">
-                  Choose photos
-                  <input
-                    disabled={!!busy}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    multiple
-                    onChange={(e) => {
-                      void add(Array.from(e.target.files || []));
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={samples}
-                  disabled={!!busy}
-                >
-                  Or use three sample photos ↗
-                </button>
-              </div>
-              <PhotoGrid
-                photos={photos}
-                edit={(rid, key, value) =>
-                  setPhotos((prev) =>
-                    prev.map((p) =>
-                      p.id === rid ? { ...p, [key]: value } : p,
-                    ),
-                  )
-                }
-                remove={(rid) =>
-                  setPhotos((prev) => prev.filter((p) => p.id !== rid))
-                }
-              />
-            </div>
-            <aside className="order-paper">
-              <h3>Where’s the happy mail going?</h3>
-              <p className="muted small">
-                Use the example details for this demo.
-              </p>
-              <label>
-                Confirmation email
-                <input
-                  required
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
-              {(
-                [
-                  ["name", "Full name"],
-                  ["line1", "Street address"],
-                  ["line2", "Apartment, suite, etc. (optional)"],
-                  ["city", "City"],
-                  ["state", "State (two letters)"],
-                  ["postalCode", "ZIP code"],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key}>
-                  {label}
-                  <input
-                    required={key !== "line2"}
-                    value={address[key]}
-                    maxLength={key === "state" ? 2 : 150}
-                    onChange={(e) =>
-                      setAddress({
-                        ...address,
-                        [key]:
-                          key === "state"
-                            ? e.target.value.toUpperCase()
-                            : e.target.value,
-                      })
-                    }
-                  />
-                </label>
-              ))}
-              <div className="country">
-                United States <span>US delivery for now</span>
-              </div>
-              <button
-                className="primary full"
-                disabled={!photos.length || !!busy}
-                type="submit"
-              >
-                {busy || "Preview my order"} <Arrow />
-              </button>
-              <p className="small muted">
-                You’ll see the full price before approval.
-              </p>
-            </aside>
-          </div>
-        </form>
-      )}
-    </main>
-  );
-}
-function PhotoGrid({
-  photos,
-  edit,
-  remove,
-}: {
-  photos: any[];
-  edit?: (id: string, key: string, value: any) => void;
-  remove?: (id: string) => void;
-}) {
-  return (
-    <div className="photo-grid">
-      {photos.map((p, i) => (
-        <article className="photo-item" key={`${p.id}-${i}`}>
-          <img
-            src={p.previews?.[p.fit] || p.url}
-            alt={`Print preview: ${p.name}`}
-            onError={(e) => {
-              e.currentTarget.alt = "Photo no longer available";
-            }}
-          />
-          <div className="photo-caption">
-            <strong>{p.name}</strong>
-            {remove && (
-              <button
-                aria-label={`Remove ${p.name}`}
-                type="button"
-                className="remove"
-                onClick={() => remove(p.id)}
-              >
-                ×
-              </button>
-            )}
-          </div>
-          {p.lowResolution && (
-            <p className="warning">Small photo: may look soft when printed.</p>
-          )}
-          {edit ? (
-            <div className="photo-controls">
-              <label>
-                Framing
-                <select
-                  value={p.fit}
-                  onChange={(e) => edit(p.id, "fit", e.target.value)}
-                >
-                  <option value="contain">Whole photo + border</option>
-                  <option value="cover">Fill print (center crop)</option>
-                </select>
-              </label>
-              <label>
-                Copies
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={p.quantity}
-                  onChange={(e) =>
-                    edit(
-                      p.id,
-                      "quantity",
-                      Math.max(1, Math.min(100, Number(e.target.value))),
-                    )
-                  }
-                />
-              </label>
-            </div>
-          ) : (
-            <p className="small muted">
-              {p.quantity} {p.quantity === 1 ? "print" : "prints"} ·{" "}
-              {p.fit === "contain" ? "whole photo + border" : "center crop"}
-            </p>
-          )}
-        </article>
-      ))}
-    </div>
-  );
-}
 function OrderSummary({ quote: q }: { quote: any }) {
   return (
     <>
-      <p className="eyebrow">YOUR LITTLE STACK</p>
-      <h3>
-        {q.items.reduce((n: number, i: any) => n + i.quantity, 0)} prints, a lot
-        of feeling.
-      </h3>
-      <p className="muted">4 × 6 inches · {q.finish}</p>
+      <p className="eyebrow">ORDER SUMMARY</p>
+      <h3>{q.items.reduce((n: number, i: any) => n + i.quantity, 0)} prints</h3>
+      <p className="muted">
+        {productOf(q).name} · {q.finish}
+      </p>
       <dl className="price-list">
         <div>
           <dt>Photo prints</dt>
@@ -858,9 +585,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
                 (order.checkoutExpired ? (
                   <p>Your checkout expired. Ask your agent for a new quote.</p>
                 ) : order.checkoutUrl ? (
-                  <a className="primary" href={order.checkoutUrl}>
-                    Complete payment <Arrow />
-                  </a>
+                  <p>Your agent can complete payment after your approval.</p>
                 ) : (
                   <p>Preparing your checkout…</p>
                 ))}
@@ -891,12 +616,16 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
                   )}
                 </div>
               ))}
-              <PhotoGrid
-                photos={order.quote.previews.map((p: any) => ({
-                  ...p,
-                  id: p.photoId,
-                }))}
-              />
+              <div className="photo-grid">
+                {order.quote.previews.map((p: any) => (
+                  <figure key={p.photoId}>
+                    <img src={p.url} alt={p.name} />
+                    <figcaption>
+                      {p.quantity} × {p.name}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
               {order.demo && order.paidAt && (
                 <section className="demo-tools">
                   <h3>Follow the whole journey.</h3>
@@ -971,19 +700,6 @@ function App() {
         <Guide config={config} />
       ) : route === "/privacy" ? (
         <Privacy config={config} />
-      ) : route === "/demo" ? (
-        config.mode === "demo" ? (
-          <Demo />
-        ) : (
-          <main className="document">
-            <h1>Demo studio</h1>
-            <p>
-              {config.mode === "loading"
-                ? "Loading…"
-                : "The demo is only available in demo mode."}
-            </p>
-          </main>
-        )
       ) : route.startsWith("/order/") ? (
         <OrderPage />
       ) : route.startsWith("/checkout/") ? (

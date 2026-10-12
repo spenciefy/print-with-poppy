@@ -944,3 +944,174 @@ nav > a:first-child {
   color: var(--muted);
   font-size: 13px;
 }
+
+/* Agent-only storefront: products, an instruction sheet, then protocol details. */
+.store-home {
+  max-width: 760px;
+}
+.store-heading {
+  padding: 40px 0 32px;
+}
+.store-heading h1 {
+  font-family: Hanken, sans-serif;
+  font-size: clamp(26px, 4vw, 32px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+.store-heading > p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+.product-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+.store-product {
+  border-top: 1px solid var(--line);
+  padding: 24px 0 16px;
+}
+.product-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.product-title h2 {
+  font-family: Hanken, sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.product-title > span {
+  font-size: 23px;
+  font-variant-numeric: tabular-nums;
+}
+.store-product p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 12px 0;
+}
+.store-product .product-spec {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 8px 0 24px;
+}
+.store-product .product-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+.store-delivery {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.store-order {
+  max-width: 528px;
+  margin: 40px auto 64px;
+}
+.instructions-copy {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid color-mix(in oklch, var(--ink) 12%, transparent);
+  border-radius: 6px;
+  background: var(--paper);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--ink) 5%, transparent);
+}
+.instructions-copy:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--orange) 15%, var(--paper));
+}
+.protocol-footer {
+  display: block;
+  max-width: 696px;
+  margin: 0 auto;
+  padding: 32px 0 24px;
+  border-top: 1px solid var(--line);
+}
+.protocol-footer .section-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+.protocol-footer h2 {
+  font-family: Hanken, sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.protocol-footer section > p:not(.section-label) {
+  font-size: 14px;
+  line-height: 1.8;
+  max-width: 64ch;
+  margin: 16px 0;
+}
+.protocol-footer .protocol-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin: 20px 0 28px;
+  font-size: 13px;
+}
+.protocol-footer .store-faq {
+  display: block;
+}
+.store-faq details {
+  border-top: 1px solid var(--line);
+  padding: 0;
+}
+.store-faq summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 18px 24px 18px 0;
+}
+.store-faq details p {
+  font-size: 13px;
+  line-height: 1.85;
+  margin: 0 0 20px;
+  max-width: 65ch;
+}
+.store-faq code {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.protocol-footer .footer-bottom {
+  border-top: 1px solid var(--line);
+  padding-top: 28px;
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  font-size: 12px;
+}
+.footer-bottom .brand {
+  margin-right: auto;
+}
+@media (max-width: 760px) {
+  .protocol-footer {
+    margin: 0 24px;
+  }
+  .store-heading {
+    padding-top: 24px;
+  }
+}
+@media (max-width: 520px) {
+  .product-list {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .store-product {
+    padding: 20px 0 12px;
+  }
+  .store-product .product-spec {
+    margin-bottom: 12px;
+  }
+  .store-order {
+    margin-top: 28px;
+  }
+}

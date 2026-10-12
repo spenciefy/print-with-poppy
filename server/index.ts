@@ -1,4 +1,5 @@
 import express from "express";
+import { catalog, offer } from "../src/offer.js";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import multer from "multer";
@@ -20,7 +21,13 @@ import {
   once,
   HttpError,
 } from "./store.js";
-import { authenticate, issueToken, client, verifyAssertion } from "./auth.js";
+import {
+  authenticate,
+  issueToken,
+  client,
+  verifyAssertion,
+  compatibilitySession,
+} from "./auth.js";
 import { upload } from "./photos.js";
 import {
   propose,
@@ -117,6 +124,34 @@ app.use((req, res, next) => {
     res.set("Cache-Control", "no-store");
   next();
 });
+app.post(
+  "/api/agent-sessions",
+  rateLimit({ windowMs: 3600000, limit: 10 }),
+  (req, res) => {
+    if (!config.compatibility)
+      throw new HttpError(
+        404,
+        "not_available",
+        "Guest compatibility is not enabled.",
+      );
+    z.object({})
+      .strict()
+      .parse(req.body || {});
+    res.status(201).json(compatibilitySession());
+  },
+);
+app.get("/api/catalog", (_req, res) =>
+  res.json({
+    products: catalog,
+    currency: "USD",
+    shippingIncluded: true,
+    country: "US",
+    tax: "Added before approval",
+    deliveryEstimate: offer.delivery,
+    oneProductPerOrder: true,
+    mode: config.APP_MODE,
+  }),
+);
 app.get("/api/config", (_req, res) =>
   res.json({
     mode: config.APP_MODE,
@@ -141,7 +176,7 @@ app.get("/.well-known/poppy.json", (_req, res) =>
         type: "openapi",
         url: `${config.origin}/openapi.json`,
         description:
-          "Upload photos, approve 4×6 home-delivered prints, pay by card and track orders.",
+          "Browse the catalog, upload photos, approve home-delivered prints, pay by card and track orders.",
       },
     ],
     extensions: {
@@ -195,7 +230,7 @@ app.get("/media/:id/:fit", (req, res) => {
     sig = String(req.query.sig || "");
   if (
     !/^photo_[A-Za-z0-9_-]+$/.test(photoId) ||
-    !["contain", "cover"].includes(fit) ||
+    !["contain", "cover", "poster-contain", "poster-cover"].includes(fit) ||
     !/^\d+$/.test(exp) ||
     Number(exp) < Date.now() / 1000 ||
     !equal(sig, sign(`${photoId}:${fit}:${exp}`))

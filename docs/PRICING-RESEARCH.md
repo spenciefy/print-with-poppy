@@ -1,3 +1,5 @@
+> Current implementation: the smaller $12/5-print offer and $35 poster below now replace the original $20/20 offer. Both are supported by the API; live ordering still requires deployment activation. Historical comparisons remain below.
+
 # Pricing and product decisions — 2026-10-11
 
 ## Launch offer

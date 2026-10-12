@@ -1,6 +1,12 @@
 import Stripe from "stripe";
-import { offer, printSubtotal } from "../src/offer.js";
-import { config, sku } from "./config.js";
+import {
+  offer,
+  printSubtotal,
+  posterPrice,
+  productOf,
+  mediaVariant,
+} from "../src/offer.js";
+import { config } from "./config.js";
 import { HttpError, mediaUrl } from "./store.js";
 import type { Proposal, Quote, Order } from "./types.js";
 export const stripe = process.env.STRIPE_SECRET_KEY
@@ -52,16 +58,24 @@ const cents = (m: any) => {
   return Math.round(Number(m.amount) * 100);
 };
 export async function getPrice(p: Proposal) {
-  const subtotal = printSubtotal(p.items.reduce((n, i) => n + i.quantity, 0));
+  const selected = productOf(p);
+  const subtotal =
+    p.product === "poster"
+      ? posterPrice
+      : printSubtotal(p.items.reduce((n, i) => n + i.quantity, 0));
   const shipping = 0;
   if (config.demo) {
     const tax = Math.round(subtotal * 0.0875);
     return { subtotal, shipping, tax, total: subtotal + tax };
   }
   // Verify the exact finish is available for the selected SKU/destination, rather than guessing attributes.
-  const product = await prodigi(`/products/${sku}`);
+  const product = await prodigi(`/products/${selected.sku}`);
   const details = product.product;
-  if (!details?.attributes?.finish?.includes(config.finish))
+  if (
+    !Object.entries(selected.attributes).every(([key, value]) =>
+      details?.attributes?.[key]?.includes(value),
+    )
+  )
     throw new HttpError(
       503,
       "product_not_configured",
@@ -72,9 +86,9 @@ export async function getPrice(p: Proposal) {
     destinationCountryCode: p.address.country,
     currencyCode: "USD",
     items: p.items.map((i) => ({
-      sku,
+      sku: selected.sku,
       copies: i.quantity,
-      attributes: { finish: config.finish },
+      attributes: selected.attributes,
       assets: [{ printArea: "default" }],
     })),
   });
@@ -162,7 +176,7 @@ export async function checkout(order: Order) {
             currency: "usd",
             unit_amount: q.subtotal,
             product_data: {
-              name: "4 × 6 photo prints",
+              name: productOf(q).name,
               description: `${q.items.reduce((s, i) => s + i.quantity, 0)} prints · ${q.finish} · delivered to ${q.address.name}`,
             },
           },
@@ -212,6 +226,7 @@ export async function submitPrint(order: Order) {
       shipments: [],
     };
   const q = order.quote;
+  const selected = productOf(q);
   const result = await prodigi("/orders", {
     merchantReference: order.id,
     idempotencyKey: order.id,
@@ -231,12 +246,15 @@ export async function submitPrint(order: Order) {
     },
     items: q.items.map((i) => ({
       merchantReference: i.photoId,
-      sku,
+      sku: selected.sku,
       copies: i.quantity,
       sizing: "fillPrintArea",
-      attributes: { finish: q.finish },
+      attributes: selected.attributes,
       assets: [
-        { printArea: "default", url: mediaUrl(i.photoId, i.fit, 7 * 86400) },
+        {
+          printArea: "default",
+          url: mediaUrl(i.photoId, mediaVariant(q.product, i.fit), 7 * 86400),
+        },
       ],
     })),
   });

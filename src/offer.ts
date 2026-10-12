@@ -1,7 +1,7 @@
 /** Shared by the public page, agent instructions and server quotes. USD cents. */
 export const offer = {
-  includedPrints: 20,
-  baseCents: 2000,
+  includedPrints: 5,
+  baseCents: 1200,
   extraPrintCents: 50,
   maxPrints: 100,
   delivery:
@@ -16,4 +16,45 @@ export function printSubtotal(quantity: number) {
   );
 }
 export const priceSummary =
-  "Up to 20 prints for $20, US delivery included. Additional prints 50¢ each, up to 100 total. Tax added before approval. Orders with fewer than 20 prints still cost $20; we print only the quantity you approve.";
+  "Up to 5 prints for $12, US delivery included. Additional prints 50¢ each, up to 100 total. Tax added before approval. Orders with fewer than 5 prints still cost $12; we print only the quantity you approve.";
+
+export const products = {
+  prints: {
+    name: "4 × 6 photo prints",
+    finish: "lustre",
+    sku: "GLOBAL-PHO-4X6",
+    attributes: { finish: "lustre" },
+    shortPixels: 1200,
+    longPixels: 1800,
+  },
+  poster: {
+    name: "12 × 16 matte print",
+    finish: "matte · 200gsm",
+    sku: "GLOBAL-FAP-12X16",
+    attributes: { paperType: "EMA", substrateWeight: "200gsm" },
+    shortPixels: 3600,
+    longPixels: 4800,
+  },
+} as const;
+export type Product = keyof typeof products;
+export const productOf = (p: { product?: Product }) =>
+  products[p.product || "prints"];
+export const mediaVariant = (product: Product | undefined, fit: string) =>
+  product === "poster" ? `poster-${fit}` : fit;
+export const posterPrice = 3500;
+export const catalog = [
+  {
+    id: "prints",
+    name: products.prints.name,
+    minimumPrice: offer.baseCents,
+    includedQuantity: offer.includedPrints,
+    additionalPrintPrice: offer.extraPrintCents,
+    maxQuantity: 100,
+  },
+  {
+    id: "poster",
+    name: products.poster.name,
+    price: posterPrice,
+    maxQuantity: 1,
+  },
+];

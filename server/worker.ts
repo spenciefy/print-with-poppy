@@ -270,7 +270,13 @@ export async function housekeeping() {
           (!config.demo || Date.now() - o.created < 86400000)),
     );
     if (!pendingApproval && !retained && Date.now() - p.created > 86400000) {
-      for (const fit of ["cover", "contain"])
+      for (const fit of [
+        "cover",
+        "contain",
+        "original",
+        "poster-cover",
+        "poster-contain",
+      ])
         await fs.rm(`${config.dataDir}/photos/${p.id}-${fit}.jpg`, {
           force: true,
         });

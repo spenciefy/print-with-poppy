@@ -1,3 +1,4 @@
+import { productOf, mediaVariant } from "../src/offer.js";
 import { config } from "./config.js";
 import {
   db,
@@ -9,7 +10,7 @@ import {
   HttpError,
   mediaUrl,
 } from "./store.js";
-import { ownedPhoto } from "./photos.js";
+import { ownedPhoto, preparePoster } from "./photos.js";
 import { getPrice, deliveryEstimate } from "./providers.js";
 import {
   proposalSchema,
@@ -51,10 +52,12 @@ export async function propose(body: unknown, session: Session, key: string) {
     );
   }
   const photos = p.items.map((i) => ownedPhoto(i.photoId, session.id));
+  const selected = productOf(p);
+  if (p.product === "poster") await preparePoster(photos[0], p.items[0].fit);
   const price = await getPrice(p);
   const created = Date.now();
   const estimate = deliveryEstimate();
-  const summary = `Prepare checkout for ${p.items.reduce((n, i) => n + i.quantity, 0)} 4×6 ${config.finish} photo prints: ${p.items.map((i, n) => `${n + 1}. ${photos[n].name}, ${i.quantity} ${i.quantity === 1 ? "copy" : "copies"}, ${i.fit === "contain" ? "whole image with white borders" : "center-cropped to fill"}${photos[n].lowResolution ? " — low-resolution warning" : ""}`).join("; ")}. Ship to ${addressText(p.address)}. Confirmation email: ${p.email}. Prints ${money(price.subtotal)} + shipping ${money(price.shipping)} + sales tax ${money(price.tax)} = ${money(price.total)} USD. ${estimate} Pay by card at the checkout link after approval. Payment releases the order to production; cancellation is not guaranteed after payment. ${config.demo ? "DEMO ONLY: illustrative prices, no charge or physical fulfillment." : ""}`;
+  const summary = `Prepare checkout for ${p.items.reduce((n, i) => n + i.quantity, 0)} ${selected.name} (${selected.finish}): ${p.items.map((i, n) => `${n + 1}. ${photos[n].name}, ${i.quantity} ${i.quantity === 1 ? "copy" : "copies"}, ${i.fit === "contain" ? "whole image with white borders" : "center-cropped to fill"}${Math.min(photos[n].width, photos[n].height) < selected.shortPixels || Math.max(photos[n].width, photos[n].height) < selected.longPixels ? " — low-resolution warning" : ""}`).join("; ")}. Ship to ${addressText(p.address)}. Confirmation email: ${p.email}. Prints ${money(price.subtotal)} + shipping ${money(price.shipping)} + sales tax ${money(price.tax)} = ${money(price.total)} USD. ${estimate} Pay by card at the checkout link after approval. Payment releases the order to production; cancellation is not guaranteed after payment. ${config.demo ? "DEMO ONLY: illustrative prices, no charge or physical fulfillment." : ""}`;
   const q: Quote = {
     ...p,
     ...price,
@@ -64,12 +67,12 @@ export async function propose(body: unknown, session: Session, key: string) {
     expires: created + 15 * 60000,
     currency: "USD",
     estimate,
-    finish: config.finish,
+    finish: selected.finish,
     shippingMethod: config.shipping,
     summary,
     previews: photos.map((ph, n) => ({
       photoId: ph.id,
-      url: mediaUrl(ph.id, p.items[n].fit),
+      url: mediaUrl(ph.id, mediaVariant(p.product, p.items[n].fit)),
       name: ph.name,
       quantity: p.items[n].quantity,
       fit: p.items[n].fit,
@@ -230,7 +233,7 @@ export function orderView(o: Order) {
       taxCalculationId: undefined,
       previews: o.quote.previews.map((p) => ({
         ...p,
-        url: mediaUrl(p.photoId, p.fit),
+        url: mediaUrl(p.photoId, mediaVariant(o.quote.product, p.fit)),
       })),
     },
     checkoutUrl: o.status === "awaiting_payment" ? o.checkoutUrl : undefined,

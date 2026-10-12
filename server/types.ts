@@ -13,6 +13,7 @@ export const addressSchema = z
   .strict();
 export const proposalSchema = z
   .object({
+    product: z.enum(["prints", "poster"]).optional(),
     email: z.email().max(254),
     address: addressSchema,
     items: z
@@ -32,6 +33,12 @@ export const proposalSchema = z
   .refine(
     (x) => x.items.reduce((s, i) => s + i.quantity, 0) <= 100,
     "Maximum 100 prints per order.",
+  )
+  .refine(
+    (x) =>
+      x.product !== "poster" ||
+      (x.items.length === 1 && x.items[0].quantity === 1),
+    "Choose one photo and one copy per poster order. Order photo prints separately.",
   );
 export type Proposal = z.infer<typeof proposalSchema>;
 export interface Session {
@@ -40,6 +47,7 @@ export interface Session {
   userId: string;
   extensions: boolean;
   demo?: boolean;
+  compatibility?: boolean;
   created: number;
 }
 export interface Photo {

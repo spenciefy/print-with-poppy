@@ -215,8 +215,46 @@ export async function issueToken(req: Request) {
     signed_in: false,
   };
 }
+export function compatibilitySession() {
+  const token = id("guest");
+  const session: Session = {
+    id: id("session"),
+    clientId: "unverified-guest-agent",
+    userId: id("user"),
+    extensions: true,
+    compatibility: true,
+    created: Date.now(),
+  };
+  put("session", session.id, session);
+  put("compat-token", hash(token), {
+    sessionId: session.id,
+    expires: Date.now() + 86400000,
+  });
+  return {
+    access_token: token,
+    token_type: "Bearer",
+    expires_in: 86400,
+    session_id: session.id,
+    mode: config.APP_MODE,
+    protocol: "http-compatibility",
+    instructions: `${config.origin}/agent.txt`,
+  };
+}
 export async function authenticate(req: Request): Promise<Session> {
   const [scheme, token] = (req.get("Authorization") || "").split(" ");
+  if (config.compatibility && scheme === "Bearer" && token) {
+    const record = get("compat-token", hash(token));
+    const session =
+      record && record.expires > Date.now()
+        ? get<Session>("session", record.sessionId)
+        : undefined;
+    if (session?.compatibility) return session;
+    throw new HttpError(
+      401,
+      "invalid_token",
+      "Guest agent session expired or unknown.",
+    );
+  }
   if (config.demo && scheme === "Demo" && token) {
     const s = get<Session>("session", token);
     if (s?.demo) return s;
