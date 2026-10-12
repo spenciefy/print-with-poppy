@@ -309,8 +309,8 @@ function Home({ config }: { config: Config }) {
             <article className="store-product">
               <div className="product-preview poster-preview">
                 <img
-                  src="/photos/poppy-field-wide.png"
-                  alt="Example unframed 12 by 16 poppy-field print with white borders"
+                  src="/photos/poppy-meadow-poster.png"
+                  alt="Example 12 by 16 wall print of a distant poppy meadow with white borders"
                 />
               </div>
               <div className="product-copy">
