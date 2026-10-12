@@ -39,7 +39,7 @@ function Brand() {
         />
       </span>
       <span>
-        print with <strong>poppy</strong>
+        Print with <strong>Poppy</strong>
       </span>
     </a>
   );

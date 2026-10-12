@@ -1926,12 +1926,12 @@ header {
   border-color: color-mix(in oklch, var(--ink) 28%, transparent);
 }
 .instructions-actions a.instructions-copy {
-  background: var(--orange);
-  color: var(--ink);
+  background: #c94b06;
+  color: #ffffff;
 }
 .instructions-actions button.instructions-copy:hover {
   background: color-mix(in oklch, var(--ink) 4%, transparent);
 }
 .instructions-actions a.instructions-copy:hover {
-  background: color-mix(in oklch, var(--orange) 90%, var(--ink));
+  background: #b54104;
 }
