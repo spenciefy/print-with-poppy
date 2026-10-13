@@ -1732,3 +1732,32 @@ test("native Poppy supports square and 8x10 items with correctly sized approved 
     assert.equal(meta.height, height);
   }
 });
+
+test("private Stripe receipt requires order token and matching paid checkout", async () => {
+  const {config}=await import("../server/config.js");
+  const {stripe}=await import("../server/providers.js");
+  const retrieve=stripe!.checkout.sessions.retrieve;
+  const oid=`ord_receipt_${randomUUID()}`;
+  const token=randomUUID();
+  const o={id:oid,viewToken:token,paidAt:Date.now(),checkoutId:"cs_receipt",quote:{total:1200}};
+  store.put("order",oid,o,"receipt-test");
+  let calls=0;
+  let reference=oid;
+  stripe!.checkout.sessions.retrieve=(async()=>{calls++;return {status:"complete",payment_status:"paid",amount_total:1200,currency:"usd",client_reference_id:reference,payment_intent:{latest_charge:{receipt_url:"https://pay.stripe.com/receipts/test"}}};}) as any;
+  config.demo=false;
+  const url=`${origin}/api/order-view/${oid}/receipt`;
+  try {
+    assert.equal((await fetch(url)).status,404);
+    assert.equal(calls,0);
+    const response=await fetch(url,{headers:{"X-Order-Token":token}});
+    assert.equal(response.status,200);
+    assert.equal(response.headers.get("cache-control"),"no-store");
+    assert.equal((await response.json()).url,"https://pay.stripe.com/receipts/test");
+    reference="different-order";
+    assert.equal((await fetch(url,{headers:{"X-Order-Token":token}})).status,404);
+    store.put("order",oid,{...o,paidAt:undefined},"receipt-test");
+    const before=calls;
+    assert.equal((await fetch(url,{headers:{"X-Order-Token":token}})).status,404);
+    assert.equal(calls,before);
+  } finally {config.demo=true;stripe!.checkout.sessions.retrieve=retrieve;}
+});

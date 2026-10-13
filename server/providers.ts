@@ -320,3 +320,21 @@ export async function sendMail(
 export function stripeCheckoutComplete(session: Pick<Stripe.Checkout.Session, "payment_status" | "status" | "amount_total">) {
   return session.payment_status === "paid" || (session.payment_status === "no_payment_required" && session.status === "complete" && session.amount_total === 0);
 }
+
+/** Retrieve a fresh hosted receipt only for the matching completed, paid checkout. */
+export async function stripeReceipt(order: Order) {
+  if (config.demo || !order.paidAt || !order.checkoutId || order.quote.total <= 0)
+    throw new HttpError(404, "receipt_unavailable", "A Stripe receipt is not available for this order.");
+  const session = await stripe!.checkout.sessions.retrieve(order.checkoutId, {
+    expand: ["payment_intent.latest_charge"],
+  });
+  if (session.client_reference_id !== order.id || !stripeCheckoutComplete(session) ||
+      session.amount_total !== order.quote.total || session.currency !== "usd")
+    throw new HttpError(404, "receipt_unavailable", "A Stripe receipt is not available for this order.");
+  const intent = session.payment_intent;
+  const charge = intent && typeof intent !== "string" ? intent.latest_charge : undefined;
+  const url = charge && typeof charge !== "string" ? charge.receipt_url : undefined;
+  if (!url || new URL(url).protocol !== "https:" || new URL(url).hostname !== "pay.stripe.com")
+    throw new HttpError(404, "receipt_unavailable", "Your Stripe receipt is not available yet. Please try again later.");
+  return url;
+}

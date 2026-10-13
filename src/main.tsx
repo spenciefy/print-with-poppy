@@ -702,8 +702,8 @@ function OrderSummary({ quote: q }: { quote: any }) {
         <div>
           <dt>Sales tax</dt>
           <dd>{money(q.tax)}</dd>
-          {!!q.discount && <><dt>Discount</dt><dd>−{money(q.discount)}</dd></>}
         </div>
+        {!!q.discount && <div><dt>Discount</dt><dd>−{money(q.discount)}</dd></div>}
         <div className="total">
           <dt>Total · USD</dt>
           <dd>{money(q.total)}</dd>
@@ -742,6 +742,8 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
   const [order, setOrder] = useState<any>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const [receiptError, setReceiptError] = useState("");
   const [emailIndex, setEmailIndex] = useState<number | null>(null);
   const headers = { "X-Order-Token": token };
   const refresh = () =>
@@ -754,6 +756,15 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
     const t = setInterval(() => void refresh(), 3000);
     return () => clearInterval(t);
   }, [rid, token]);
+  async function openReceipt() {
+    setReceiptBusy(true);
+    setReceiptError("");
+    try {
+      const result = await api(`/api/order-view/${rid}/receipt`, { headers });
+      window.location.assign(result.url);
+    } catch (e) { setReceiptError((e as Error).message); }
+    finally { setReceiptBusy(false); }
+  }
   async function action(action: string) {
     setBusy(true);
     setError("");
@@ -955,6 +966,9 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
         </div>
         <aside className="order-paper">
           <OrderSummary quote={order.quote} />
+          {!order.demo && !!order.paidAt && order.quote.total > 0 && <button className="text-button receipt-link" disabled={receiptBusy} onClick={() => void openReceipt()}>{receiptBusy ? "Loading receipt…" : "View Stripe receipt"}</button>}
+          {!order.demo && !order.paidAt && order.status === "awaiting_payment" && order.checkoutUrl && !order.checkoutExpired && <a className="text-link receipt-link" href={order.checkoutUrl}>Continue payment on Stripe</a>}
+          {receiptError && <p className="error" role="alert">{receiptError}</p>}
           <p className="small muted">
             After payment, printing starts automatically. Contact support
             promptly for changes; cancellation isn’t guaranteed.

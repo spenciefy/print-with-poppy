@@ -2019,3 +2019,9 @@ header {
   box-shadow: 0 2px 5px rgb(48 41 31 / 7%), 0 8px 20px rgb(48 41 31 / 8%);
 }
 .order-shell .photo-grid figcaption { margin-top: 10px; }
+
+.price-list > div { align-items: baseline; }
+.price-list dt, .price-list dd { line-height: 1.5; }
+.price-list dd { text-align: right; font-variant-numeric: tabular-nums; }
+.price-list .total { align-items: baseline; }
+.receipt-link { display: inline-block; font-size: 14px; margin-top: 20px; color: var(--rust); }

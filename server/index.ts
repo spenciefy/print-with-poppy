@@ -38,7 +38,7 @@ import {
   orderView,
   paid,
 } from "./commerce.js";
-import { stripe, stripeCheckoutComplete } from "./providers.js";
+import { stripe, stripeCheckoutComplete, stripeReceipt } from "./providers.js";
 import { tick, housekeeping, syncProvider } from "./worker.js";
 import { openapi, agentInstructions } from "./openapi.js";
 import type { Session, Order } from "./types.js";
@@ -301,6 +301,13 @@ app.post(
     void tick();
   },
 );
+app.get("/api/order-view/:id/receipt", async (req, res) => {
+  const o = requireRecord<Order>("order", String(req.params.id));
+  if (!equal(req.get("X-Order-Token") || "", o.viewToken))
+    throw new HttpError(404, "not_found", "Order not found.");
+  res.set("Cache-Control", "no-store");
+  res.json({ url: await stripeReceipt(o) });
+});
 app.get("/api/order-view/:id", (req, res) => {
   const o = requireRecord<Order>("order", String(req.params.id));
   if (!equal(req.get("X-Order-Token") || "", o.viewToken))
