@@ -1,10 +1,11 @@
+import { orderingMethodLabel } from "./ordering-method";
 import React, { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 import Demo from "./Demo";
 import { orderSubtitle, visibleShipment } from "./order-copy";
-import { productOf, shippingSummary, orderProducts, orderLabel } from "./offer";
+import { productOf, shippingSummary, orderProducts, orderLabel, merchandiseLabel } from "./offer";
 type Config = { environment?: string; mode: string; origin: string; support: string };
 const money = (c: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -311,6 +312,11 @@ function Footer({ compact = false }: { compact?: boolean }) {
           </Faq>
         </div>
       </section>
+      <details className="secret-goody">
+        <summary>One more thing ☕</summary>
+        <p>A photo mug, for your desk or someone else’s. $22 including US shipping, plus tax.</p>
+        <p>Ask your personal agent for an 11oz photo mug. You’ll approve the wrap artwork before ordering. It may arrive separately from your prints.</p>
+      </details>
       <div className="footer-bottom">
         <Brand />
         <a href="https://x.com/spenciefy">a project by @spenciefy</a>
@@ -705,12 +711,12 @@ function OrderSummary({ quote: q }: { quote: any }) {
   return (
     <>
       <p className="eyebrow">ORDER SUMMARY</p>
-      <h3>{q.items.reduce((n: number, i: any) => n + i.quantity, 0)} {orderProducts(q).length > 1 ? "items" : "prints"}</h3>
+      <h3>{q.items.reduce((n: number, i: any) => n + i.quantity, 0)} {orderProducts(q).length > 1 || merchandiseLabel(q) === "Items" ? "items" : "prints"}</h3>
       <p className="muted">
         {orderLabel(q)} · {q.finish}
       </p>
       <dl className="price-list">
-        <div><dt>Prints</dt><dd>{money(q.subtotal)}</dd></div>
+        <div><dt>{merchandiseLabel(q)}</dt><dd>{money(q.subtotal)}</dd></div>
         <div>
           <dt>Home delivery</dt>
           <dd>{q.shipping === 0 ? "Included" : money(q.shipping)}</dd>
@@ -824,8 +830,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
     <main className="order-shell">
       {order.demo && (
         <div className="demo-banner">
-          <span>✳ DEMO ORDER</span> No charge. No prints shipped. Emails are
-          previews only.
+          <span>✳ DEMO ORDER</span> No charge. Nothing is printed or shipped. Test order emails may be delivered.
         </div>
       )}
       <div className="order-heading">
@@ -839,6 +844,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
           {!order.demo && !!order.paidAt && order.quote.total > 0 && <button className="text-button receipt-link" disabled={receiptBusy} onClick={() => void openReceipt()}>{receiptBusy ? "Loading payment…" : "View Stripe payment"}</button>}
           {!order.demo && !order.paidAt && order.status === "awaiting_payment" && order.checkoutUrl && !order.checkoutExpired && <a className="text-link receipt-link" href={order.checkoutUrl}>View Stripe payment</a>}
         </div>
+        {order.orderingMethod && <p className="order-method">{orderingMethodLabel(order.orderingMethod)}</p>}
         {receiptError && <p className="error" role="alert">{receiptError}</p>}
         <p>
           {checkout

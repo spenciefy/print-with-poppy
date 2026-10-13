@@ -249,12 +249,17 @@ app.post("/oauth/revoke", async (req, res) => {
       "A signed client assertion is required.",
     );
   const c = await client(req.body.client_id);
-  const assertion = await verifyAssertion(
-    req.body.client_assertion,
-    c.keys,
-    req.body.client_id,
-    `${config.origin}/oauth/revoke`,
-  );
+  let assertion;
+  try {
+    assertion = await verifyAssertion(
+      req.body.client_assertion,
+      c.keys,
+      req.body.client_id,
+      `${config.origin}/oauth/revoke`,
+    );
+  } catch {
+    throw new HttpError(401, "invalid_client", "Invalid client assertion for revocation.");
+  }
   once(
     `assertion:${req.body.client_id}:${assertion.jti}`,
     assertion.exp! * 1000,
@@ -270,7 +275,7 @@ app.get("/media/:id/:fit", (req, res) => {
     sig = String(req.query.sig || "");
   if (
     !/^photo_[A-Za-z0-9_-]+$/.test(photoId) ||
-    !["contain", "cover", "poster-contain", "poster-cover", "square-contain", "square-cover", "enlargement-contain", "enlargement-cover"].includes(fit) ||
+    !["contain", "cover", "poster-contain", "poster-cover", "square-contain", "square-cover", "enlargement-contain", "enlargement-cover", "mug-cover", "mug-contain"].includes(fit) ||
     !/^\d+$/.test(exp) ||
     Number(exp) < Date.now() / 1000 ||
     !equal(sig, sign(`${photoId}:${fit}:${exp}`))

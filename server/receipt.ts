@@ -1,4 +1,4 @@
-import { itemProduct, orderProducts, productOf } from "../src/offer.js";
+import { itemProduct, orderProducts, productOf, merchandiseLabel } from "../src/offer.js";
 import { addressText, money, type Proposal, type Photo, type Quote } from "./types.js";
 
 function photoList(names: string[]) {
@@ -17,6 +17,7 @@ function photoList(names: string[]) {
 export function receipt(p: Proposal, photos: Pick<Photo, "name" | "width" | "height">[], price: Pick<Quote, "subtotal" | "shipping" | "discount" | "tax" | "total">, demo: boolean) {
   const lines = ["Print with Poppy"];
   for (const group of orderProducts(p)) {
+    if (group.product === "mug") lines.push("Mug preview: flat horizontal wrap artwork; may ship separately.");
     lines.push(`${group.quantity} × ${group.name} · ${group.finish}`);
     const settings = new Map<string, { names: string[]; quantity: number; fit: string }>();
     const soft: string[] = [];
@@ -40,7 +41,7 @@ export function receipt(p: Proposal, photos: Pick<Photo, "name" | "width" | "hei
     for (const row of settings.values()) lines.push(`${photoList(row.names)} · ${row.quantity} ${row.quantity === 1 ? "copy" : "copies"} each · ${row.fit === "contain" ? "whole image with white margins" : "cropped to fill"}`);
     if (soft.length) lines.push(`Low-resolution warning: ${photoList(soft)} may look soft at this size.`);
   }
-  lines.push("", `Deliver to: ${addressText(p.address)}`, `Email: ${p.email}`, "Delivery: estimated 7–12 business days after payment; not guaranteed.", "", `Prints ${money(price.subtotal)} ${price.shipping ? `+ shipping ${money(price.shipping)}` : "· US shipping included"}${price.discount ? ` − discount ${money(price.discount)}` : ""} + tax ${money(price.tax)}`, `Total: ${money(price.total)} USD`, "", price.total === 0 ? "Approve to continue to free checkout; no card required." : "Approve to continue to payment.", "Completing checkout starts printing; cancellation is not guaranteed afterward.");
+  lines.push("", `Deliver to: ${addressText(p.address)}`, `Email: ${p.email}`, "Delivery: estimated 7–12 business days after payment; not guaranteed.", "", `${merchandiseLabel(p)} ${money(price.subtotal)} ${price.shipping ? `+ shipping ${money(price.shipping)}` : "· US shipping included"}${price.discount ? ` − discount ${money(price.discount)}` : ""} + tax ${money(price.tax)}`, `Total: ${money(price.total)} USD`, "", price.total === 0 ? "Approve to continue to free checkout; no card required." : "Approve to continue to payment.", "Completing checkout starts printing; cancellation is not guaranteed afterward.");
   if (demo) lines.push("SANDBOX: simulated payment and fulfillment. No prints will be shipped.");
   return lines.join("\n");
 }

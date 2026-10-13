@@ -856,6 +856,7 @@ test("HTTP compatibility sessions isolate ownership, expire, and cannot downgrad
   assert.equal(own.status, 202);
   const op = (await own.json()).operation;
   assert.equal(op.terms.subtotal, 1200);
+  assert.equal(op.terms.orderingMethod, "http-compatibility");
   assert.equal(op.confirmation, null);
   const native = await makeAgent();
   assert.equal((await send(native.session.access_token)).status, 401);
@@ -1760,4 +1761,75 @@ test("private Stripe receipt requires order token and matching paid checkout", a
     assert.equal((await fetch(url,{headers:{"X-Order-Token":token}})).status,404);
     assert.equal(calls,before);
   } finally {config.demo=true;stripe!.checkout.sessions.retrieve=retrieve;}
+});
+
+test("ordering method is server-recorded, survives session cleanup, and labels order/email", async () => {
+  const f = await fixture();
+  assert.equal(f.op.terms.orderingMethod, "native-poppy");
+  const { sessionOrderingMethod, quoteOrderingMethod } = await import("../server/ordering-method.js");
+  const { emailFor } = await import("../server/email.js");
+  assert.equal(sessionOrderingMethod({ ...store.get<import("../server/types.js").Session>("session", f.a.session.session_id)!, compatibility: true }), "http-compatibility");
+  await f.a.request(`/api/operations/${f.op.operation_id}/confirm`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ revision: 1, approved_by: "user" }),
+  });
+  await worker.tick();
+  const op = commerce.readOperation(f.op.operation_id, f.a.session.session_id);
+  const order = store.get("order", op.orderId!);
+  assert.equal(commerce.orderView(order).orderingMethod, "native-poppy");
+  assert.match(emailFor(order, "confirmation").text, /Ordered via Personal Agent Protocol/);
+  const legacy = { ...order.quote, orderingMethod: undefined };
+  assert.equal(quoteOrderingMethod(legacy), "native-poppy");
+  assert.equal(quoteOrderingMethod({ ...legacy, owner: "missing-session" }), undefined);
+  assert.equal(quoteOrderingMethod({ ...order.quote, owner: "missing-session" }), "native-poppy");
+  const spoof = await f.a.request("/api/orders", {
+    method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+    body: JSON.stringify({ ...f.proposal, orderingMethod: "http-compatibility" }),
+  });
+  assert.equal(spoof.status, 400);
+});
+
+test("hidden mug supports mixed approval, horizontal artwork and one-mug limit", async () => {
+  const f = await fixture();
+  const proposal = { ...f.proposal, items: [
+    { product: "prints", photoId: f.photo.id, quantity: 5, fit: "cover" },
+    { product: "mug", photoId: f.photo.id, quantity: 1, fit: "contain" },
+  ] };
+  const send = (body: unknown) => f.a.request("/api/orders", {
+    method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+    body: JSON.stringify(body),
+  });
+  const r = await send(proposal);
+  assert.equal(r.status, 202, JSON.stringify(r.body));
+  assert.equal(r.body.operation.terms.subtotal, 3400);
+  assert.equal(r.body.operation.terms.shipping, 0);
+  assert.match(r.body.operation.summary, /flat horizontal wrap artwork/);
+  const preview = await fetch(r.body.operation.terms.previews[1].url);
+  assert.equal(preview.status, 200);
+  const meta = await sharp(Buffer.from(await preview.arrayBuffer())).metadata();
+  assert.equal(meta.width, 2670);
+  assert.equal(meta.height, 1110);
+  assert.equal((await send({ ...proposal, items: [{ ...proposal.items[1], quantity: 2 }] })).status, 400);
+  assert.equal((await send({ ...proposal, items: [proposal.items[1], proposal.items[1]] })).status, 400);
+  const { orderProducts } = await import("../src/offer.js");
+  const mug = orderProducts(r.body.operation.terms).find(g => g.product === "mug")!;
+  assert.equal(mug.sku, "GLOBAL-MUG-W");
+  assert.deepEqual(mug.attributes, { color: "white", size: "313ml / 11oz" });
+});
+
+test("invalid revocation assertions return invalid_client rather than a retryable server error", async () => {
+  const a = await makeAgent();
+  for (const assertion of [await a.assertion(clientId, origin + "/oauth/token"), "malformed"]) {
+    const r = await fetch(origin + "/oauth/revoke", {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: clientId, client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", client_assertion: assertion, token: "unknown-account-token" }),
+    });
+    assert.equal(r.status, 401);
+    assert.equal((await r.json()).error, "invalid_client");
+  }
+  const r = await fetch(origin + "/oauth/revoke", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: clientId, client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", client_assertion: await a.assertion(clientId, origin + "/oauth/revoke"), token: "unknown-account-token" }),
+  });
+  assert.equal(r.status, 200);
 });

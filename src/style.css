@@ -2040,3 +2040,9 @@ header {
 @media (max-width: 860px) {
   .store-home-standard > .store-order { margin-top: 32px; }
 }
+
+.order-heading .order-method { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+
+.secret-goody { margin: 24px 0; max-width: 600px; color: var(--muted); font-size: 14px; }
+.secret-goody summary { cursor: pointer; color: var(--rust); }
+.secret-goody p { margin: 10px 0; line-height: 1.6; }

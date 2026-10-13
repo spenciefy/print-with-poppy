@@ -175,3 +175,23 @@ Live orders check current supplier costs at proposal, checkout creation and fulf
 ### Agent conversation
 
 Approval summaries are compact receipts: photos with matching quantities/crops are grouped, with exceptions and low-resolution warnings retained. Agents should collect missing details together, use a single mixed order for one destination, show numbered previews alongside the receipt, and keep API mechanics out of customer chat. The same guidance is published for native Poppy, HTTP compatibility, and sandbox clients. Explicit approval of the complete terms is still required. Client agents control their own UI and may not follow every presentation instruction.
+
+### Ordering method and native Poppy verification
+
+Orders record `quote.orderingMethod` on the server when proposed. The order response also returns `orderingMethod`; the private order page and confirmation email show its readable label:
+
+- `native-poppy`: authenticated Poppy client with a DPoP-bound session, signed out or signed in.
+- `http-compatibility`: the separate Bearer-token HTTP API; not Personal Agent Protocol and not a verified agent identity.
+- `visual-demo`: the local scripted demo identity.
+
+Customer account sign-in is independent of the integration method. Clients cannot submit or override this field. Old orders use their original session if available; missing historical evidence is left unlabeled. A native authentication failure must not silently switch an order to compatibility access.
+
+The native schema remains `/openapi.json`, discovered through `/.well-known/poppy.json`. Non-native agents use `/api/compat/instructions` and `/api/compat/openapi.json`. The hosted sandbox allows native sessions only. See [sandbox testing](docs/SANDBOX.md) for DPA and reference-client tests. Passing the reference client does not establish that the deployed DPA chat UI passed.
+
+### Hidden extra: photo mug
+
+The footer’s “One more thing ☕” reveals an optional **11oz white ceramic photo mug for $22 including US shipping, plus tax**. It is an `easterEgg` catalog entry, not a primary homepage product or automatic upsell. Agents can order `items[].product: "mug"`, alone or with prints. Maximum one mug per order; no shared-photo shipping discount applies to the mug.
+
+Prodigi SKU `GLOBAL-MUG-W`, attributes `color: white`, `size: 313ml / 11oz`, print area `default`, fixed horizontal artwork **2670 × 1110 px**. The user approves the flat wrap artwork, not a 3D mockup. Both crop-to-fill and contain are supported; the approved artwork is used for fulfillment. Products may ship separately. Standard privacy cleanup includes mug artwork.
+
+On 2026-10-12, the live Prodigi API quoted one US mug at $10 production + $6.45 Budget shipping, excluding possible supplier tax. At $22, the conservative cost guard leaves about $1.50 after its tax/fee allowances and $1 reserve (about $2.50 before that reserve). Every real proposal and fulfillment rechecks supplier costs; coupons remain intentional subsidies. See [product research](docs/PHOTO-MUG.md).

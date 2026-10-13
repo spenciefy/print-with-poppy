@@ -1,4 +1,9 @@
 export const orderingGuidance = `
+Authentication routing:
+- Choose one integration based on your actual tools. Native Poppy clients use discovery and the native OpenAPI document; their transport creates assertions and DPoP proofs. Agents without that transport use only the separate HTTP compatibility instructions and schema.
+- A failed native request is not permission to downgrade to compatibility. Fix the native session or report the blocker. Never ask a customer for a private signing key, invent a proof, or mix tokens between these paths.
+- Native signed-out sessions are still Personal Agent Protocol. Customer sign-in is optional and separate from the integration method. The server records orderingMethod; use it when explaining how an order was placed, rather than inferring from the agent's name.
+
 Customer conversation:
 - Start by asking for photos if none were supplied. Use original-resolution uploads when possible; do not substitute thumbnails. If a preview is low resolution, explain it may print softly and offer an original upload before approval.
 - Ask for all missing details together in one concise message: product choice, copies, recipient name, complete US shipping address and confirmation email. Reuse details the user has already supplied. Do not invent missing details. Ask about crop exceptions when needed; show the resulting previews before approval.

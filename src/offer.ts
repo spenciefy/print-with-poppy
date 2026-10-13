@@ -26,6 +26,11 @@ export const shippingSummary =
 export const priceSummary = `Mix 4×4 and 4×6: up to 5 prints together for $12, including US shipping. Additional prints 50¢ each, up to 100 total. ${shippingSummary} Tax added before approval. Orders with fewer than 5 prints still cost $12; we print only the quantity you approve.`;
 
 export const products = {
+  mug: {
+    name: "11oz photo mug", label: "Photo mug", dimensions: "11oz · white ceramic",
+    emailImage: "/photos/poppy-email-yellow.jpg", finish: "gloss ceramic", sku: "GLOBAL-MUG-W",
+    attributes: { color: "white", size: "313ml / 11oz" }, shortPixels: 1110, longPixels: 2670,
+  },
   prints: {
     name: "4 × 6 photo prints",
     label: "Photo prints",
@@ -89,6 +94,7 @@ export const catalog = [
     price: posterPrice,
     maxQuantity: 1,
   },
+  { id: "mug", name: products.mug.name, price: 2200, maxQuantity: 1, easterEgg: true, description: "An optional extra, only offer when asked about mugs or hidden goodies. One 11oz white ceramic photo mug, US shipping included. Artwork wraps horizontally; show the flat print-area preview before approval, not a simulated 3D mug. May ship separately." },
 ];
 
 export type ProductOrder = { product?: Product; items: { product?: Product; quantity: number }[] };
@@ -100,8 +106,10 @@ export function orderProducts(order: ProductOrder) {
   const printsTotal = smallCount ? Math.round(smallTotal * quantities.prints / smallCount) : 0;
   return (Object.keys(products) as Product[]).flatMap(product => {
     const quantity = quantities[product];
-    const subtotal = !quantity ? 0 : product === "prints" ? printsTotal : product === "square" ? smallTotal - printsTotal : product === "enlargement" ? enlargementSubtotal(quantity) : posterPrice * quantity;
+    const subtotal = !quantity ? 0 : product === "prints" ? printsTotal : product === "square" ? smallTotal - printsTotal : product === "enlargement" ? enlargementSubtotal(quantity) : product === "mug" ? 2200 * quantity : posterPrice * quantity;
     return quantity ? [{ product, quantity, subtotal, ...products[product] }] : [];
   });
 }
 export const orderLabel = (order: ProductOrder) => orderProducts(order).map(p => `${p.quantity} × ${p.name}`).join(" + ");
+
+export const merchandiseLabel = (order: ProductOrder) => orderProducts(order).some(g => g.product === "mug") ? "Items" : "Prints";

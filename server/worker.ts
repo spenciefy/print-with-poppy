@@ -300,6 +300,7 @@ export async function housekeeping() {
         "contain",
         "original",
         "square-cover", "square-contain", "enlargement-cover", "enlargement-contain",
+        "mug-cover", "mug-contain",
         "poster-cover",
         "poster-contain",
       ])

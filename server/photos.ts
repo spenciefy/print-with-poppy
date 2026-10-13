@@ -120,7 +120,7 @@ export async function preparePoster(p: Photo, fit: "contain" | "cover", product:
     );
   }
   const spec = productOf({ product });
-  const [w, h] = p.width >= p.height ? [spec.longPixels, spec.shortPixels] : [spec.shortPixels, spec.longPixels];
+  const [w, h] = product === "mug" || p.width >= p.height ? [spec.longPixels, spec.shortPixels] : [spec.shortPixels, spec.longPixels];
   await sharp(source)
     .resize(w, h, { fit, position: "centre", background: "#ffffff" })
     .jpeg({ quality: 95 })

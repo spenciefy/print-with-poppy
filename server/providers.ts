@@ -2,6 +2,7 @@ import { coupon, discountedAmounts } from "./coupons.js";
 import Stripe from "stripe";
 import { contributionBudget } from "./pricing.js";
 import {
+  merchandiseLabel,
   offer,
   printSubtotal,
   shippingPrice,
@@ -213,7 +214,7 @@ export async function checkout(order: Order) {
             unit_amount: q.subtotal - (q.printDiscount || 0),
             product_data: {
               name: orderLabel(q),
-              description: `${q.items.reduce((s, i) => s + i.quantity, 0)} prints · ${q.finish} · delivered to ${q.address.name}`,
+              description: `${q.items.reduce((s, i) => s + i.quantity, 0)} ${merchandiseLabel(q).toLowerCase()} · ${q.finish} · delivered to ${q.address.name}`,
             },
           },
           quantity: 1,

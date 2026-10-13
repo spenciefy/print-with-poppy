@@ -132,10 +132,10 @@ if (accountTest) {
 const photo = new FormData();
 photo.append(
   "photo",
-  new Blob([await fs.readFile("public/photos/lake.jpg")], {
-    type: "image/jpeg",
+  new Blob([await fs.readFile("public/photos/poppy-abstract-cluster.webp")], {
+    type: "image/webp",
   }),
-  "lake.jpg",
+  "sample-poppy.webp",
 );
 const uploaded = await call("/api/photos", { method: "POST", body: photo });
 const { operation } = await call("/api/orders", {
@@ -154,7 +154,10 @@ const { operation } = await call("/api/orders", {
       postalCode: "94103",
       country: "US",
     },
-    items: [{ photoId: uploaded.id, quantity: 3, fit: "contain" }],
+    items: [
+      { photoId: uploaded.id, product: "prints", quantity: 3, fit: "contain" },
+      ...(process.argv.includes("--mug") ? [{ photoId: uploaded.id, product: "mug", quantity: 1, fit: "contain" }] : []),
+    ],
   }),
 });
 console.log("\nAPPROVAL SUMMARY\n" + operation.summary);
@@ -210,6 +213,8 @@ for (let i = 0; i < 30; i++) {
 }
 if (view.status !== "shipped" || view.emails?.length !== 2)
   throw new Error("Shipment/email checks failed.");
+if (view.orderingMethod !== "native-poppy") throw new Error("Native order provenance missing.");
+console.log("Native Poppy ordering method verified on order page API.");
 console.log(
   "\nVerified: approved → demo paid → submitted → shipped → 2 captured emails.",
 );

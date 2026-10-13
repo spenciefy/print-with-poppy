@@ -1,3 +1,4 @@
+import { sessionOrderingMethod, quoteOrderingMethod } from "./ordering-method.js";
 import { receipt } from "./receipt.js";
 import { redeemCoupon } from "./coupons.js";
 import { productOf, mediaVariant, itemProduct, orderProducts, orderLabel } from "../src/offer.js";
@@ -83,6 +84,7 @@ export async function propose(body: unknown, session: Session, key: string) {
     ...price,
     id: id("quote"),
     owner: session.id,
+    orderingMethod: sessionOrderingMethod(session),
     accountId: session.accountId,
     created,
     expires: created + 15 * 60000,
@@ -262,6 +264,7 @@ export function orderView(o: Order) {
     status_url: `${config.origin}/order/${o.id}#${o.viewToken}`,
     id: o.id,
     status: o.status,
+    orderingMethod: quoteOrderingMethod(o.quote),
     created: o.created,
     paidAt: o.paidAt,
     quote: {
