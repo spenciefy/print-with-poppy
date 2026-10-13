@@ -12,6 +12,7 @@ import {
   orderProducts,
   orderLabel,
   mediaVariant,
+  itemAttributes,
 } from "../src/offer.js";
 import { config, sandboxEmailEnabled } from "./config.js";
 import { HttpError, mediaUrl } from "./store.js";
@@ -85,6 +86,11 @@ async function supplierCosts(p: Proposal) {
         "The configured finish is not supported by the product.",
       );
   }
+  for (const i of p.items.filter(i => itemProduct(p, i) === "tshirt")) {
+    const details = (await prodigi("/products/GLOBAL-TEE-BC-3001")).product;
+    if (!details?.variants?.some((v: any) => v.attributes?.color === i.color && v.attributes?.size === i.size && v.shipsTo?.includes("US")))
+      throw new HttpError(422, "variant_unavailable", "That T-shirt color and size cannot currently ship to the US. Choose another combination.");
+  }
   const q = await prodigi("/quotes", {
     shippingMethod: config.shipping,
     destinationCountryCode: p.address.country,
@@ -92,8 +98,8 @@ async function supplierCosts(p: Proposal) {
     items: p.items.map((i) => ({
       sku: productOf({ product: itemProduct(p, i) }).sku,
       copies: i.quantity,
-      attributes: productOf({ product: itemProduct(p, i) }).attributes,
-      assets: [{ printArea: "default" }],
+      attributes: itemAttributes(itemProduct(p, i), i),
+      assets: [{ printArea: itemProduct(p, i) === "tshirt" ? "front" : "default" }],
     })),
   });
   if (String(q.outcome).toLowerCase() === "createdwithissues" &&
@@ -108,6 +114,8 @@ async function supplierCosts(p: Proposal) {
       "shipping_unavailable",
       "No shipping quote is available for this destination.",
     );
+  if (p.items.some(i => itemProduct(p, i) === "tshirt") && (!candidate.shipments?.length || candidate.shipments.some((s: any) => s.fulfillmentLocation?.countryCode !== "US")))
+    throw new HttpError(422, "shipping_unavailable", "US fulfillment is unavailable for this combination. No order was placed.");
   // Keep the advertised price fixed. Stop quoting instead of passing on an unexpected supplier increase.
   const supplierBase =
     cents(candidate.costSummary.items) +
@@ -162,14 +170,15 @@ export async function getPrice(p: Proposal) {
       },
       address_source: "shipping",
     },
-    line_items: [
-      {
-        amount: netSubtotal,
-        reference: "photo-prints",
-        tax_behavior: "exclusive",
-        tax_code: "txcd_99999999",
-      },
-    ],
+    line_items: groups.some(g => g.product === "tshirt") ? (() => {
+      // Allocate the order discount proportionally, preserving the exact approved cents.
+      let allocated = 0;
+      return groups.map((g, index) => {
+        const amount = index === groups.length - 1 ? netSubtotal - allocated : Math.floor(g.subtotal * netSubtotal / subtotal);
+        allocated += amount;
+        return { amount, reference: g.product, tax_behavior: "exclusive" as const, tax_code: g.product === "tshirt" ? "txcd_30011000" : "txcd_99999999" };
+      });
+    })() : [{ amount: netSubtotal, reference: "photo-prints", tax_behavior: "exclusive", tax_code: "txcd_99999999" }],
     shipping_cost: { amount: netShipping, tax_behavior: "exclusive" },
   });
   if (calculation.amount_total > 0 && calculation.amount_total < 50)
@@ -286,10 +295,10 @@ export async function submitPrint(order: Order) {
       sku: productOf({ product: itemProduct(q, i) }).sku,
       copies: i.quantity,
       sizing: "fillPrintArea",
-      attributes: productOf({ product: itemProduct(q, i) }).attributes,
+      attributes: itemAttributes(itemProduct(q, i), i),
       assets: [
         {
-          printArea: "default",
+          printArea: itemProduct(q, i) === "tshirt" ? "front" : "default",
           url: mediaUrl(i.photoId, mediaVariant(itemProduct(q, i), i.fit), 7 * 86400),
         },
       ],

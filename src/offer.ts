@@ -25,7 +25,16 @@ export const shippingSummary =
   "US shipping included.";
 export const priceSummary = `Mix 4×4 and 4×6: up to 5 prints together for $12, including US shipping. Additional prints 50¢ each, up to 100 total. ${shippingSummary} Tax added before approval. Orders with fewer than 5 prints still cost $12; we print only the quantity you approve.`;
 
+export const shirtColors = { white: "#f7f6f2", black: "#252525", "navy blue": "#27364c", orange: "#e97932", natural: "#e9ddc5" } as const;
+export const shirtSizes = ["s", "m", "l", "xl"] as const;
+export const shirtPrice = 2900;
+export const shirtPath = "M220 95 L290 65 Q350 115 410 65 L480 95 L595 190 L530 290 L480 260 L480 650 L220 650 L220 260 L170 290 L105 190 Z";
 export const products = {
+  tshirt: {
+    name: "Custom T-shirt", label: "T-shirt", dimensions: "Bella+Canvas 3001 · front print",
+    emailImage: "/photos/poppy-email-yellow.jpg", finish: "direct-to-garment", sku: "GLOBAL-TEE-BC-3001",
+    attributes: {}, shortPixels: 4680, longPixels: 5790,
+  },
   mug: {
     name: "11oz photo mug", label: "Photo mug", dimensions: "11oz · white ceramic",
     emailImage: "/photos/poppy-email-yellow.jpg", finish: "gloss ceramic", sku: "GLOBAL-MUG-W",
@@ -94,10 +103,10 @@ export const catalog = [
     price: posterPrice,
     maxQuantity: 1,
   },
-  { id: "mug", name: products.mug.name, price: 2200, maxQuantity: 1, easterEgg: true, description: "An optional extra, only offer when asked about mugs or hidden goodies. One 11oz white ceramic photo mug, US shipping included. Artwork wraps horizontally; show the flat print-area preview before approval, not a simulated 3D mug. May ship separately." },
+  { id: "tshirt", name: products.tshirt.name, price: shirtPrice, maxQuantity: 1, easterEgg: true, colors: Object.keys(shirtColors), sizes: shirtSizes, description: "Optional custom front-print T-shirt. Ask for color and size together with the photo. Show the returned shirt mockup before approval; it is an approximate illustration. US shipping included; may ship separately. Only offer when asked about T-shirts or hidden extras." },
 ];
 
-export type ProductOrder = { product?: Product; items: { product?: Product; quantity: number }[] };
+export type ProductOrder = { product?: Product; items: { product?: Product; quantity: number; color?: string; size?: string }[] };
 export const itemProduct = (order: { product?: Product }, item: { product?: Product }): Product => item.product ?? order.product ?? "prints";
 export function orderProducts(order: ProductOrder) {
   const quantities = Object.fromEntries(Object.keys(products).map(product => [product, order.items.filter(i => itemProduct(order, i) === product).reduce((n, i) => n + i.quantity, 0)])) as Record<Product, number>;
@@ -106,10 +115,15 @@ export function orderProducts(order: ProductOrder) {
   const printsTotal = smallCount ? Math.round(smallTotal * quantities.prints / smallCount) : 0;
   return (Object.keys(products) as Product[]).flatMap(product => {
     const quantity = quantities[product];
-    const subtotal = !quantity ? 0 : product === "prints" ? printsTotal : product === "square" ? smallTotal - printsTotal : product === "enlargement" ? enlargementSubtotal(quantity) : product === "mug" ? 2200 * quantity : posterPrice * quantity;
-    return quantity ? [{ product, quantity, subtotal, ...products[product] }] : [];
+    const subtotal = !quantity ? 0 : product === "prints" ? printsTotal : product === "square" ? smallTotal - printsTotal : product === "enlargement" ? enlargementSubtotal(quantity) : product === "tshirt" ? shirtPrice * quantity : product === "mug" ? 2200 * quantity : posterPrice * quantity;
+    const shirt = product === "tshirt" ? order.items.find(i => itemProduct(order, i) === "tshirt") : undefined;
+    return quantity ? [{ product, quantity, subtotal, ...products[product], ...(shirt ? { attributes: { color: shirt.color!, size: shirt.size! }, name: `Custom T-shirt · ${shirt.color} · ${shirt.size?.toUpperCase()}` } : {}) }] : [];
   });
 }
 export const orderLabel = (order: ProductOrder) => orderProducts(order).map(p => `${p.quantity} × ${p.name}`).join(" + ");
 
-export const merchandiseLabel = (order: ProductOrder) => orderProducts(order).some(g => g.product === "mug") ? "Items" : "Prints";
+export const merchandiseLabel = (order: ProductOrder) => orderProducts(order).some(g => ["mug", "tshirt"].includes(g.product)) ? "Items" : "Prints";
+
+export const itemAttributes = (product: Product, item: { color?: string; size?: string }) => product === "tshirt" ? { color: item.color!, size: item.size! } : products[product].attributes;
+export const previewVariant = (product: Product | undefined, fit: string, color?: string) => product === "tshirt" ? `tshirt-preview-${color?.replace(/ /g, "-")}-${fit}` : mediaVariant(product, fit);
+export const shirtMediaVariants = ["contain", "cover"].flatMap(fit => [`tshirt-${fit}`, ...Object.keys(shirtColors).map(color => previewVariant("tshirt", fit, color))]);

@@ -1,3 +1,4 @@
+import { shirtMediaVariants } from "../src/offer.js";
 import { stripeCheckoutComplete } from "./providers.js";
 import fs from "node:fs/promises";
 import { config, sandboxEmailEnabled } from "./config.js";
@@ -300,11 +301,11 @@ export async function housekeeping() {
         "contain",
         "original",
         "square-cover", "square-contain", "enlargement-cover", "enlargement-contain",
-        "mug-cover", "mug-contain",
+        "mug-cover", "mug-contain", ...shirtMediaVariants,
         "poster-cover",
         "poster-contain",
       ])
-        await fs.rm(`${config.dataDir}/photos/${p.id}-${fit}.jpg`, {
+        await fs.rm(`${config.dataDir}/photos/${p.id}-${fit}.${/^tshirt-(contain|cover)$/.test(fit) ? "png" : "jpg"}`, {
           force: true,
         });
       p.deleted = true;

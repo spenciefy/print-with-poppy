@@ -1,7 +1,7 @@
 import { sessionOrderingMethod, quoteOrderingMethod } from "./ordering-method.js";
 import { receipt } from "./receipt.js";
 import { redeemCoupon } from "./coupons.js";
-import { productOf, mediaVariant, itemProduct, orderProducts, orderLabel } from "../src/offer.js";
+import { productOf, mediaVariant, previewVariant, itemProduct, orderProducts, orderLabel } from "../src/offer.js";
 import { config } from "./config.js";
 import {
   db,
@@ -73,7 +73,7 @@ export async function propose(body: unknown, session: Session, key: string) {
   const photos = p.items.map((i) => ownedPhoto(i.photoId, session.id));
   const groups = orderProducts(p);
   for (const [n, item] of p.items.entries()) {
-    if (itemProduct(p, item) !== "prints") await preparePoster(photos[n], item.fit, itemProduct(p, item));
+    if (itemProduct(p, item) !== "prints") await preparePoster(photos[n], item.fit, itemProduct(p, item), item.color);
   }
   const price = await getPrice(p);
   const created = Date.now();
@@ -96,7 +96,8 @@ export async function propose(body: unknown, session: Session, key: string) {
     previews: photos.map((ph, n) => ({
       product: itemProduct(p, p.items[n]),
       photoId: ph.id,
-      url: mediaUrl(ph.id, mediaVariant(itemProduct(p, p.items[n]), p.items[n].fit)),
+      color: p.items[n].color, size: p.items[n].size,
+      url: mediaUrl(ph.id, previewVariant(itemProduct(p, p.items[n]), p.items[n].fit, p.items[n].color)),
       name: photoLabel(ph.id, n),
       quantity: p.items[n].quantity,
       fit: p.items[n].fit,
@@ -276,7 +277,7 @@ export function orderView(o: Order) {
       previews: o.quote.previews.map((p, index) => ({
         ...p,
         name: photoLabel(p.photoId, index),
-        url: mediaUrl(p.photoId, mediaVariant(p.product ?? o.quote.product, p.fit)),
+        url: mediaUrl(p.photoId, previewVariant(p.product ?? o.quote.product, p.fit, p.color)),
       })),
     },
     checkoutUrl: o.status === "awaiting_payment" ? o.checkoutUrl : undefined,

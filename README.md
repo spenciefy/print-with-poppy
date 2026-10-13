@@ -188,10 +188,12 @@ Customer account sign-in is independent of the integration method. Clients canno
 
 The native schema remains `/openapi.json`, discovered through `/.well-known/poppy.json`. Non-native agents use `/api/compat/instructions` and `/api/compat/openapi.json`. The hosted sandbox allows native sessions only. See [sandbox testing](docs/SANDBOX.md) for DPA and reference-client tests. Passing the reference client does not establish that the deployed DPA chat UI passed.
 
-### Hidden extra: photo mug
+### Hidden extra: custom T-shirt
 
-The footer’s “One more thing ☕” reveals an optional **11oz white ceramic photo mug for $22 including US shipping, plus tax**. It is an `easterEgg` catalog entry, not a primary homepage product or automatic upsell. Agents can order `items[].product: "mug"`, alone or with prints. Maximum one mug per order; no shared-photo shipping discount applies to the mug.
+The footer’s “One more thing 👕” reveals a **Bella+Canvas 3001 T-shirt for $29 including US shipping, plus tax**, with sample color previews. Shirts replace mugs as the only new Easter egg product. Existing mug records remain readable.
 
-Prodigi SKU `GLOBAL-MUG-W`, attributes `color: white`, `size: 313ml / 11oz`, print area `default`, fixed horizontal artwork **2670 × 1110 px**. The user approves the flat wrap artwork, not a 3D mockup. Both crop-to-fill and contain are supported; the approved artwork is used for fulfillment. Products may ship separately. Standard privacy cleanup includes mug artwork.
+Agents use `items[].product: "tshirt"`, `color` (white, black, navy blue, orange, natural) and `size` (s, m, l, xl). Ask for these choices and the photo together. Maximum one shirt per order; prints may share checkout but can ship separately. Show the returned custom mockup before approval. A change to color, size, photo or crop requires a new proposal and explicit approval. Both native Poppy and HTTP compatibility use the same validation and fulfillment.
 
-On 2026-10-12, the live Prodigi API quoted one US mug at $10 production + $6.45 Budget shipping, excluding possible supplier tax. At $22, the conservative cost guard leaves about $1.50 after its tax/fee allowances and $1 reserve (about $2.50 before that reserve). Every real proposal and fulfillment rechecks supplier costs; coupons remain intentional subsidies. See [product research](docs/PHOTO-MUG.md).
+The mockup is an approximate illustration, not a photograph or exact garment measurement. It shows the selected color and the same front artwork used for fulfillment. `contain` preserves the photo with transparent, unprinted margins; `cover` fills the portrait print area. Source photos remain rectangular; white within a photo is printed. The server sends only the 4680 × 5790 PNG artwork to Prodigi's `front` print area, never the shirt mockup. Signed preview URLs, email refresh and retention cleanup include these assets.
+
+Live US quotes on 2026-10-12 returned $12 production + $10.75 shipping for the five colors (M). Current exact variant availability, US routing and contribution checks run before every real order. Stripe Tax classifies shirts as clothing separately from photos and allocates coupon discounts across those categories. See [T-shirt details](docs/PHOTO-TSHIRT.md).

@@ -1789,11 +1789,11 @@ test("ordering method is server-recorded, survives session cleanup, and labels o
   assert.equal(spoof.status, 400);
 });
 
-test("hidden mug supports mixed approval, horizontal artwork and one-mug limit", async () => {
+test("hidden shirt requires options and separates mockup from print artwork", async () => {
   const f = await fixture();
   const proposal = { ...f.proposal, items: [
     { product: "prints", photoId: f.photo.id, quantity: 5, fit: "cover" },
-    { product: "mug", photoId: f.photo.id, quantity: 1, fit: "contain" },
+    { product: "tshirt", color: "orange", size: "m", photoId: f.photo.id, quantity: 1, fit: "contain" },
   ] };
   const send = (body: unknown) => f.a.request("/api/orders", {
     method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
@@ -1801,20 +1801,64 @@ test("hidden mug supports mixed approval, horizontal artwork and one-mug limit",
   });
   const r = await send(proposal);
   assert.equal(r.status, 202, JSON.stringify(r.body));
-  assert.equal(r.body.operation.terms.subtotal, 3400);
+  assert.equal(r.body.operation.terms.subtotal, 4100);
   assert.equal(r.body.operation.terms.shipping, 0);
-  assert.match(r.body.operation.summary, /flat horizontal wrap artwork/);
+  assert.match(r.body.operation.summary, /shirt preview is approximate/);
   const preview = await fetch(r.body.operation.terms.previews[1].url);
   assert.equal(preview.status, 200);
   const meta = await sharp(Buffer.from(await preview.arrayBuffer())).metadata();
-  assert.equal(meta.width, 2670);
-  assert.equal(meta.height, 1110);
+  assert.equal(meta.width, 700);
+  assert.equal(meta.height, 760);
   assert.equal((await send({ ...proposal, items: [{ ...proposal.items[1], quantity: 2 }] })).status, 400);
   assert.equal((await send({ ...proposal, items: [proposal.items[1], proposal.items[1]] })).status, 400);
+  for (const change of [{ color: undefined }, { size: undefined }, { color: "pink" }, { size: "xxl" }])
+    assert.equal((await send({ ...proposal, items: [{ ...proposal.items[1], ...change }] })).status, 400);
+  assert.equal((await send({ ...proposal, items: [{ ...proposal.items[0], color: "white" }] })).status, 400);
+  assert.equal((await send({ ...proposal, items: [{ ...proposal.items[1], product: "mug" }] })).status, 400);
+  const art = await sharp(await fs.readFile(`${temp}/photos/${f.photo.id}-tshirt-contain.png`)).metadata();
+  assert.equal(art.width, 4680); assert.equal(art.height, 5790); assert.equal(art.hasAlpha, true);
+  const black = await send({ ...proposal, items: [{ ...proposal.items[1], color: "black" }] });
+  assert.equal(black.status, 202);
+  assert.notEqual(black.body.operation.terms.previews[0].url, r.body.operation.terms.previews[1].url);
+  await commerce.confirm(r.body.operation.operation_id, f.a.session.session_id, 1, "user");
+  await worker.tick();
+  const op = commerce.readOperation(r.body.operation.operation_id, f.a.session.session_id);
+  const order = store.get("order", op.orderId!);
+  const email = (await import("../server/email.js")).emailFor(order, "email-confirmation");
+  assert.match(email.html, /orange · M/);
+  assert.match(email.html, /tshirt-preview-orange-contain/);
+  const view = commerce.orderView(order);
+  assert.match(view.quote.previews[1].url, /tshirt-preview-orange-contain/);
+  assert.match(view.quote.summary, /orange · M/);
   const { orderProducts } = await import("../src/offer.js");
-  const mug = orderProducts(r.body.operation.terms).find(g => g.product === "mug")!;
-  assert.equal(mug.sku, "GLOBAL-MUG-W");
-  assert.deepEqual(mug.attributes, { color: "white", size: "313ml / 11oz" });
+  const mug = orderProducts(r.body.operation.terms).find(g => g.product === "tshirt")!;
+  assert.equal(mug.sku, "GLOBAL-TEE-BC-3001");
+  assert.deepEqual(mug.attributes, { color: "orange", size: "m" });
+  const providers = await import("../server/providers.js");
+  const { config } = await import("../server/config.js");
+  const originalFetch = globalThis.fetch, originalTax = providers.stripe!.tax.calculations.create;
+  let sent: any, taxRequest: any;
+  try {
+    config.demo = false;
+    globalThis.fetch = (async (url: any, init: any) => {
+      if (String(url).includes("/products/")) return Response.json({ outcome: "Ok", product: { attributes: { color: ["orange"], size: ["m"], finish: ["lustre"] }, variants: [{ attributes: { color: "orange", size: "m" }, shipsTo: ["US"] }] } });
+      const body = JSON.parse(init.body);
+      assert.equal(body.items[1].assets[0].printArea, "front");
+      assert.deepEqual(body.items[1].attributes, { color: "orange", size: "m" });
+      if (String(url).endsWith("/quotes")) return Response.json({ outcome: "Created", quotes: [{ shipmentMethod: "Budget", shipments: [{ fulfillmentLocation: { countryCode: "US" } }], costSummary: { items: { amount: "15", currency: "USD" }, shipping: { amount: "13", currency: "USD" } } }] });
+      sent = body;
+      return Response.json({ outcome: "Created", order: { id: "shirt-contract" } });
+    }) as any;
+    providers.stripe!.tax.calculations.create = (async (params: any) => { taxRequest = params; return { id: "tax_shirt", amount_total: params.line_items.reduce((n: number, i: any) => n + i.amount, 0), tax_amount_exclusive: 0 }; }) as any;
+    await providers.getPrice(proposal as any);
+    assert.deepEqual(taxRequest.line_items.map((i: any) => [i.reference, i.amount, i.tax_code]), [["tshirt", 2900, "txcd_30011000"], ["prints", 1200, "txcd_99999999"]]);
+    await providers.submitPrint(order);
+    assert.match(sent.items[1].assets[0].url, /tshirt-contain/);
+    assert.doesNotMatch(sent.items[1].assets[0].url, /preview/);
+    const printFile = await originalFetch(sent.items[1].assets[0].url);
+    assert.equal(printFile.headers.get("content-type"), "image/png");
+  } finally { config.demo = true; globalThis.fetch = originalFetch; providers.stripe!.tax.calculations.create = originalTax; }
+
 });
 
 test("invalid revocation assertions return invalid_client rather than a retryable server error", async () => {

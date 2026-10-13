@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import "./style.css";
 import Demo from "./Demo";
 import { orderSubtitle, visibleShipment } from "./order-copy";
-import { productOf, shippingSummary, orderProducts, orderLabel, merchandiseLabel } from "./offer";
+import { shirtColors, shirtSizes, shirtPath, productOf, shippingSummary, orderProducts, orderLabel, merchandiseLabel } from "./offer";
 type Config = { environment?: string; mode: string; origin: string; support: string };
 const money = (c: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -19,6 +19,30 @@ async function api(url: string, init: RequestInit = {}) {
   return data;
 }
 const Arrow = () => <span aria-hidden="true">↗</span>;
+function ShirtExtra() {
+  const [color, setColor] = useState<keyof typeof shirtColors>("natural");
+  const [size, setSize] = useState("m");
+  const [copied, setCopied] = useState(false);
+  return <details className="secret-goody">
+    <summary>One more thing 👕</summary>
+    <div className="shirt-extra">
+      <svg viewBox="0 0 700 760" role="img" aria-label={`Sample poppy T-shirt in ${color}`}>
+        <rect width="700" height="760" fill="#f7f3ec" />
+        <path d={shirtPath} fill={shirtColors[color]} stroke="#b4aaa0" strokeWidth="2" />
+        <path d="M290 65 Q350 150 410 65" fill="none" stroke="#b4aaa0" strokeWidth="2" />
+        <image href="/photos/poppy-email-yellow.jpg" x="240" y="210" width="220" height="272" preserveAspectRatio="xMidYMid meet" />
+        <text x="350" y="720" textAnchor="middle" fontSize="16" fill="#635c55">Sample artwork · approximate color and placement</text>
+      </svg>
+      <div><h3>Your photo. On a T-shirt.</h3>
+        <p>Bella+Canvas 3001, with your photo printed on the front. $29 including US shipping, plus tax.</p>
+        <fieldset><legend>Color: {color}</legend><div className="shirt-swatches">{Object.entries(shirtColors).map(([name, hex]) => <button key={name} type="button" aria-label={name} aria-pressed={color === name} style={{ background: hex }} onClick={() => setColor(name as keyof typeof shirtColors)} />)}</div></fieldset>
+        <label>Size <select value={size} onChange={e => setSize(e.target.value)}>{shirtSizes.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></label>
+        <p>Send your agent a photo and these choices. You’ll see your own shirt preview before approving. Shirts may ship separately from prints.</p>
+        <button className="copy-btn" type="button" onClick={async () => { try { await navigator.clipboard.writeText(`Please help me order a custom T-shirt from https://printwithpoppy.com in ${color}, size ${size.toUpperCase()}. Ask me for the photo and show my custom shirt preview before approval. If you support native Poppy sessions, use /.well-known/poppy.json. Otherwise use https://printwithpoppy.com/api/compat/instructions.`); setCopied(true); } catch { setCopied(false); } }}>{copied ? "Copied" : "Copy T-shirt request"}</button>
+      </div>
+    </div>
+  </details>;
+}
 function Brand() {
   return (
     <a className="brand" href="/" aria-label="Print with Poppy home">
@@ -312,11 +336,7 @@ function Footer({ compact = false }: { compact?: boolean }) {
           </Faq>
         </div>
       </section>
-      <details className="secret-goody">
-        <summary>One more thing ☕</summary>
-        <p>A photo mug, for your desk or someone else’s. $22 including US shipping, plus tax.</p>
-        <p>Ask your personal agent for an 11oz photo mug. You’ll approve the wrap artwork before ordering. It may arrive separately from your prints.</p>
-      </details>
+      <ShirtExtra />
       <div className="footer-bottom">
         <Brand />
         <a href="https://x.com/spenciefy">a project by @spenciefy</a>
@@ -945,7 +965,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
                   <figure key={`${p.photoId}:${index}`}>
                     <img src={p.url} alt={p.name} />
                     <figcaption>
-                      {p.quantity} × {p.name} · {productOf({ product: p.product ?? order.quote.product }).label}
+                      {p.quantity} × {p.name} · {productOf({ product: p.product ?? order.quote.product }).label}{p.product === "tshirt" ? ` · ${p.color} · ${p.size?.toUpperCase()} · approximate preview` : ""}
                     </figcaption>
                   </figure>
                 ))}

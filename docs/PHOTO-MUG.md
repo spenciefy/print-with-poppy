@@ -1,3 +1,5 @@
+> Historical research only. New mug orders are disabled; see [the T-shirt](PHOTO-TSHIRT.md). Existing orders retain their original terms.
+
 # Optional photo mug — product research
 
 Checked 2026-10-12 using Prodigi's public catalog and authenticated live product/quote API. No physical order was submitted.

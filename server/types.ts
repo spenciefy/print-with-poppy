@@ -15,7 +15,7 @@ export const addressSchema = z
   .strict();
 export const proposalSchema = z
   .object({
-    product: z.enum(["prints", "square", "enlargement", "poster", "mug"]).optional(),
+    product: z.enum(["prints", "square", "enlargement", "poster", "tshirt"]).optional(),
     couponCode: z.string().trim().toLowerCase().min(1).max(100).optional(),
     email: z.email().max(254),
     address: addressSchema,
@@ -23,7 +23,9 @@ export const proposalSchema = z
       .array(
         z
           .object({
-            product: z.enum(["prints", "square", "enlargement", "poster", "mug"]).optional(),
+            product: z.enum(["prints", "square", "enlargement", "poster", "tshirt"]).optional(),
+            color: z.enum(["white", "black", "navy blue", "orange", "natural"]).optional(),
+            size: z.enum(["s", "m", "l", "xl"]).optional(),
             photoId: short,
             quantity: z.number().int().min(1).max(100),
             fit: z.enum(["contain", "cover"]).default("cover"),
@@ -35,7 +37,7 @@ export const proposalSchema = z
   })
   .strict()
   .refine(
-    (x) => x.items.filter(i => !["poster", "mug"].includes(itemProduct(x, i))).reduce((s, i) => s + i.quantity, 0) <= 100,
+    (x) => x.items.filter(i => !["poster", "tshirt"].includes(itemProduct(x, i))).reduce((s, i) => s + i.quantity, 0) <= 100,
     "Maximum 100 prints per order.",
   )
   .refine(
@@ -44,9 +46,15 @@ export const proposalSchema = z
     "Maximum one poster per order. Photo prints can be included in the same order.",
   )
   .refine(
-    x => x.items.filter(i => itemProduct(x, i) === "mug").reduce((sum, i) => sum + i.quantity, 0) <= 1,
-    "Maximum one photo mug per order.",
-  );
+    x => x.items.filter(i => itemProduct(x, i) === "tshirt").reduce((sum, i) => sum + i.quantity, 0) <= 1,
+    "Maximum one T-shirt per order.",
+  ).superRefine((p, ctx) => {
+    p.items.forEach((item, index) => {
+      if (itemProduct(p, item) === "tshirt") {
+        if (!item.color || !item.size) ctx.addIssue({ code: "custom", path: ["items", index], message: "Choose both T-shirt color and size before proposing." });
+      } else if (item.color || item.size) ctx.addIssue({ code: "custom", path: ["items", index], message: "Color and size apply only to T-shirts." });
+    });
+  });
 export type Proposal = z.infer<typeof proposalSchema>;
 export interface Session {
   id: string;
@@ -93,8 +101,10 @@ export interface Quote extends Proposal {
   shippingMethod: string;
   summary: string;
   previews: {
-    product?: "prints" | "square" | "enlargement" | "poster" | "mug";
+    product?: "prints" | "square" | "enlargement" | "poster" | "mug" | "tshirt";
     photoId: string;
+    color?: string;
+    size?: string;
     url: string;
     name: string;
     quantity: number;

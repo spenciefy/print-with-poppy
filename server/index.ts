@@ -1,3 +1,4 @@
+import { shirtMediaVariants } from "../src/offer.js";
 import express from "express";
 import { catalog, offer } from "../src/offer.js";
 import helmet from "helmet";
@@ -275,16 +276,16 @@ app.get("/media/:id/:fit", (req, res) => {
     sig = String(req.query.sig || "");
   if (
     !/^photo_[A-Za-z0-9_-]+$/.test(photoId) ||
-    !["contain", "cover", "poster-contain", "poster-cover", "square-contain", "square-cover", "enlargement-contain", "enlargement-cover", "mug-cover", "mug-contain"].includes(fit) ||
+    ![...shirtMediaVariants, "contain", "cover", "poster-contain", "poster-cover", "square-contain", "square-cover", "enlargement-contain", "enlargement-cover", "mug-cover", "mug-contain"].includes(fit) ||
     !/^\d+$/.test(exp) ||
     Number(exp) < Date.now() / 1000 ||
     !equal(sig, sign(`${photoId}:${fit}:${exp}`))
   )
     throw new HttpError(403, "invalid_link", "Preview link has expired.");
-  const file = path.join(config.dataDir, "photos", `${photoId}-${fit}.jpg`);
+  const file = path.join(config.dataDir, "photos", `${photoId}-${fit}.${/^tshirt-(contain|cover)$/.test(fit) ? "png" : "jpg"}`);
   if (!fs.existsSync(file))
     throw new HttpError(410, "photo_expired", "This photo has been deleted.");
-  res.type("image/jpeg").sendFile(file, { dotfiles: "allow" });
+  res.type(/^tshirt-(contain|cover)$/.test(fit) ? "image/png" : "image/jpeg").sendFile(file, { dotfiles: "allow" });
 });
 app.post(
   "/api/webhooks/prodigi",

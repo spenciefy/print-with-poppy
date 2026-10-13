@@ -2043,6 +2043,17 @@ header {
 
 .order-heading .order-method { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
 
-.secret-goody { margin: 24px 0; max-width: 600px; color: var(--muted); font-size: 14px; }
+.secret-goody { margin: 24px 0; max-width: 900px; color: var(--muted); font-size: 14px; }
 .secret-goody summary { cursor: pointer; color: var(--rust); }
 .secret-goody p { margin: 10px 0; line-height: 1.6; }
+
+.shirt-extra { display: grid; grid-template-columns: minmax(180px, 320px) 1fr; gap: 32px; align-items: center; max-width: 900px; padding-top: 20px; }
+.shirt-extra svg { width: 100%; height: auto; }
+.shirt-extra fieldset { border: 0; padding: 0; margin: 20px 0; }
+.shirt-swatches { display: flex; gap: 12px; margin-top: 12px; }
+.shirt-swatches button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #b4aaa0; cursor: pointer; }
+.shirt-swatches button[aria-pressed="true"] { outline: 2px solid #c54c00; outline-offset: 3px; }
+.shirt-extra select { margin-left: 12px; padding: 8px 16px; font: inherit; background: transparent; border: 1px solid #b4aaa0; border-radius: 6px; }
+@media (max-width: 600px) { .shirt-extra { grid-template-columns: 1fr; gap: 12px; } .shirt-extra svg { max-width: 280px; margin: auto; } }
+
+.shirt-extra .copy-btn { padding: 12px 18px; border: 1px solid #b4aaa0; border-radius: 8px; color: var(--ink); background: transparent; font: inherit; cursor: pointer; }

@@ -156,7 +156,7 @@ const { operation } = await call("/api/orders", {
     },
     items: [
       { photoId: uploaded.id, product: "prints", quantity: 3, fit: "contain" },
-      ...(process.argv.includes("--mug") ? [{ photoId: uploaded.id, product: "mug", quantity: 1, fit: "contain" }] : []),
+      ...(process.argv.includes("--tshirt") ? [{ photoId: uploaded.id, product: "tshirt", color: "orange", size: "m", quantity: 1, fit: "contain" }] : []),
     ],
   }),
 });

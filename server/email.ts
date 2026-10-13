@@ -1,6 +1,6 @@
 import { orderingMethodLabel } from "../src/ordering-method.js";
 import { quoteOrderingMethod } from "./ordering-method.js";
-import { merchandiseLabel, orderProducts, itemProduct, productOf, mediaVariant } from "../src/offer.js";
+import { merchandiseLabel, orderProducts, itemProduct, productOf, mediaVariant, previewVariant } from "../src/offer.js";
 import { photoLabel } from "./photos.js";
 import { mediaUrl } from "./store.js";
 import { config } from "./config.js";
@@ -58,9 +58,9 @@ export function emailFor(o: Order, kind: string, shipment?: Shipment) {
     return {
       ...item,
       name: photoLabel(item.photoId, index),
-      details: productOf({ product }),
+      details: { ...productOf({ product }), dimensions: product === "tshirt" ? `${item.color} · ${item.size?.toUpperCase()} · approximate front mockup` : productOf({ product }).dimensions },
       // Renew at send time; proposal preview URLs expire after one hour.
-      url: mediaUrl(item.photoId, mediaVariant(product, item.fit), 30 * 86400),
+      url: mediaUrl(item.photoId, previewVariant(product, item.fit, item.color), 30 * 86400),
     };
   });
   const productLine = groups.map(g => `${g.quantity} × ${g.label} · ${g.dimensions} · ${g.finish}`).join("; ");
@@ -72,7 +72,7 @@ export function emailFor(o: Order, kind: string, shipment?: Shipment) {
     `Order ${o.id}`,
     orderingMethodLabel(quoteOrderingMethod(o.quote)),
     productLine,
-    ...orderedPhotos.map(p => `${p.name} — ${p.quantity} × ${p.details.label}, ${p.details.dimensions}, ${p.fit === "contain" ? "whole image with white margins" : "cropped to fill"}`),
+    ...orderedPhotos.map(p => `${p.name} — ${p.quantity} × ${p.details.label}, ${p.details.dimensions}, ${p.fit === "contain" ? p.product === "tshirt" ? "whole photo on front; unprinted margins" : "whole image with white margins" : "cropped to fill"}`),
     `${merchandiseLabel(o.quote)}: ${money(o.quote.subtotal)} · Shipping: ${o.quote.shipping ? money(o.quote.shipping) : "Included"} · Tax: ${money(o.quote.tax)}`,
     o.quote.discount ? `Discount: -${money(o.quote.discount)}` : "",
     addressText(o.quote.address),
@@ -92,7 +92,7 @@ ${config.demo ? '<p style="font-size:12px">TEST ORDER — no real payment, print
 ${quoteOrderingMethod(o.quote) ? `<p style="font-size:12px;color:#6e6155">${escapeHtml(orderingMethodLabel(quoteOrderingMethod(o.quote)))}</p>` : ""}
 <h1 style="font-size:26px;line-height:1.25;letter-spacing:-0.5px;margin:28px 0 12px">${heading}</h1><p style="font-size:16px;line-height:1.6;color:#6e6155">${intro}</p>
 ${groups.map(g => `<h2 style="font-size:20px;margin:24px 0 8px">${g.label} · ${g.quantity}</h2><p style="font-size:14px;color:#6e6155">${g.dimensions} · ${g.finish}</p>`).join("")}
-${orderedPhotos.map(p => `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0"><tr><td width="144" valign="top"><img src="${escapeHtml(p.url)}" width="128" alt="${escapeHtml(p.name)}" style="display:block;width:128px;max-width:100%;height:auto;border:0"></td><td valign="top" style="font-size:14px;line-height:1.6;padding-left:12px;overflow-wrap:anywhere"><strong>${escapeHtml(p.name)}</strong><br>${p.details.label} · ${p.details.dimensions}<br>Quantity: ${p.quantity}<br>${p.fit === "contain" ? "Whole image with white margins" : "Cropped to fill"}</td></tr></table>`).join("")}
+${orderedPhotos.map(p => `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0"><tr><td width="144" valign="top"><img src="${escapeHtml(p.url)}" width="128" alt="${escapeHtml(p.name)}" style="display:block;width:128px;max-width:100%;height:auto;border:0"></td><td valign="top" style="font-size:14px;line-height:1.6;padding-left:12px;overflow-wrap:anywhere"><strong>${escapeHtml(p.name)}</strong><br>${p.details.label} · ${p.details.dimensions}<br>Quantity: ${p.quantity}<br>${p.fit === "contain" ? p.product === "tshirt" ? "Whole photo on front; unprinted margins" : "Whole image with white margins" : "Cropped to fill"}</td></tr></table>`).join("")}
 
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:14px;line-height:1.9;border-top:1px solid #dfd5c7;padding-top:20px;margin-top:24px"><tr><td>${merchandiseLabel(o.quote)}</td><td align="right">${money(o.quote.subtotal)}</td></tr><tr><td>Shipping</td><td align="right">${o.quote.shipping ? money(o.quote.shipping) : 'Included'}</td></tr>${o.quote.discount ? `<tr><td>Discount</td><td align="right">−${money(o.quote.discount)}</td></tr>` : ""}<tr><td>Tax</td><td align="right">${money(o.quote.tax)}</td></tr><tr><td style="padding-top:8px;font-weight:bold">${config.demo ? "Simulated total" : "Total paid"} · USD</td><td align="right" style="padding-top:8px;font-weight:bold">${money(o.quote.total)}</td></tr></table>
 <h2 style="font-size:16px;margin:28px 0 8px">Delivering to</h2><p style="font-size:14px;line-height:1.6;margin:0">${escapeHtml(addressText(o.quote.address))}</p><p style="font-size:14px;line-height:1.6;color:#6e6155">${escapeHtml(estimate)}</p>${shipping ? `<p style="font-size:14px;line-height:1.6">${escapeHtml(trackingText)}</p>` : ''}

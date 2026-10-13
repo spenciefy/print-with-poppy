@@ -1,4 +1,4 @@
-import { productOf, mediaVariant, type Product } from "../src/offer.js";
+import { productOf, mediaVariant, previewVariant, shirtColors, shirtPath, type Product } from "../src/offer.js";
 import sharp from "sharp";
 import fs from "node:fs/promises";
 import { config } from "./config.js";
@@ -108,7 +108,7 @@ export function ownedPhoto(photoId: string, owner: string) {
   return p;
 }
 
-export async function preparePoster(p: Photo, fit: "contain" | "cover", product: Product = "poster") {
+export async function preparePoster(p: Photo, fit: "contain" | "cover", product: Product = "poster", color?: string) {
   const source = `${config.dataDir}/photos/${p.id}-original.jpg`;
   try {
     await fs.access(source);
@@ -118,6 +118,17 @@ export async function preparePoster(p: Photo, fit: "contain" | "cover", product:
       "reupload_required",
       "Upload this photo again to prepare the larger print.",
     );
+  }
+  if (product === "tshirt") {
+    const art = await sharp(source).resize(4680, 5790, { fit, position: "centre", background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+    await fs.writeFile(`${config.dataDir}/photos/${p.id}-tshirt-${fit}.png`, art, { mode: 0o600 });
+    const fill = shirtColors[color as keyof typeof shirtColors];
+    if (!fill) throw new HttpError(400, "invalid_color", "Choose a supported T-shirt color.");
+    const base = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="700" height="760"><rect width="700" height="760" fill="#f7f3ec"/><path d="${shirtPath}" fill="${fill}" stroke="#b4aaa0" stroke-width="2"/><path d="M290 65 Q350 150 410 65" fill="none" stroke="#b4aaa0" stroke-width="2"/><text x="350" y="720" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#635c55">Front preview · approximate color and placement</text></svg>`);
+    // Same complete print-area artwork as fulfillment, scaled proportionally onto the shirt.
+    const print = await sharp(art).resize(220, 272).png().toBuffer();
+    await sharp(base).composite([{ input: print, left: 240, top: 210 }]).jpeg({ quality: 92 }).toFile(`${config.dataDir}/photos/${p.id}-${previewVariant(product, fit, color)}.jpg`);
+    return;
   }
   const spec = productOf({ product });
   const [w, h] = product === "mug" || p.width >= p.height ? [spec.longPixels, spec.shortPixels] : [spec.shortPixels, spec.longPixels];
