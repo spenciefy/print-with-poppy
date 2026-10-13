@@ -68,7 +68,7 @@ export async function getPrice(p: Proposal) {
       : printSubtotal(p.items.reduce((n, i) => n + i.quantity, 0));
   const shipping = shippingPrice(subtotal);
   const promotion = coupon(p.couponCode);
-  const discounts = discountedAmounts(subtotal, shipping, promotion?.percent);
+  const discounts = discountedAmounts(subtotal, shipping, promotion?.percent, promotion?.maxAmount);
   const netSubtotal = subtotal - discounts.printDiscount;
   const netShipping = shipping - discounts.shippingDiscount;
   if (config.demo) {

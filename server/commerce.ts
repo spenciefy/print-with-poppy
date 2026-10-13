@@ -184,7 +184,7 @@ export function confirm(
       viewToken: id("view"),
       shipments: [],
     };
-    redeemCoupon(op.terms.couponCode, order.id);
+    redeemCoupon(op.terms.couponCode, order.id, op.terms.discount || 0);
     op.state = "in_progress";
     op.confirmation = {
       revision,

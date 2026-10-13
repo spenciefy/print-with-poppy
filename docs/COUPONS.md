@@ -9,10 +9,10 @@ These are store codes, not Stripe promotion codes: do not type them into Stripe.
 Run on the desired service with its persistent database and environment:
 
 ```sh
-npx tsx scripts/coupons.ts 10 100
+npx tsx scripts/coupons.ts 10 100 1500
 ```
 
-Arguments are count (1–10, with a different peak for each code in the batch) and percentage (1–100). `100` covers prints and shipping and leaves no sales tax to collect from the customer. Other percentages discount both prints and shipping before Stripe calculates tax. Printing and fulfillment still cost the merchant money. The existing product quantity limits apply.
+Arguments are count (1–10, with a different peak for each code in the batch) percentage (1–100), and maximum discount in cents (default `1500`, or $15). `100` discounts prints and shipping up to that combined cap. Customers pay the remainder plus recalculated tax. Orders below the cap can be free. Other percentages discount both prints and shipping before Stripe calculates tax. Printing and fulfillment still cost the merchant money. The existing product quantity limits apply.
 
 Output is private: save it securely, never commit it or publish it in the catalog. The coupon registry stores hashes. Codes are redeemed atomically at approval, so competing proposals cannot spend a code twice. Retries of the approved operation reuse the same order. If a checkout is abandoned or expires, issue a replacement code only after verifying that checkout can no longer complete; codes are not automatically released while payment status might be uncertain.
 

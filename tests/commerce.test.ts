@@ -1461,7 +1461,7 @@ test("normal deployments do not advertise or expose agent sandbox controls", asy
 
 test("private coupons discount before approval, reserve once, and free orders fulfill once", async () => {
   const { generateCoupons } = await import("../server/coupons.js");
-  const [code] = generateCoupons(1, 100);
+  const [code] = generateCoupons(1, 100, 10000);
   const f = await fixture();
   const submit = () => f.a.request("/api/orders", {
     method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
@@ -1526,4 +1526,19 @@ test("Stripe completion accepts zero-cost completed sessions but rejects unfinis
   assert.equal(stripeCheckoutComplete({ payment_status: "no_payment_required", status: "open", amount_total: 0 }), false);
   assert.equal(stripeCheckoutComplete({ payment_status: "no_payment_required", status: "complete", amount_total: 1700 }), false);
   assert.equal(stripeCheckoutComplete({ payment_status: "unpaid", status: "complete", amount_total: 0 }), false);
+});
+
+
+test("coupon cap limits prints and shipping together and stale approvals cannot exceed it", async () => {
+  const { generateCoupons, discountedAmounts, redeemCoupon } = await import("../server/coupons.js");
+  assert.deepEqual(discountedAmounts(1200, 500, 100, 1500), { printDiscount: 1200, shippingDiscount: 300, discount: 1500 });
+  assert.equal(discountedAmounts(3500, 0, 100, 1500).discount, 1500);
+  assert.equal(discountedAmounts(1000, 0, 100, 1500).discount, 1000);
+  const [code] = generateCoupons(1, 100);
+  assert.throws(() => redeemCoupon(code, "order_test", 1700), /limit changed/);
+  const { getPrice } = await import("../server/providers.js");
+  const f = await fixture();
+  const price = await getPrice({ ...f.proposal, couponCode: code } as any);
+  assert.equal(price.discount, 1500);
+  assert.equal(price.total, 200 + Math.round(200 * 0.0875));
 });
