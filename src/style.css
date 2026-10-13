@@ -2043,9 +2043,8 @@ header {
 
 .order-heading .order-method { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
 
-.secret-goody { margin: 24px 0; max-width: 900px; color: var(--muted); font-size: 14px; }
-.secret-goody summary { cursor: pointer; color: var(--rust); }
-.secret-goody p { margin: 10px 0; line-height: 1.6; }
+.shirt-page p { margin: 14px 0; line-height: 1.6; }
+.shirt-page .shirt-extra { max-width: none; padding-top: 0; }
 
 .shirt-extra { display: grid; grid-template-columns: minmax(180px, 320px) 1fr; gap: 32px; align-items: center; max-width: 900px; padding-top: 20px; }
 .shirt-extra svg { width: 100%; height: auto; }

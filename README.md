@@ -190,7 +190,7 @@ The native schema remains `/openapi.json`, discovered through `/.well-known/popp
 
 ### Hidden extra: custom T-shirt
 
-The footer’s “One more thing 👕” reveals a **Bella+Canvas 3001 T-shirt: $29 for the first, $17 for each additional shirt, including US shipping, plus tax**, with sample color previews. Shirts replace mugs as the only new Easter egg product. Existing mug records remain readable.
+The unlinked `/shirt` page offers a **Bella+Canvas 3001 T-shirt: $29 for the first, $17 for each additional shirt, including US shipping, plus tax**, with sample color previews. Shirts replace mugs as the only new Easter egg product. Existing mug records remain readable.
 
 Agents use `items[].product: "tshirt"`, `color` (white, black, navy blue, orange, natural) and `size` (s, m, l, xl). Ask for these choices and the photo together. Use separate items with quantities for each photo/color/size/fit combination, up to 20 shirts per order; prints may share checkout but can ship separately. Show every returned custom mockup with its color, size and quantity. Record explicit user approval using `POST /api/operations/{id}/shirt-previews` (`approveShirtPreviews`) with `revision`, `approved_by: "user"` and exactly all shirt `previewIds` before standard operation confirmation. Checkout rejects missing approval. This is a store API, not a change to the Poppy protocol. A change to color, size, photo or crop requires a new proposal and explicit approval. Both native Poppy and HTTP compatibility use the same validation and fulfillment.
 

@@ -1,5 +1,7 @@
 # Custom T-shirt
 
+The UI is available only at the unlinked `/shirt` page. It is not promoted in the homepage or FAQ.
+
 Prodigi [Bella+Canvas 3001](https://www.prodigi.com/products/mens-clothing/t-shirts/classic/bella-canvas-3001/), SKU `GLOBAL-TEE-BC-3001`. Front only, up to 20 per order. $29 for the first and $17 per additional shirt, including US shipping plus tax. Sizes and colors can be mixed. Supported colors: white, black, navy blue, orange, natural. Sizes: S, M, L, XL.
 
 Quote evidence (2026-10-12): all five M variants returned $12 production plus $10.75 Budget shipping, US lab us20, excluding possible supplier sales tax. Variant metadata supports all offered combinations; each actual order verifies its exact variant and current quote. No shared fulfillment or carrier promise is made. Do not expand options without new US quote checks.
