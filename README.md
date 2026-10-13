@@ -178,7 +178,7 @@ Approval summaries are compact receipts: photos with matching quantities/crops a
 
 ### Ordering method and native Poppy verification
 
-Orders record `quote.orderingMethod` on the server when proposed. The order response also returns `orderingMethod`; the private order page and confirmation email show its readable label:
+Orders record `quote.orderingMethod` on the server when proposed. The order response also returns `orderingMethod`. After verified payment, successful order states include `successMessage` for the agent to say once alongside the verified status and exact private order link. Pending, attention, cancelled and unknown-method orders omit it. Sandbox messages explicitly identify simulated payment and fulfillment. HTTP use does not establish that an agent lacks native support. The the private order page and confirmation email show its readable label:
 
 - `native-poppy`: authenticated Poppy client with a DPoP-bound session, signed out or signed in.
 - `http-compatibility`: the separate Bearer-token HTTP API; not Personal Agent Protocol and not a verified agent identity.

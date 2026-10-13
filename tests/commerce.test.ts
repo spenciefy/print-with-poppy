@@ -1937,3 +1937,17 @@ test("mixed shirt sizes use quantity pricing and require every preview approval 
   store.put("operation", expired.operation_id, expired, f.a.session.session_id);
   assert.throws(() => commerce.approveShirtPreviews(expired.operation_id, f.a.session.session_id, 1, expired.terms.previews.map(p => p.previewId!), "user"), /active proposal/);
 });
+
+
+test("success messages distinguish native, HTTP and sandbox without celebrating unpaid or failed orders", async () => {
+  const { orderSuccessMessage } = await import("../server/ordering-method.js");
+  const order = { paidAt: 123, status: "printing", quote: { orderingMethod: "native-poppy" } } as import("../server/types.js").Order;
+  assert.equal(orderSuccessMessage(order, false), "You successfully used Personal Agent Protocol to order from Print with Poppy!");
+  assert.match(orderSuccessMessage({ ...order, quote: { ...order.quote, orderingMethod: "http-compatibility" } }, false)!, /HTTP API.*did not use Personal Agent Protocol/);
+  assert.match(orderSuccessMessage(order, true)!, /Sandbox.*No real payment, printing or shipping/);
+  assert.equal(orderSuccessMessage({ ...order, paidAt: undefined }, false), undefined);
+  for (const status of ["awaiting_payment", "attention", "cancelled", "expired"] as const)
+    assert.equal(orderSuccessMessage({ ...order, status }, false), undefined);
+  assert.equal(orderSuccessMessage({ ...order, quote: { ...order.quote, orderingMethod: "visual-demo" } }, false), undefined);
+  assert.equal(orderSuccessMessage({ ...order, quote: { ...order.quote, orderingMethod: undefined, owner: "missing-session" } }, false), undefined);
+});

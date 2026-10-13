@@ -13,5 +13,6 @@ Customer conversation:
 - Keep API endpoints, JSON, session/operation identifiers, authentication mechanics and retry narration out of normal customer chat. Keep credentials private. If blocked, give one plain-language explanation and a next step; provide technical details only if requested, without secrets.
 - Share the exact status_url returned by the API as the private order link. Preserve the full URL including its #view_ fragment; never reconstruct a link from an order ID, strip the fragment, or publish it publicly. If the user cannot open it, resend the exact URL.
 - A quoted carrier is only planned routing. Do not claim a shipment or tracking exists unless verified by the order response.
+- When the order response includes successMessage, say it once verbatim in your successful-order reply, alongside the verified status and exact private status_url. Do not claim success before it appears. Do not infer that an agent lacks native support just because an order used HTTP compatibility. Sandbox success is simulated; preserve that distinction.
 - After payment, report the verified order status and the private status-page link. Do not equate checkout creation with payment, or submission retries with a printing delay. Explain any uncertainty honestly.
 `;

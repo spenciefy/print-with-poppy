@@ -1,4 +1,4 @@
-import { sessionOrderingMethod, quoteOrderingMethod } from "./ordering-method.js";
+import { sessionOrderingMethod, quoteOrderingMethod, orderSuccessMessage } from "./ordering-method.js";
 import { receipt } from "./receipt.js";
 import { redeemCoupon } from "./coupons.js";
 import { productOf, mediaVariant, previewVariant, itemProduct, orderProducts, orderLabel } from "../src/offer.js";
@@ -287,6 +287,7 @@ export function orderView(o: Order) {
     id: o.id,
     status: o.status,
     orderingMethod: quoteOrderingMethod(o.quote),
+    successMessage: orderSuccessMessage(o, config.demo),
     created: o.created,
     paidAt: o.paidAt,
     quote: {
