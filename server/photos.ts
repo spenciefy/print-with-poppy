@@ -1,9 +1,9 @@
 import sharp from "sharp";
 import fs from "node:fs/promises";
 import { config } from "./config.js";
-import { all, id, put, requireRecord, HttpError, mediaUrl } from "./store.js";
+import { all, get, id, put, requireRecord, HttpError, mediaUrl } from "./store.js";
 import type { Photo } from "./types.js";
-export async function upload(buffer: Buffer, name: string, owner: string) {
+export async function upload(buffer: Buffer, _name: string, owner: string) {
   if (all<Photo>("photo", owner).filter((p) => !p.deleted).length >= 100)
     throw new HttpError(
       429,
@@ -68,7 +68,7 @@ export async function upload(buffer: Buffer, name: string, owner: string) {
   const p: Photo = {
     id: photoId,
     owner,
-    name: name.replace(/[<>\x00-\x1f]/g, "").slice(0, 100) || "Photo",
+    name: `Photo ${all<Photo>("photo", owner).length + 1}`,
     width,
     height,
     lowResolution:
@@ -78,10 +78,18 @@ export async function upload(buffer: Buffer, name: string, owner: string) {
   put("photo", photoId, p, owner);
   return photoView(p);
 }
+export function photoLabel(photoId: string, fallbackIndex = 0) {
+  const p = get<Photo>("photo", photoId);
+  if (!p) return `Photo ${fallbackIndex + 1}`;
+  if (/^Photo [1-9][0-9]*$/.test(p.name)) return p.name;
+  const index = all<Photo>("photo", p.owner).sort((a, b) => a.created - b.created || a.id.localeCompare(b.id)).findIndex(photo => photo.id === photoId);
+  return `Photo ${index + 1}`;
+}
 export function photoView(p: Photo) {
   return {
     ...p,
     owner: undefined,
+    name: photoLabel(p.id),
     previews: {
       contain: mediaUrl(p.id, "contain"),
       cover: mediaUrl(p.id, "cover"),

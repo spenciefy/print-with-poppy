@@ -11,7 +11,7 @@ import {
   HttpError,
   mediaUrl,
 } from "./store.js";
-import { ownedPhoto, preparePoster } from "./photos.js";
+import { ownedPhoto, preparePoster, photoLabel } from "./photos.js";
 import { getPrice, deliveryEstimate } from "./providers.js";
 import {
   proposalSchema,
@@ -76,7 +76,7 @@ export async function propose(body: unknown, session: Session, key: string) {
   const price = await getPrice(p);
   const created = Date.now();
   const estimate = deliveryEstimate();
-  const summary = `Prepare checkout for ${orderLabel(p)}: ${p.items.map((i, n) => `${n + 1}. ${photos[n].name} (${productOf({ product: itemProduct(p, i) }).name}), ${i.quantity} ${i.quantity === 1 ? "copy" : "copies"}, ${i.fit === "contain" ? "whole image with white borders" : "center-cropped to fill"}${Math.min(photos[n].width, photos[n].height) < productOf({ product: itemProduct(p, i) }).shortPixels || Math.max(photos[n].width, photos[n].height) < productOf({ product: itemProduct(p, i) }).longPixels ? " — low-resolution warning" : ""}`).join("; ")}. Ship to ${addressText(p.address)}. Confirmation email: ${p.email}. Prints ${money(price.subtotal)} + shipping ${money(price.shipping)}${price.discount ? ` - discount ${money(price.discount)}` : ""} + sales tax ${money(price.tax)} = ${money(price.total)} USD. ${estimate} ${price.total === 0 ? "Complete the free checkout after approval; no card is required." : "Pay by card at the checkout link after approval."} Completing checkout releases the order to production; cancellation is not guaranteed after payment. ${config.demo ? "DEMO ONLY: illustrative prices, no charge or physical fulfillment." : ""}`;
+  const summary = `Prepare checkout for ${orderLabel(p)}: ${p.items.map((i, n) => `${n + 1}. ${photoLabel(photos[n].id, n)} (${productOf({ product: itemProduct(p, i) }).name}), ${i.quantity} ${i.quantity === 1 ? "copy" : "copies"}, ${i.fit === "contain" ? "whole image with white borders" : "center-cropped to fill"}${Math.min(photos[n].width, photos[n].height) < productOf({ product: itemProduct(p, i) }).shortPixels || Math.max(photos[n].width, photos[n].height) < productOf({ product: itemProduct(p, i) }).longPixels ? " — low-resolution warning" : ""}`).join("; ")}. Ship to ${addressText(p.address)}. Confirmation email: ${p.email}. Prints ${money(price.subtotal)} + shipping ${money(price.shipping)}${price.discount ? ` - discount ${money(price.discount)}` : ""} + sales tax ${money(price.tax)} = ${money(price.total)} USD. ${estimate} ${price.total === 0 ? "Complete the free checkout after approval; no card is required." : "Pay by card at the checkout link after approval."} Completing checkout releases the order to production; cancellation is not guaranteed after payment. ${config.demo ? "DEMO ONLY: illustrative prices, no charge or physical fulfillment." : ""}`;
   const q: Quote = {
     ...p,
     ...price,
@@ -94,7 +94,7 @@ export async function propose(body: unknown, session: Session, key: string) {
       product: itemProduct(p, p.items[n]),
       photoId: ph.id,
       url: mediaUrl(ph.id, mediaVariant(itemProduct(p, p.items[n]), p.items[n].fit)),
-      name: ph.name,
+      name: photoLabel(ph.id, n),
       quantity: p.items[n].quantity,
       fit: p.items[n].fit,
     })),
@@ -144,12 +144,22 @@ export function readOperation(opId: string, owner: string) {
   }
   return op;
 }
+function displayPhotoLabels(quote: Quote) {
+  let summary = quote.summary;
+  const previews = quote.previews.map((preview, index) => {
+    const name = photoLabel(preview.photoId, index);
+    if (preview.name && preview.name !== name) summary = summary.split(preview.name).join(name);
+    return { ...preview, name };
+  });
+  return { ...quote, summary, previews };
+}
 export function operationView(op: Operation) {
   const { owner, ...view } = op;
   return {
     ...view,
+    summary: displayPhotoLabels(view.terms).summary,
     terms: {
-      ...view.terms,
+      ...displayPhotoLabels(view.terms),
       owner: undefined,
       accountId: undefined,
       couponCode: undefined,
@@ -253,13 +263,14 @@ export function orderView(o: Order) {
     created: o.created,
     paidAt: o.paidAt,
     quote: {
-      ...o.quote,
+      ...displayPhotoLabels(o.quote),
       owner: undefined,
       taxCalculationId: undefined,
       accountId: undefined,
       couponCode: undefined,
-      previews: o.quote.previews.map((p) => ({
+      previews: o.quote.previews.map((p, index) => ({
         ...p,
+        name: photoLabel(p.photoId, index),
         url: mediaUrl(p.photoId, mediaVariant(p.product ?? o.quote.product, p.fit)),
       })),
     },

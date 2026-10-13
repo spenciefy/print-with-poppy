@@ -24,7 +24,8 @@ test("all email kinds use catalog product details and new branding", () => {
     }
     assert.ok(message.html.includes("poppy-email-logo.png"));
     assert.ok(message.html.includes("Print with <strong>Poppy</strong>"));
-    assert.ok(message.html.includes("Beach &lt;sunset&gt;.jpg"));
+    assert.ok(message.html.includes("Photo 1"));
+    assert.ok(!message.html.includes("Beach"));
     assert.ok(!message.html.includes("expired.example"));
     assert.ok(!message.html.includes("/poppy.png"));
   }

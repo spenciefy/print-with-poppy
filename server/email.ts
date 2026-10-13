@@ -1,4 +1,5 @@
 import { orderProducts, itemProduct, productOf, mediaVariant } from "../src/offer.js";
+import { photoLabel } from "./photos.js";
 import { mediaUrl } from "./store.js";
 import { config } from "./config.js";
 import { addressText, money, type Order, type Shipment } from "./types.js";
@@ -52,10 +53,9 @@ export function emailFor(o: Order, kind: string, shipment?: Shipment) {
   const groups = orderProducts(o.quote);
   const orderedPhotos = o.quote.items.map((item, index) => {
     const product = itemProduct(o.quote, item);
-    const preview = o.quote.previews[index];
     return {
       ...item,
-      name: preview?.name || `Photo ${index + 1}`,
+      name: photoLabel(item.photoId, index),
       details: productOf({ product }),
       // Renew at send time; proposal preview URLs expire after one hour.
       url: mediaUrl(item.photoId, mediaVariant(product, item.fit), 30 * 86400),

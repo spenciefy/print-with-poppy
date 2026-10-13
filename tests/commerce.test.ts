@@ -1641,3 +1641,14 @@ test("mixed products share pricing, checkout and fulfillment without losing prod
     providers.stripe!.checkout.sessions.create = originalCheckout;
   }
 });
+
+ test("photo labels omit original filenames and remain stable across products", async () => {
+  const f = await fixture();
+  const buffer = await sharp({ create: { width: 600, height: 800, channels: 3, background: "red" } }).jpeg().toBuffer();
+  const uploaded = await photos.upload(buffer, "secret-gibberish-IMG_123.jpg", f.a.session.session_id);
+  assert.match(uploaded.name, /^Photo [0-9]+$/);
+  assert.ok(!JSON.stringify(uploaded).includes("secret-gibberish"));
+  assert.equal(photos.photoView(photos.ownedPhoto(uploaded.id, f.a.session.session_id)).name, uploaded.name);
+  assert.equal(f.op.terms.previews[0].name, f.photo.name);
+  assert.match(f.op.summary, new RegExp(f.photo.name));
+});
