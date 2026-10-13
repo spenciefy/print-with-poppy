@@ -383,8 +383,8 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   const productSection = (
     <section className="store-products" aria-labelledby="home-title">
       <div className="store-heading">
-        <h1 id="home-title">Your photos, in print.</h1>
-        <p>Ordered by your personal agent. Delivered to your door.</p>
+        <h1 id="home-title">Your photos are better printed.</h1>
+        <p>Use your personal agent to get photo prints delivered</p>
       </div>
       <div className="product-list">
         <article className="store-product">
