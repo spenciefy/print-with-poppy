@@ -63,32 +63,21 @@ const cents = (m: any) => {
     );
   return Math.round(Number(m.amount) * 100);
 };
-export async function getPrice(p: Proposal) {
-  const groups = orderProducts(p);
-  const subtotal = groups.reduce((sum, group) => sum + group.subtotal, 0);
-  const shipping = shippingPrice(subtotal);
-  const promotion = coupon(p.couponCode);
-  const discounts = discountedAmounts(subtotal, shipping, promotion?.percent, promotion?.maxAmount);
-  const netSubtotal = subtotal - discounts.printDiscount;
-  const netShipping = shipping - discounts.shippingDiscount;
-  if (config.demo) {
-    const tax = Math.round((netSubtotal + netShipping) * 0.0875);
-    return { subtotal, shipping, ...discounts, tax, total: netSubtotal + netShipping + tax };
-  }
+async function supplierCosts(p: Proposal) {
   // Verify the exact finish is available for the selected SKU/destination, rather than guessing attributes.
-  for (const selected of groups) {
-  const product = await prodigi(`/products/${selected.sku}`);
-  const details = product.product;
-  if (
-    !Object.entries(selected.attributes).every(([key, value]) =>
-      details?.attributes?.[key]?.includes(value),
+  for (const selected of orderProducts(p)) {
+    const product = await prodigi(`/products/${selected.sku}`);
+    const details = product.product;
+    if (
+      !Object.entries(selected.attributes).every(([key, value]) =>
+        details?.attributes?.[key]?.includes(value),
+      )
     )
-  )
-    throw new HttpError(
-      503,
-      "product_not_configured",
-      "The configured finish is not supported by the product.",
-    );
+      throw new HttpError(
+        503,
+        "product_not_configured",
+        "The configured finish is not supported by the product.",
+      );
   }
   const q = await prodigi("/quotes", {
     shippingMethod: config.shipping,
@@ -101,6 +90,8 @@ export async function getPrice(p: Proposal) {
       assets: [{ printArea: "default" }],
     })),
   });
+  if (String(q.outcome).toLowerCase() === "createdwithissues")
+    throw new HttpError(502, "invalid_quote", "The supplier quote has unresolved issues. No order can be prepared until a complete quote is available.");
   const candidate = q.quotes?.find(
     (v: any) => v.shipmentMethod === config.shipping,
   );
@@ -120,17 +111,33 @@ export async function getPrice(p: Proposal) {
   const supplierTax = candidate.costSummary.totalTax
     ? cents(candidate.costSummary.totalTax)
     : 0;
-  const checkMargin = (tax: number) => {
-    if (
-      contributionBudget(subtotal + shipping, tax, supplierBase, supplierTax) <
-      0
-    )
-      throw new HttpError(
-        503,
-        "pricing_unavailable",
-        "This delivery cannot currently be offered at our published price. Please try again later.",
-      );
-  };
+  const quotedTotal = candidate.costSummary.totalCost ? cents(candidate.costSummary.totalCost) : supplierBase + supplierTax;
+  return { supplierBase, supplierTax: Math.max(supplierTax, quotedTotal - supplierBase) };
+}
+function assertMargin(revenue: number, tax: number, costs: { supplierBase: number; supplierTax: number }) {
+  if (![revenue, tax, costs.supplierBase, costs.supplierTax].every(v => Number.isSafeInteger(v) && v >= 0) || !(contributionBudget(revenue, tax, costs.supplierBase, costs.supplierTax) >= 0))
+    throw new HttpError(422, "pricing_unavailable", "This order cannot cover its printing, shipping and processing costs at the published price. Change the order or contact support before requesting approval.");
+}
+export async function ensureOrderMargin(order: Order) {
+  if (config.demo) return;
+  const costs = await supplierCosts(order.quote);
+  // Approved coupons are an intentional merchant-funded subsidy.
+  assertMargin(order.quote.total - order.quote.tax + (order.quote.discount || 0), order.quote.tax, costs);
+}
+export async function getPrice(p: Proposal) {
+  const groups = orderProducts(p);
+  const subtotal = groups.reduce((sum, group) => sum + group.subtotal, 0);
+  const shipping = shippingPrice(subtotal);
+  const promotion = coupon(p.couponCode);
+  const discounts = discountedAmounts(subtotal, shipping, promotion?.percent, promotion?.maxAmount);
+  const netSubtotal = subtotal - discounts.printDiscount;
+  const netShipping = shipping - discounts.shippingDiscount;
+  if (config.demo) {
+    const tax = Math.round((netSubtotal + netShipping) * 0.0875);
+    return { subtotal, shipping, ...discounts, tax, total: netSubtotal + netShipping + tax };
+  }
+  const costs = await supplierCosts(p);
+  const checkMargin = (tax: number) => assertMargin(subtotal + shipping, tax, costs);
   checkMargin(0);
   // A fully sponsored order has no customer consideration or sales tax to collect.
   if (netSubtotal + netShipping === 0)
@@ -180,6 +187,7 @@ export async function checkout(order: Order) {
       url: `${config.origin}/checkout/${order.id}#${order.viewToken}`,
       expires: Math.floor(order.created / 1000) + 3600,
     };
+  await ensureOrderMargin(order);
   const q = order.quote;
   const session = await stripe!.checkout.sessions.create(
     {
@@ -247,6 +255,7 @@ export async function submitPrint(order: Order) {
       status: { stage: "InProgress" },
       shipments: [],
     };
+  await ensureOrderMargin(order);
   const q = order.quote;
   const result = await prodigi("/orders", {
     merchantReference: order.id,

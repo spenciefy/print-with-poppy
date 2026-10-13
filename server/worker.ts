@@ -213,6 +213,24 @@ export async function tick() {
           job.id,
         );
       } catch (e) {
+        if ((e as any)?.code === "pricing_unavailable" && ["checkout", "fulfill"].includes(job.kind)) {
+          db.prepare("UPDATE jobs SET state='failed',error=? WHERE id=?").run((e as Error).message, job.id);
+          const order = get<Order>("order", job.record_id);
+          if (order) {
+            order.status = "attention";
+            order.issue = order.paidAt
+              ? "Payment received; printing is on hold because fulfillment costs changed. Contact support for review or a refund."
+              : "Checkout is on hold because fulfillment costs changed. No payment was taken. Request a new quote or contact support.";
+            put("order", order.id, order, order.owner);
+            if (job.kind === "checkout") {
+              const op = requireRecord<Operation>("operation", order.operationId);
+              op.state = "failed";
+              op.result = { summary: order.issue };
+              put("operation", op.operation_id, op, op.owner);
+            }
+          }
+          continue;
+        }
         const attempts = job.attempts + 1;
         db.prepare(
           "UPDATE jobs SET attempts=?,next_at=?,error=? WHERE id=?",

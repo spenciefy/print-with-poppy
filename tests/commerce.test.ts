@@ -1505,9 +1505,13 @@ test("free Stripe checkout has zero line items and no tax charge", async () => {
   const { config } = await import("../server/config.js");
   const { stripe, checkout } = await import("../server/providers.js");
   const original = stripe!.checkout.sessions.create;
+  const originalFetch = globalThis.fetch;
   let sent: any;
   try {
     config.demo = false;
+    globalThis.fetch = (async (url: any) => Response.json(String(url).includes("/products/")
+      ? { outcome: "Ok", product: { attributes: { finish: ["lustre"] } } }
+      : { outcome: "Created", quotes: [{ shipmentMethod: "Budget", costSummary: { items: { amount: "1.25", currency: "USD" }, shipping: { amount: "6.70", currency: "USD" } } }] })) as any;
     stripe!.checkout.sessions.create = (async (params: any) => {
       sent = params;
       return { id: "cs_free", url: "https://checkout.stripe.com/free", expires_at: params.expires_at };
@@ -1517,7 +1521,7 @@ test("free Stripe checkout has zero line items and no tax charge", async () => {
     assert.equal(sent.line_items.length, 1);
     assert.equal(sent.line_items[0].price_data.unit_amount, 0);
     assert.equal(sent.allow_promotion_codes, false);
-  } finally { config.demo = true; stripe!.checkout.sessions.create = original; }
+  } finally { config.demo = true; globalThis.fetch = originalFetch; stripe!.checkout.sessions.create = original; }
 });
 
 test("Stripe completion accepts zero-cost completed sessions but rejects unfinished or nonzero free sessions", async () => {
@@ -1651,4 +1655,48 @@ test("mixed products share pricing, checkout and fulfillment without losing prod
   assert.equal(photos.photoView(photos.ownedPhoto(uploaded.id, f.a.session.session_id)).name, uploaded.name);
   assert.equal(f.op.terms.previews[0].name, f.photo.name);
   assert.match(f.op.summary, new RegExp(f.photo.name));
+});
+
+test("cost guard blocks supplier increases before checkout and fulfillment while allowing coupon subsidies", async () => {
+  const f = await fixture();
+  commerce.confirm(f.op.operation_id, f.a.session.session_id, 1, "user");
+  await worker.tick();
+  const op = commerce.readOperation(f.op.operation_id, f.a.session.session_id);
+  const order = store.get("order", op.orderId!);
+  const { config } = await import("../server/config.js");
+  const providers = await import("../server/providers.js");
+  const originalFetch = globalThis.fetch;
+  const originalCheckout = providers.stripe!.checkout.sessions.create;
+  let supplierItems = "1.25", checkoutCalls = 0, fulfillmentCalls = 0;
+  try {
+    config.demo = false;
+    globalThis.fetch = (async (url: any) => {
+      if (String(url).includes("/products/")) return Response.json({ outcome: "Ok", product: { attributes: { finish: ["lustre"] } } });
+      if (String(url).endsWith("/quotes")) return Response.json({ outcome: "Created", quotes: [{ shipmentMethod: "Budget", costSummary: { items: { amount: supplierItems, currency: "USD" }, shipping: { amount: "6.70", currency: "USD" } } }] });
+      fulfillmentCalls++;
+      throw new Error("Unexpected fulfillment");
+    }) as any;
+    providers.stripe!.checkout.sessions.create = (async () => { checkoutCalls++; return { id: "cs_guard", url: "https://checkout.example/guard" }; }) as any;
+    await providers.ensureOrderMargin(order);
+    const sponsored = { ...order, quote: { ...order.quote, total: 0, tax: 0, discount: 1700 } };
+    await providers.ensureOrderMargin(sponsored);
+    supplierItems = "100.00";
+    await assert.rejects(providers.checkout(order), /cannot cover/);
+    await assert.rejects(providers.submitPrint(order), /cannot cover/);
+    await assert.rejects(providers.ensureOrderMargin(sponsored), /cannot cover/);
+    assert.equal(checkoutCalls, 0);
+    assert.equal(fulfillmentCalls, 0);
+    const jobId = "fulfill:guard-test";
+    store.put("order", order.id, { ...order, paidAt: Date.now() }, order.owner);
+    store.enqueue("fulfill", order.id, jobId);
+    await worker.tick();
+    assert.equal(store.get("order", order.id).status, "attention");
+    assert.match(store.get("order", order.id).issue, /on hold/);
+    assert.equal((store.db.prepare("SELECT state FROM jobs WHERE id=?").get(jobId) as any).state, "failed");
+    assert.equal(fulfillmentCalls, 0);
+  } finally {
+    config.demo = true;
+    globalThis.fetch = originalFetch;
+    providers.stripe!.checkout.sessions.create = originalCheckout;
+  }
 });

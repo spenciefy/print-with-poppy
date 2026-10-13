@@ -151,3 +151,7 @@ Project code is available under the [MIT License](LICENSE). Third-party fonts re
 ### Private discounts
 
 One-use mountain-peak codes can sponsor part or all of an order, including shipping. Agents supply `couponCode` before approval; the quote, checkout and confirmation reflect the discount. See [code generation and redemption](docs/COUPONS.md). Generated codes are private and are never committed.
+
+### Order cost protection
+
+Live orders check current supplier costs at proposal, checkout creation and fulfillment. Coupon discounts are intentional merchant subsidies; ordinary orders must cover conservative costs and reserves. A cost increase after payment holds printing for review/refund. See [margin policy and combined-shipping research](docs/ORDER-MARGINS.md) for assumptions and limits.
