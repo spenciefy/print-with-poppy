@@ -55,7 +55,7 @@ function Header({
   return (
     <header>
       <Brand />
-      <nav
+      {!route.startsWith("/order/") && !route.startsWith("/checkout/") && <nav
         className="audience-toggle"
         data-agents={agents}
         aria-label="Choose a view"
@@ -74,7 +74,7 @@ function Header({
         >
           For Personal Agents
         </a>
-      </nav>
+      </nav>}
     </header>
   );
 }
@@ -734,7 +734,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
   const headers = { "X-Order-Token": token };
   const refresh = () =>
     api(`/api/order-view/${rid}`, { headers })
-      .then(setOrder)
+      .then((freshOrder) => { setOrder(freshOrder); setError(""); })
       .catch((e) => setError(e.message));
   useEffect(() => {
     void refresh();
@@ -1049,7 +1049,9 @@ function App() {
       {route !== "/demo" &&
         route !== "/" &&
         route !== "/for-agents" &&
-        !route.startsWith("/variants") && <Footer />}
+        !route.startsWith("/variants") &&
+        !route.startsWith("/order/") &&
+        !route.startsWith("/checkout/") && <Footer />}
     </>
   );
 }
