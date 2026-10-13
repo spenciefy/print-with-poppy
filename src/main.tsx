@@ -81,7 +81,10 @@ function Header({
   const agents = route === "/for-agents";
   return (
     <header>
-      <Brand />
+      <div className="header-brand">
+        <Brand />
+        <a className="protocol-credit" href="https://personalagentprotocol.org/">Built on Personal Agent Protocol</a>
+      </div>
       {!route.startsWith("/order/") && !route.startsWith("/checkout/") && <nav
         className="audience-toggle"
         data-agents={agents}
@@ -344,6 +347,7 @@ function Footer({ compact = false }: { compact?: boolean }) {
           View on Github
         </a>
         <a href="https://personalagentprotocol.org/">Personal Agent Protocol</a>
+        <a className="discovery-link" href="/.well-known/poppy.json">For personal agents: /.well-known/poppy.json</a>
       </div>
     </footer>
   );
