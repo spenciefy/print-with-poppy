@@ -14,6 +14,7 @@ export const addressSchema = z
 export const proposalSchema = z
   .object({
     product: z.enum(["prints", "poster"]).optional(),
+    couponCode: z.string().trim().toLowerCase().min(1).max(100).optional(),
     email: z.email().max(254),
     address: addressSchema,
     items: z
@@ -73,6 +74,9 @@ export interface Quote extends Proposal {
   expires: number;
   subtotal: number;
   shipping: number;
+  discount?: number;
+  printDiscount?: number;
+  shippingDiscount?: number;
   tax: number;
   total: number;
   currency: "USD";

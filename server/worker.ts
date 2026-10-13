@@ -1,3 +1,4 @@
+import { stripeCheckoutComplete } from "./providers.js";
 import fs from "node:fs/promises";
 import { config, sandboxEmailEnabled } from "./config.js";
 import { db, get, put, all, requireRecord, enqueue } from "./store.js";
@@ -95,7 +96,7 @@ export async function runJob(job: any) {
       op.state = "succeeded";
       op.result = {
         summary:
-          "Approved order prepared. Complete card payment at the checkout URL; nothing has been charged or printed yet.",
+          o.quote.total === 0 ? "Approved free order prepared. Complete checkout at the checkout URL; no card is required and nothing has been printed yet." : "Approved order prepared. Complete card payment at the checkout URL; nothing has been charged or printed yet.",
         data: {
           order_id: o.id,
           checkout_url: c.url,
@@ -118,7 +119,7 @@ export async function runJob(job: any) {
   } else if (job.kind === "payment-sync") {
     if (config.demo || !o.checkoutId || o.paidAt) return;
     const session = await stripe!.checkout.sessions.retrieve(o.checkoutId);
-    if (session.payment_status === "paid") {
+    if (stripeCheckoutComplete(session)) {
       paid(o.id, {
         id: session.id,
         amount: session.amount_total!,

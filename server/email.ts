@@ -35,7 +35,7 @@ export function emailFor(o: Order, kind: string, shipment?: Shipment) {
     ? "The printer has cancelled this order. Please contact us to arrange a refund or reprint."
     : shipping
       ? "Your print shipment has left the lab."
-      : "We received your payment. Your photos are queued for printing.";
+      : o.quote.total === 0 ? "Your free order is confirmed. Your photos are queued for printing." : "We received your payment. Your photos are queued for printing.";
   const trackingText = shipping
     ? shipment?.tracking?.number
       ? `Tracking: ${shipment.tracking.number}${tracking ? ` — ${tracking}` : ""}`
@@ -59,6 +59,7 @@ export function emailFor(o: Order, kind: string, shipment?: Shipment) {
     `Order ${o.id}`,
     productLine,
     `Prints: ${money(o.quote.subtotal)} · Shipping: ${money(o.quote.shipping)} · Tax: ${money(o.quote.tax)}`,
+    o.quote.discount ? `Discount: -${money(o.quote.discount)}` : "",
     addressText(o.quote.address),
     `${config.demo ? "Simulated total" : "Total paid"}: ${money(o.quote.total)}`,
     estimate,
@@ -74,7 +75,7 @@ export function emailFor(o: Order, kind: string, shipment?: Shipment) {
 ${config.demo ? '<p style="font-size:12px">TEST ORDER — no real payment, printing or shipment</p>' : ''}
 <h1 style="font-size:30px;line-height:1.15;letter-spacing:-1px;margin:32px 0 16px">${subject}</h1><p style="font-size:16px;line-height:1.6;color:#6e6155">${intro}</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:28px 0;border-top:1px solid #ded6c7;border-bottom:1px solid #ded6c7"><tr><td width="88" style="padding:24px 16px 24px 0;vertical-align:middle"><img src="${origin}${product.emailImage}" width="72" alt="${product.label} — sample poppy artwork" style="display:block;border:6px solid #ffffff;width:72px;height:auto"></td><td style="padding:24px 0"><h2 style="font-size:20px;margin:0 0 8px">${product.label}</h2><p style="font-size:14px;line-height:1.6;color:#6e6155;margin:0">${product.dimensions} · ${escapeHtml(o.quote.finish)}<br>Quantity: ${quantity}</p></td></tr></table>
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:14px;line-height:1.9"><tr><td>Prints</td><td align="right">${money(o.quote.subtotal)}</td></tr><tr><td>Shipping</td><td align="right">${o.quote.shipping ? money(o.quote.shipping) : 'Included'}</td></tr><tr><td>Tax</td><td align="right">${money(o.quote.tax)}</td></tr><tr><td style="padding-top:8px;font-weight:bold">${config.demo ? "Simulated total" : "Total paid"} · USD</td><td align="right" style="padding-top:8px;font-weight:bold">${money(o.quote.total)}</td></tr></table>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:14px;line-height:1.9"><tr><td>Prints</td><td align="right">${money(o.quote.subtotal)}</td></tr><tr><td>Shipping</td><td align="right">${o.quote.shipping ? money(o.quote.shipping) : 'Included'}</td></tr>${o.quote.discount ? `<tr><td>Discount</td><td align="right">−${money(o.quote.discount)}</td></tr>` : ""}<tr><td>Tax</td><td align="right">${money(o.quote.tax)}</td></tr><tr><td style="padding-top:8px;font-weight:bold">${config.demo ? "Simulated total" : "Total paid"} · USD</td><td align="right" style="padding-top:8px;font-weight:bold">${money(o.quote.total)}</td></tr></table>
 <h2 style="font-size:16px;margin:28px 0 8px">Delivering to</h2><p style="font-size:14px;line-height:1.6;margin:0">${escapeHtml(addressText(o.quote.address))}</p><p style="font-size:14px;line-height:1.6;color:#6e6155">${escapeHtml(estimate)}</p>${shipping ? `<p style="font-size:14px;line-height:1.6">${escapeHtml(trackingText)}</p>` : ''}
 ${tracking ? `<p><a style="color:#af3e06" href="${escapeHtml(tracking)}">Track your shipment →</a></p>` : ''}<p style="margin:28px 0"><a style="background:#30291f;color:#ffffff;text-decoration:none;padding:14px 20px;display:inline-block;border-radius:6px" href="${escapeHtml(statusUrl)}">View your order</a></p><p style="font-size:12px;line-height:1.7;color:#6e6155">${escapeHtml(o.id)}<br>Questions? <a style="color:#af3e06" href="mailto:${escapeHtml(config.support)}">${escapeHtml(config.support)}</a></p>
 </td></tr></table></td></tr></table></body></html>`;

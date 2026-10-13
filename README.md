@@ -147,3 +147,7 @@ Malformed JSON bodies return `400 invalid_request`; oversized JSON bodies return
 ## License
 
 Project code is available under the [MIT License](LICENSE). Third-party fonts retain their accompanying licenses.
+
+### Private discounts
+
+One-use mountain-peak codes can sponsor part or all of an order, including shipping. Agents supply `couponCode` before approval; the quote, checkout and confirmation reflect the discount. See [code generation and redemption](docs/COUPONS.md). Generated codes are private and are never committed.

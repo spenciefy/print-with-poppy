@@ -38,7 +38,7 @@ import {
   orderView,
   paid,
 } from "./commerce.js";
-import { stripe } from "./providers.js";
+import { stripe, stripeCheckoutComplete } from "./providers.js";
 import { tick, housekeeping, syncProvider } from "./worker.js";
 import { openapi, agentInstructions } from "./openapi.js";
 import type { Session, Order } from "./types.js";
@@ -110,7 +110,7 @@ app.post(
           id: s.id,
           amount: s.amount_total,
           currency: s.currency,
-          paid: s.payment_status === "paid",
+          paid: stripeCheckoutComplete(s),
         });
     }
     res.json({ received: true });

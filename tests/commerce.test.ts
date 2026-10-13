@@ -1458,3 +1458,72 @@ test("normal deployments do not advertise or expose agent sandbox controls", asy
     404,
   );
 });
+
+test("private coupons discount before approval, reserve once, and free orders fulfill once", async () => {
+  const { generateCoupons } = await import("../server/coupons.js");
+  const [code] = generateCoupons(1, 100);
+  const f = await fixture();
+  const submit = () => f.a.request("/api/orders", {
+    method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+    body: JSON.stringify({ ...f.proposal, couponCode: code.toUpperCase() }),
+  });
+  const first = await submit(), second = await submit();
+  assert.equal(first.status, 202);
+  assert.equal(second.status, 202);
+  const op = first.body.operation;
+  assert.equal(op.terms.total, 0);
+  assert.equal(op.terms.tax, 0);
+  assert.equal(op.terms.discount, op.terms.subtotal + op.terms.shipping);
+  assert.match(op.summary, /free checkout/);
+  const confirmed = commerce.confirm(op.operation_id, f.a.session.session_id, 1, "user");
+  assert.throws(() => commerce.confirm(second.body.operation.operation_id, f.a.session.session_id, 1, "user"), /already been used/);
+  assert.equal((await submit()).status, 422);
+  const order = store.get("order", confirmed.orderId!);
+  order.checkoutId = "cs_free_contract";
+  store.put("order", order.id, order, order.owner);
+  assert.throws(() => commerce.paid(order.id, { id: order.checkoutId, amount: 1, currency: "usd", paid: true }), /does not match/);
+  commerce.paid(order.id, { id: order.checkoutId, amount: 0, currency: "usd", paid: true });
+  commerce.paid(order.id, { id: order.checkoutId, amount: 0, currency: "usd", paid: true });
+  assert.equal(store.get("order", order.id).status, "paid");
+  assert.equal((store.db.prepare("SELECT count(*) AS n FROM jobs WHERE kind='fulfill' AND record_id=?").get(order.id) as any).n, 1);
+  assert.equal(commerce.orderView(store.get("order", order.id)!).quote.couponCode, undefined);
+});
+
+test("percentage coupons recalculate tax on discounted prints and shipping", async () => {
+  const { generateCoupons } = await import("../server/coupons.js");
+  const { getPrice } = await import("../server/providers.js");
+  const [couponCode] = generateCoupons(1, 50);
+  const f = await fixture();
+  const price = await getPrice({ ...f.proposal, couponCode } as any);
+  assert.equal(price.discount, 850);
+  assert.equal(price.tax, Math.round(850 * 0.0875));
+  assert.equal(price.total, 850 + price.tax);
+  await assert.rejects(getPrice({ ...f.proposal, couponCode: "not-a-code" } as any), /invalid/);
+});
+
+test("free Stripe checkout has zero line items and no tax charge", async () => {
+  const { config } = await import("../server/config.js");
+  const { stripe, checkout } = await import("../server/providers.js");
+  const original = stripe!.checkout.sessions.create;
+  let sent: any;
+  try {
+    config.demo = false;
+    stripe!.checkout.sessions.create = (async (params: any) => {
+      sent = params;
+      return { id: "cs_free", url: "https://checkout.stripe.com/free", expires_at: params.expires_at };
+    }) as any;
+    const sample = store.all<any>("order")[0];
+    await checkout({ ...sample, quote: { ...sample.quote, subtotal: 1200, shipping: 500, tax: 0, total: 0, printDiscount: 1200, shippingDiscount: 500, discount: 1700 } });
+    assert.equal(sent.line_items.length, 1);
+    assert.equal(sent.line_items[0].price_data.unit_amount, 0);
+    assert.equal(sent.allow_promotion_codes, false);
+  } finally { config.demo = true; stripe!.checkout.sessions.create = original; }
+});
+
+test("Stripe completion accepts zero-cost completed sessions but rejects unfinished or nonzero free sessions", async () => {
+  const { stripeCheckoutComplete } = await import("../server/providers.js");
+  assert.equal(stripeCheckoutComplete({ payment_status: "no_payment_required", status: "complete", amount_total: 0 }), true);
+  assert.equal(stripeCheckoutComplete({ payment_status: "no_payment_required", status: "open", amount_total: 0 }), false);
+  assert.equal(stripeCheckoutComplete({ payment_status: "no_payment_required", status: "complete", amount_total: 1700 }), false);
+  assert.equal(stripeCheckoutComplete({ payment_status: "unpaid", status: "complete", amount_total: 0 }), false);
+});

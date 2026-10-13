@@ -695,6 +695,7 @@ function OrderSummary({ quote: q }: { quote: any }) {
         <div>
           <dt>Sales tax</dt>
           <dd>{money(q.tax)}</dd>
+          {!!q.discount && <><dt>Discount</dt><dd>−{money(q.discount)}</dd></>}
         </div>
         <div className="total">
           <dt>Total · USD</dt>
@@ -864,7 +865,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
                     <span>{i <= step ? "✓" : i + 1}</span>
                     {
                       [
-                        "Payment received",
+                        order.quote.total === 0 ? "Free order confirmed" : "Payment received",
                         "At the print lab",
                         "Shipped to you",
                       ][i]

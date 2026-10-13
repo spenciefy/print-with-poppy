@@ -1,3 +1,4 @@
+import { coupon, discountedAmounts } from "./coupons.js";
 import Stripe from "stripe";
 import { contributionBudget } from "./pricing.js";
 import {
@@ -66,9 +67,13 @@ export async function getPrice(p: Proposal) {
       ? posterPrice
       : printSubtotal(p.items.reduce((n, i) => n + i.quantity, 0));
   const shipping = shippingPrice(subtotal);
+  const promotion = coupon(p.couponCode);
+  const discounts = discountedAmounts(subtotal, shipping, promotion?.percent);
+  const netSubtotal = subtotal - discounts.printDiscount;
+  const netShipping = shipping - discounts.shippingDiscount;
   if (config.demo) {
-    const tax = Math.round((subtotal + shipping) * 0.0875);
-    return { subtotal, shipping, tax, total: subtotal + shipping + tax };
+    const tax = Math.round((netSubtotal + netShipping) * 0.0875);
+    return { subtotal, shipping, ...discounts, tax, total: netSubtotal + netShipping + tax };
   }
   // Verify the exact finish is available for the selected SKU/destination, rather than guessing attributes.
   const product = await prodigi(`/products/${selected.sku}`);
@@ -125,6 +130,9 @@ export async function getPrice(p: Proposal) {
       );
   };
   checkMargin(0);
+  // A fully sponsored order has no customer consideration or sales tax to collect.
+  if (netSubtotal + netShipping === 0)
+    return { subtotal, shipping, ...discounts, tax: 0, total: 0 };
   const calculation = await stripe!.tax.calculations.create({
     currency: "usd",
     customer_details: {
@@ -140,18 +148,21 @@ export async function getPrice(p: Proposal) {
     },
     line_items: [
       {
-        amount: subtotal,
+        amount: netSubtotal,
         reference: "photo-prints",
         tax_behavior: "exclusive",
         tax_code: "txcd_99999999",
       },
     ],
-    shipping_cost: { amount: shipping, tax_behavior: "exclusive" },
+    shipping_cost: { amount: netShipping, tax_behavior: "exclusive" },
   });
+  if (calculation.amount_total > 0 && calculation.amount_total < 50)
+    throw new HttpError(422, "discount_total_too_small", "This discount leaves less than the minimum $0.50 card payment. Use a full-order code or change the order.");
   checkMargin(calculation.tax_amount_exclusive);
   return {
     subtotal,
     shipping,
+    ...discounts,
     tax: calculation.tax_amount_exclusive,
     total: calculation.amount_total,
     taxCalculationId: calculation.id || undefined,
@@ -183,7 +194,7 @@ export async function checkout(order: Order) {
         {
           price_data: {
             currency: "usd",
-            unit_amount: q.subtotal,
+            unit_amount: q.subtotal - (q.printDiscount || 0),
             product_data: {
               name: productOf(q).name,
               description: `${q.items.reduce((s, i) => s + i.quantity, 0)} prints · ${q.finish} · delivered to ${q.address.name}`,
@@ -191,12 +202,12 @@ export async function checkout(order: Order) {
           },
           quantity: 1,
         },
-        ...(q.shipping
+        ...(q.shipping - (q.shippingDiscount || 0)
           ? [
               {
                 price_data: {
                   currency: "usd",
-                  unit_amount: q.shipping,
+                  unit_amount: q.shipping - (q.shippingDiscount || 0),
                   product_data: { name: "Home delivery" },
                 },
                 quantity: 1,
@@ -288,4 +299,8 @@ export async function sendMail(
   });
   if (!r.ok) throw new Error(`Email provider returned ${r.status}.`);
   return r.json();
+}
+
+export function stripeCheckoutComplete(session: Pick<Stripe.Checkout.Session, "payment_status" | "status" | "amount_total">) {
+  return session.payment_status === "paid" || (session.payment_status === "no_payment_required" && session.status === "complete" && session.amount_total === 0);
 }
