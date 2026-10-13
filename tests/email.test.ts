@@ -4,7 +4,8 @@ import { emailFor } from "../server/email.js";
 import type { Order } from "../server/types.js";
 export const sampleOrder = (product: "prints" | "poster"): Order => ({
   id: "ord_email_preview", viewToken: "preview-only", quote: {
-    product, email: "preview@example.com", items: [{ quantity: product === "poster" ? 1 : 5 }],
+    product, email: "preview@example.com", items: [{ photoId: "photo_email", fit: "cover", quantity: product === "poster" ? 1 : 5 }],
+    previews: [{ photoId: "photo_email", name: 'Beach <sunset>.jpg', url: "https://expired.example/preview", quantity: 1, fit: "cover" }],
     finish: product === "poster" ? "matte · 200gsm" : "lustre",
     subtotal: product === "poster" ? 3500 : 1200, shipping: product === "poster" ? 0 : 500,
     tax: 0, total: product === "poster" ? 3500 : 1700,
@@ -22,6 +23,9 @@ test("all email kinds use catalog product details and new branding", () => {
       if (product === "poster") assert.ok(!body.includes("4×6"));
     }
     assert.ok(message.html.includes("poppy-email-logo.png"));
+    assert.ok(message.html.includes("Print with <strong>Poppy</strong>"));
+    assert.ok(message.html.includes("Beach &lt;sunset&gt;.jpg"));
+    assert.ok(!message.html.includes("expired.example"));
     assert.ok(!message.html.includes("/poppy.png"));
   }
 });

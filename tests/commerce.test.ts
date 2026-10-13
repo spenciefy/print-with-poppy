@@ -1588,6 +1588,19 @@ test("mixed products share pricing, checkout and fulfillment without losing prod
   const email = emailFor(order, "email-confirmation");
   assert.match(email.html, /Photo prints/);
   assert.match(email.html, /Poster print/);
+  assert.match(email.html, /Print with <strong>Poppy<\/strong>/);
+  assert.doesNotMatch(email.html, /poppy-email-(yellow|red)\.jpg/);
+  assert.match(email.html, new RegExp(`/media/${f.photo.id}/cover`));
+  assert.match(email.html, new RegExp(`/media/${f.photo.id}/poster-contain`));
+  assert.match(email.html, /Quantity: 5/);
+  assert.match(email.html, /Quantity: 1/);
+  assert.match(email.text, /Photo prints, 4 × 6 inches/);
+  const imageUrls = [...email.html.matchAll(/src="([^"]*\/media\/[^"]*)"/g)].map(m => m[1].replaceAll("&amp;", "&"));
+  assert.equal(imageUrls.length, 2);
+  for (const url of imageUrls) {
+    assert.ok(Number(new URL(url).searchParams.get("exp")) > Date.now() / 1000 + 29 * 86400);
+    assert.equal((await fetch(url)).status, 200);
+  }
   const { config } = await import("../server/config.js");
   const providers = await import("../server/providers.js");
   const originalFetch = globalThis.fetch;
