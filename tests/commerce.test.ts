@@ -1566,7 +1566,7 @@ test("shared coupon allows exactly ten distinct approved orders and retries do n
 
 test("mixed products share pricing, checkout and fulfillment without losing product-specific artwork", async () => {
   const f = await fixture();
-  const proposal = { ...f.proposal, items: [
+  const proposal = { ...f.proposal, address: { ...f.proposal.address, line2: "" }, items: [
     { photoId: f.photo.id, product: "prints", quantity: 5, fit: "cover" },
     { photoId: f.photo.id, product: "poster", quantity: 1, fit: "contain" },
   ] };
@@ -1634,6 +1634,7 @@ test("mixed products share pricing, checkout and fulfillment without losing prod
     assert.equal(checkout.line_items.reduce((n: number, i: any) => n + i.price_data.unit_amount * i.quantity, 0), order.quote.total);
     assert.equal(checkout.line_items.filter((i: any) => i.price_data.product_data.name === "Home delivery").length, 0);
     await providers.submitPrint(order);
+    assert.equal("line2" in fulfillment.recipient.address, false);
     assert.deepEqual(fulfillment.items.map((i: any) => i.copies), [5, 1]);
     assert.notEqual(fulfillment.items[0].merchantReference, fulfillment.items[1].merchantReference);
     assert.match(fulfillment.items[1].assets[0].url, /poster-contain/);
@@ -1672,7 +1673,7 @@ test("cost guard blocks supplier increases before checkout and fulfillment while
     config.demo = false;
     globalThis.fetch = (async (url: any) => {
       if (String(url).includes("/products/")) return Response.json({ outcome: "Ok", product: { attributes: { finish: ["lustre"] } } });
-      if (String(url).endsWith("/quotes")) return Response.json({ outcome: "Created", quotes: [{ shipmentMethod: "Budget", costSummary: { items: { amount: supplierItems, currency: "USD" }, shipping: { amount: "6.70", currency: "USD" } } }] });
+      if (String(url).endsWith("/quotes")) return Response.json({ outcome: "CreatedWithIssues", issues: [{ errorCode: "destinationCountryCode.UsSalesTaxWarning" }], quotes: [{ shipmentMethod: "Budget", costSummary: { items: { amount: supplierItems, currency: "USD" }, shipping: { amount: "6.70", currency: "USD" } } }] });
       fulfillmentCalls++;
       throw new Error("Unexpected fulfillment");
     }) as any;
@@ -1699,4 +1700,13 @@ test("cost guard blocks supplier increases before checkout and fulfillment while
     globalThis.fetch = originalFetch;
     providers.stripe!.checkout.sessions.create = originalCheckout;
   }
+});
+
+ test("Prodigi validation errors identify rejected fields without exposing submitted values", async () => {
+  const { prodigi } = await import("../server/providers.js");
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => Response.json({ outcome: "ValidationFailed", failures: { "recipient.address.line2": [{ code: "MustNotBeEmptyOrWhitespace", providedValue: "private-address" }] } }, { status: 400 })) as any;
+    await assert.rejects(prodigi("/orders", {}), (e: any) => e.code === "fulfillment_rejected" && e.message.includes("recipient.address.line2") && !e.message.includes("private-address"));
+  } finally { globalThis.fetch = originalFetch; }
 });

@@ -31,6 +31,11 @@ export async function prodigi(path: string, body?: unknown) {
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(20000),
   });
+  if (!res.ok && res.status === 400) {
+    const details = await res.json().catch(() => ({})) as any;
+    const fields = Object.keys(details.failures || {}).filter(key => /^[a-zA-Z0-9_.\[\]]+$/.test(key));
+    throw new HttpError(502, "fulfillment_rejected", `Print provider rejected the request${fields.length ? ` (${fields.join(", ")})` : ""}. The order has not been accepted; contact support.`);
+  }
   if (!res.ok)
     throw new HttpError(
       502,
@@ -90,7 +95,8 @@ async function supplierCosts(p: Proposal) {
       assets: [{ printArea: "default" }],
     })),
   });
-  if (String(q.outcome).toLowerCase() === "createdwithissues")
+  if (String(q.outcome).toLowerCase() === "createdwithissues" &&
+      (!Array.isArray(q.issues) || !q.issues.length || q.issues.some((issue: any) => issue.errorCode !== "destinationCountryCode.UsSalesTaxWarning")))
     throw new HttpError(502, "invalid_quote", "The supplier quote has unresolved issues. No order can be prepared until a complete quote is available.");
   const candidate = q.quotes?.find(
     (v: any) => v.shipmentMethod === config.shipping,
@@ -267,7 +273,7 @@ export async function submitPrint(order: Order) {
       email: q.email,
       address: {
         line1: q.address.line1,
-        line2: q.address.line2,
+        ...(q.address.line2?.trim() ? { line2: q.address.line2.trim() } : {}),
         townOrCity: q.address.city,
         stateOrCounty: q.address.state,
         postalOrZipCode: q.address.postalCode,
