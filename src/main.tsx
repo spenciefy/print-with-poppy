@@ -287,9 +287,7 @@ function Footer({ compact = false }: { compact?: boolean }) {
               There are two integration paths: native Poppy sessions and a plain
               HTTP guest API for agents that can upload files and call APIs. The
               guest path uses the same order approval and payment flow, but does
-              not verify the agent’s identity through Poppy. Muse and Instinct
-              have not yet been tested end to end with this store; browser
-              access alone does not guarantee compatibility.
+              not verify the agent’s identity through Poppy.
             </p>
           </Faq>
 
