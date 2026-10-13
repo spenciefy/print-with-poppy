@@ -427,7 +427,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
         </article>
       </div>
       <p className="store-delivery">
-        Currently shipping within the United States only. {shippingSummary} Save $5 when combining small prints and 8×10s in one order. Tax shown before approval.
+        Currently shipping within the United States only. {shippingSummary}
         <br />
         {sandbox ? "Illustrative prices and delivery estimates only. Nothing will be printed or shipped." : "Estimated delivery: 7–12 business days after payment."}
       </p>
