@@ -770,12 +770,16 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
   if (!order)
     return (
       <main className="order-shell order-message">
-        <h1>{!token ? "This link is incomplete." : error ? "We couldn’t load your order." : "Loading your order…"}</h1>
-        <p role={error ? "alert" : undefined}>{!token
+        {token && !error && <div className="order-loading-photos" aria-hidden="true">
+          <img src="/photos/poppy-abstract-cluster.webp" alt="" width="64" height="64" />
+          <img src="/photos/poppy-abstract-yellow.webp" alt="" width="64" height="64" />
+          <img src="/photos/poppy-abstract-red.webp" alt="" width="64" height="64" />
+        </div>}
+        <h1 role={token && !error ? "status" : undefined}>{!token ? "This link is incomplete." : error ? "We couldn’t load your order." : "Loading your order…"}</h1>
+        {(!token || error) && <p role={error ? "alert" : undefined}>{!token
           ? "Open the full private link from your confirmation email, or ask your agent to resend it with the part after # included."
-          : error ? "The link may be invalid, or the service may be temporarily unavailable. Try again or use the link in your confirmation email." : "One moment."}</p>
+          : "The link may be invalid, or the service may be temporarily unavailable. Try again or use the link in your confirmation email."}</p>}
         {token && error && <button className="outline" onClick={() => void refresh()}>Try again</button>}
-        <a href="/">Back to Print with Poppy</a>
       </main>
     );
   const labels: Record<string, string> = {

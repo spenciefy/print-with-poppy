@@ -1975,3 +1975,29 @@ header {
 .order-heading > p:last-child { font-size: 16px; margin: 12px 0 0; line-height: 1.5; }
 .order-message { padding-top: 12px; }
 .shipment { border-top: 0; padding-top: 0; }
+
+.order-loading-photos {
+  display: flex;
+  gap: 14px;
+  padding: 12px 0;
+  margin: 0 0 22px;
+}
+.order-loading-photos img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border: 4px solid white;
+  box-shadow: 0 2px 4px rgb(48 41 31 / 7%);
+  transform: rotate(var(--photo-tilt));
+  animation: poppy-loading-wave 1.8s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+.order-loading-photos img:nth-child(1) { --photo-tilt: -6deg; }
+.order-loading-photos img:nth-child(2) { --photo-tilt: 3deg; animation-delay: .18s; }
+.order-loading-photos img:nth-child(3) { --photo-tilt: -3deg; animation-delay: .36s; }
+@keyframes poppy-loading-wave {
+  0%, 55%, 100% { transform: translateY(0) rotate(var(--photo-tilt)); }
+  25% { transform: translateY(-10px) rotate(0deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .order-loading-photos img { animation: none; }
+}
