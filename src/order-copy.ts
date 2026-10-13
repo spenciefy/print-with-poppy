@@ -7,7 +7,7 @@ export function orderSubtitle(status: string) {
     case "paid":
     case "submitted":
     case "printing":
-      return "We’ll email you when your prints ship.";
+      return "We’ll email you when the printer confirms dispatch.";
     case "partially_shipped":
       return "Part of your order has shipped. See each package below.";
     case "shipped":
@@ -19,4 +19,9 @@ export function orderSubtitle(status: string) {
     default:
       return "Check below for the latest order status.";
   }
+}
+
+/** Do not present planned routing or empty tracking placeholders as shipment news. */
+export function visibleShipment(s: { status?: string; tracking?: { number?: string; url?: string } }) {
+  return s.status === "Shipped" || s.status === "Cancelled" || !!s.tracking?.number || !!s.tracking?.url;
 }

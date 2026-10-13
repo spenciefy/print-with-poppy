@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 import Demo from "./Demo";
-import { orderSubtitle } from "./order-copy";
+import { orderSubtitle, visibleShipment } from "./order-copy";
 import { productOf, shippingSummary, orderProducts, orderLabel } from "./offer";
 type Config = { environment?: string; mode: string; origin: string; support: string };
 const money = (c: number) =>
@@ -778,26 +778,17 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
         <a href="/">Back to Print with Poppy</a>
       </main>
     );
-  const stages = ["paid", "printing", "shipped"];
   const labels: Record<string, string> = {
     awaiting_payment: "Payment pending.",
     expired: "This checkout has expired.",
-    paid: "Your print order has been placed.",
-    submitted: "Your print order has been placed.",
-    printing: "Your print order has been placed.",
+    paid: "Your order is confirmed.",
+    submitted: "Your order is confirmed.",
+    printing: "Your order is confirmed.",
     partially_shipped: "Your prints are on their way.",
     shipped: "Your prints have shipped.",
     attention: "Your order needs attention.",
     cancelled: "An update on your order.",
   };
-  const step =
-    order.status === "shipped"
-      ? 2
-      : ["printing", "submitted", "partially_shipped"].includes(order.status)
-        ? 1
-        : order.paidAt
-          ? 0
-          : -1;
   return (
     <main className="order-shell">
       {order.demo && (
@@ -868,20 +859,6 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
             </section>
           ) : (
             <>
-              <ol className="order-progress">
-                {stages.map((s, i) => (
-                  <li className={i <= step ? "complete" : ""} key={s}>
-                    <span>{i <= step ? "✓" : i + 1}</span>
-                    {
-                      [
-                        order.quote.total === 0 ? "Free order confirmed" : "Payment received",
-                        "At the print lab",
-                        "Shipped to you",
-                      ][i]
-                    }
-                  </li>
-                ))}
-              </ol>
               {order.issue && <p className="error">{order.issue}</p>}
               {order.status === "expired" && (
                 <p>
@@ -897,25 +874,17 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
                 ) : (
                   <p>Preparing your checkout…</p>
                 ))}
-              {order.shipments.map((s: any) => (
+              {order.shipments.filter(visibleShipment).map((s: any) => (
                 <div className="shipment" key={s.id}>
                   <h3>
                     {s.status === "Shipped"
                       ? "Your package has shipped."
                       : s.status === "Cancelled"
                         ? "Shipment cancelled."
-                        : "Not yet shipped."}
+                        : "Tracking available."}
                   </h3>
-                  <p>
-                    {s.carrier?.name
-                      ? `${s.status === "Shipped" ? "Carrier" : "Planned carrier"}: ${s.carrier.name}`
-                      : "Carrier not assigned"}
-                  </p>
-                  <p>
-                    {s.tracking?.number
-                      ? `Tracking: ${s.tracking.number}`
-                      : "Tracking isn’t available for this shipment yet."}
-                  </p>
+                  {s.status === "Shipped" && s.carrier?.name && <p>Carrier: {s.carrier.name}</p>}
+                  {s.tracking?.number && <p>Tracking: {s.tracking.number}</p>}
                   {s.tracking?.url && (
                     <a
                       className="text-link"

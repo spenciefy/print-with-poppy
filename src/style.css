@@ -1962,3 +1962,16 @@ header {
 .order-heading { padding: 24px 0; }
 
 .enlargement-preview img { display: block; width: 80%; height: auto; aspect-ratio: 4 / 5; object-fit: cover; margin: auto; border: 8px solid white; box-sizing: border-box; }
+
+/* Order status stays quiet and readable, including loading/error states. */
+.order-message h1, .order-heading h1 {
+  font-family: Hanken, sans-serif;
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+.order-heading { padding: 12px 0 28px; }
+.order-heading > p:last-child { font-size: 16px; margin: 12px 0 0; line-height: 1.5; }
+.order-message { padding-top: 12px; }
+.shipment { border-top: 0; padding-top: 0; }

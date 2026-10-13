@@ -36,3 +36,14 @@ test("email escapes recipient details and refuses unsafe tracking links", () => 
   assert.ok(!message.html.includes("<script>")); assert.ok(!message.html.includes("javascript:"));
   assert.ok(message.html.includes("&lt;track&gt;"));
 });
+
+test("confirmation uses saved prices and plain copy with shipping included", () => {
+  const o = sampleOrder("poster");
+  o.quote.subtotal = 3100; o.quote.total = 3100;
+  const m = emailFor(o, "email-confirmation");
+  assert.match(m.html, /Your order is confirmed/);
+  assert.match(m.html, /Included/);
+  assert.match(m.html, /\$31\.00/);
+  assert.ok(!m.html.includes("$28.00"));
+  assert.ok(!m.html.includes("memories"));
+});
