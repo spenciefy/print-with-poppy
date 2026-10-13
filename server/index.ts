@@ -303,6 +303,10 @@ app.get("/api/order-view/:id", (req, res) => {
   const o = requireRecord<Order>("order", String(req.params.id));
   if (!equal(req.get("X-Order-Token") || "", o.viewToken))
     throw new HttpError(404, "not_found", "Order not found.");
+  if (!config.demo && o.checkoutId && !o.paidAt && o.status === "awaiting_payment") {
+    enqueue("payment-sync", o.id, `payment-sync:${o.id}:${Math.floor(Date.now() / 60000)}:view`);
+    void tick();
+  }
   res.json({
     ...orderView(o),
     emails: config.demo
