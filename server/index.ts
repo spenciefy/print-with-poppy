@@ -157,7 +157,7 @@ app.get("/api/catalog", (_req, res) =>
     country: "US",
     tax: "Added before approval",
     deliveryEstimate: offer.delivery,
-    oneProductPerOrder: true,
+    oneProductPerOrder: false,
     mode: config.APP_MODE,
     environment: config.agentSandbox ? "agent-sandbox" : config.APP_MODE,
     sandboxEmailDelivery: config.agentSandbox && config.sandboxEmailDelivery,

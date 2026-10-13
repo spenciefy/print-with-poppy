@@ -1,3 +1,4 @@
+import { itemProduct } from "../src/offer.js";
 import { z } from "zod";
 const short = z.string().trim().min(1).max(150);
 export const addressSchema = z
@@ -21,6 +22,7 @@ export const proposalSchema = z
       .array(
         z
           .object({
+            product: z.enum(["prints", "poster"]).optional(),
             photoId: short,
             quantity: z.number().int().min(1).max(100),
             fit: z.enum(["contain", "cover"]).default("cover"),
@@ -28,18 +30,17 @@ export const proposalSchema = z
           .strict(),
       )
       .min(1)
-      .max(100),
+      .max(101),
   })
   .strict()
   .refine(
-    (x) => x.items.reduce((s, i) => s + i.quantity, 0) <= 100,
+    (x) => x.items.filter(i => itemProduct(x, i) === "prints").reduce((s, i) => s + i.quantity, 0) <= 100,
     "Maximum 100 prints per order.",
   )
   .refine(
     (x) =>
-      x.product !== "poster" ||
-      (x.items.length === 1 && x.items[0].quantity === 1),
-    "Choose one photo and one copy per poster order. Order photo prints separately.",
+      x.items.filter(i => itemProduct(x, i) === "poster").reduce((s, i) => s + i.quantity, 0) <= 1,
+    "Maximum one poster per order. Photo prints can be included in the same order.",
   );
 export type Proposal = z.infer<typeof proposalSchema>;
 export interface Session {
@@ -86,6 +87,7 @@ export interface Quote extends Proposal {
   shippingMethod: string;
   summary: string;
   previews: {
+    product?: "prints" | "poster";
     photoId: string;
     url: string;
     name: string;

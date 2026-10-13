@@ -1559,3 +1559,72 @@ test("shared coupon allows exactly ten distinct approved orders and retries do n
   redeemCoupon(code, "shared-order-0", 1500);
   assert.equal(store.get("coupon", store.hash(code)).orderIds.length, 10);
 });
+
+test("mixed products share pricing, checkout and fulfillment without losing product-specific artwork", async () => {
+  const f = await fixture();
+  const proposal = { ...f.proposal, items: [
+    { photoId: f.photo.id, product: "prints", quantity: 5, fit: "cover" },
+    { photoId: f.photo.id, product: "poster", quantity: 1, fit: "contain" },
+  ] };
+  const send = (body: unknown) => f.a.request("/api/orders", {
+    method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() }, body: JSON.stringify(body),
+  });
+  assert.equal((await send({ ...proposal, items: [proposal.items[0], { ...proposal.items[1], quantity: 2 }] })).status, 400);
+  assert.equal((await send({ ...proposal, items: [{ ...proposal.items[0], quantity: 101 }, proposal.items[1]] })).status, 400);
+  const response = await send(proposal);
+  assert.equal(response.status, 202, JSON.stringify(response.body));
+  const op = response.body.operation;
+  assert.equal(op.terms.subtotal, 4700);
+  assert.equal(op.terms.shipping, 0);
+  assert.deepEqual(op.terms.previews.map((p: any) => p.product), ["prints", "poster"]);
+  assert.match(op.terms.previews[1].url, /poster-contain/);
+  assert.match(op.summary, /5 × 4 × 6 photo prints/);
+  assert.match(op.summary, /1 × 12 × 16 matte print/);
+  await commerce.confirm(op.operation_id, f.a.session.session_id, 1, "user");
+  await worker.tick();
+  const persisted = commerce.readOperation(op.operation_id, f.a.session.session_id);
+  const order = store.get("order", persisted.orderId!);
+  const { emailFor } = await import("../server/email.js");
+  const email = emailFor(order, "email-confirmation");
+  assert.match(email.html, /Photo prints/);
+  assert.match(email.html, /Poster print/);
+  const { config } = await import("../server/config.js");
+  const providers = await import("../server/providers.js");
+  const originalFetch = globalThis.fetch;
+  const originalTax = providers.stripe!.tax.calculations.create;
+  const originalCheckout = providers.stripe!.checkout.sessions.create;
+  let fulfillment: any, checkout: any, quoteCalls = 0;
+  try {
+    config.demo = false;
+    globalThis.fetch = (async (url: any, init: any) => {
+      if (String(url).includes("/products/")) return Response.json({ outcome: "Ok", product: { attributes: { finish: ["lustre"], paperType: ["EMA"], substrateWeight: ["200gsm"] } } });
+      const body = JSON.parse(init.body);
+      assert.deepEqual(body.items.map((i: any) => i.sku), ["GLOBAL-PHO-4X6", "GLOBAL-FAP-12X16"]);
+      if (String(url).endsWith("/quotes")) {
+        quoteCalls++;
+        return Response.json({ outcome: "Created", quotes: [{ shipmentMethod: "Budget", costSummary: { items: { amount: "16", currency: "USD" }, shipping: { amount: "10", currency: "USD" } } }] });
+      }
+      fulfillment = body;
+      return Response.json({ outcome: "Created", order: { id: "mixed-contract" } });
+    }) as any;
+    providers.stripe!.tax.calculations.create = (async (params: any) => ({ id: "tax_mixed", amount_total: params.line_items[0].amount, tax_amount_exclusive: 0 })) as any;
+    providers.stripe!.checkout.sessions.create = (async (params: any) => { checkout = params; return { id: "cs_mixed", url: "https://checkout.example/mixed", expires_at: 1 }; }) as any;
+    const price = await providers.getPrice(proposal as any);
+    assert.equal(price.subtotal, 4700);
+    assert.equal(price.shipping, 0);
+    assert.equal(quoteCalls, 1);
+    await providers.checkout(order);
+    assert.equal(checkout.line_items.reduce((n: number, i: any) => n + i.price_data.unit_amount * i.quantity, 0), order.quote.total);
+    assert.equal(checkout.line_items.filter((i: any) => i.price_data.product_data.name === "Home delivery").length, 0);
+    await providers.submitPrint(order);
+    assert.deepEqual(fulfillment.items.map((i: any) => i.copies), [5, 1]);
+    assert.notEqual(fulfillment.items[0].merchantReference, fulfillment.items[1].merchantReference);
+    assert.match(fulfillment.items[1].assets[0].url, /poster-contain/);
+    assert.deepEqual(fulfillment.items[1].attributes, { paperType: "EMA", substrateWeight: "200gsm" });
+  } finally {
+    config.demo = true;
+    globalThis.fetch = originalFetch;
+    providers.stripe!.tax.calculations.create = originalTax;
+    providers.stripe!.checkout.sessions.create = originalCheckout;
+  }
+});

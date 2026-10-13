@@ -72,3 +72,13 @@ export const catalog = [
     maxQuantity: 1,
   },
 ];
+
+export type ProductOrder = { product?: Product; items: { product?: Product; quantity: number }[] };
+export const itemProduct = (order: { product?: Product }, item: { product?: Product }): Product => item.product ?? order.product ?? "prints";
+export function orderProducts(order: ProductOrder) {
+  return (["prints", "poster"] as const).flatMap(product => {
+    const quantity = order.items.filter(i => itemProduct(order, i) === product).reduce((n, i) => n + i.quantity, 0);
+    return quantity ? [{ product, quantity, subtotal: product === "prints" ? printSubtotal(quantity) : posterPrice * quantity, ...products[product] }] : [];
+  });
+}
+export const orderLabel = (order: ProductOrder) => orderProducts(order).map(p => `${p.quantity} × ${p.name}`).join(" + ");

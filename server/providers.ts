@@ -7,6 +7,9 @@ import {
   shippingPrice,
   posterPrice,
   productOf,
+  itemProduct,
+  orderProducts,
+  orderLabel,
   mediaVariant,
 } from "../src/offer.js";
 import { config, sandboxEmailEnabled } from "./config.js";
@@ -61,11 +64,8 @@ const cents = (m: any) => {
   return Math.round(Number(m.amount) * 100);
 };
 export async function getPrice(p: Proposal) {
-  const selected = productOf(p);
-  const subtotal =
-    p.product === "poster"
-      ? posterPrice
-      : printSubtotal(p.items.reduce((n, i) => n + i.quantity, 0));
+  const groups = orderProducts(p);
+  const subtotal = groups.reduce((sum, group) => sum + group.subtotal, 0);
   const shipping = shippingPrice(subtotal);
   const promotion = coupon(p.couponCode);
   const discounts = discountedAmounts(subtotal, shipping, promotion?.percent, promotion?.maxAmount);
@@ -76,6 +76,7 @@ export async function getPrice(p: Proposal) {
     return { subtotal, shipping, ...discounts, tax, total: netSubtotal + netShipping + tax };
   }
   // Verify the exact finish is available for the selected SKU/destination, rather than guessing attributes.
+  for (const selected of groups) {
   const product = await prodigi(`/products/${selected.sku}`);
   const details = product.product;
   if (
@@ -88,14 +89,15 @@ export async function getPrice(p: Proposal) {
       "product_not_configured",
       "The configured finish is not supported by the product.",
     );
+  }
   const q = await prodigi("/quotes", {
     shippingMethod: config.shipping,
     destinationCountryCode: p.address.country,
     currencyCode: "USD",
     items: p.items.map((i) => ({
-      sku: selected.sku,
+      sku: productOf({ product: itemProduct(p, i) }).sku,
       copies: i.quantity,
-      attributes: selected.attributes,
+      attributes: productOf({ product: itemProduct(p, i) }).attributes,
       assets: [{ printArea: "default" }],
     })),
   });
@@ -196,7 +198,7 @@ export async function checkout(order: Order) {
             currency: "usd",
             unit_amount: q.subtotal - (q.printDiscount || 0),
             product_data: {
-              name: productOf(q).name,
+              name: orderLabel(q),
               description: `${q.items.reduce((s, i) => s + i.quantity, 0)} prints · ${q.finish} · delivered to ${q.address.name}`,
             },
           },
@@ -246,7 +248,6 @@ export async function submitPrint(order: Order) {
       shipments: [],
     };
   const q = order.quote;
-  const selected = productOf(q);
   const result = await prodigi("/orders", {
     merchantReference: order.id,
     idempotencyKey: order.id,
@@ -264,16 +265,16 @@ export async function submitPrint(order: Order) {
         countryCode: q.address.country,
       },
     },
-    items: q.items.map((i) => ({
-      merchantReference: i.photoId,
-      sku: selected.sku,
+    items: q.items.map((i, index) => ({
+      merchantReference: `${i.photoId}:${index}`,
+      sku: productOf({ product: itemProduct(q, i) }).sku,
       copies: i.quantity,
       sizing: "fillPrintArea",
-      attributes: selected.attributes,
+      attributes: productOf({ product: itemProduct(q, i) }).attributes,
       assets: [
         {
           printArea: "default",
-          url: mediaUrl(i.photoId, mediaVariant(q.product, i.fit), 7 * 86400),
+          url: mediaUrl(i.photoId, mediaVariant(itemProduct(q, i), i.fit), 7 * 86400),
         },
       ],
     })),

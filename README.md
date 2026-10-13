@@ -84,7 +84,7 @@ The card stays at **Stripe-hosted Checkout**. An agent with an authorized card m
 
 ## Prices, email and delivery
 
-- US/USD only. 4×6 lustre photo prints (up to 100 per order), or one 12×16 matte poster print for $35. Products are ordered separately.
+- US/USD only. 4×6 lustre photo prints (up to 100 per order), or one 12×16 matte poster print for $35. Both products can share one order and checkout. Shipping is calculated once on the combined subtotal ($5, or free at $25 before tax). Set `product: "prints"` or `product: "poster"` on each item; the top-level `product` remains the default for older clients. Fulfillment may use separate packages.
 - $12 for 1–5 prints, then $0.50 per additional print through 100. US Budget shipping is $5 below a $25 merchandise subtotal and free at $25 or more; customer tax is added before approval. Shared constants in `src/offer.ts` power the site and quotes. Supplier costs, conservative tax/fee allowances and a $1 operating reserve that exceed pre-tax revenue stop the quote instead of silently increasing the price. See [pricing research](docs/PRICING-RESEARCH.md).
 - Quotes expire in 15 minutes. The approved checkout expires roughly one hour after creation. Changing address/photos/quantities requires a new proposal and fresh approval.
 - Payment confirmation email contains the full shipping address, total, order link and available estimate. Every shipped package gets a shipment email; newly available tracking generates an update. All packages remain visible on the order page.

@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import "./style.css";
 import Demo from "./Demo";
 import { orderSubtitle } from "./order-copy";
-import { productOf, shippingSummary } from "./offer";
+import { productOf, shippingSummary, orderProducts, orderLabel } from "./offer";
 type Config = { environment?: string; mode: string; origin: string; support: string };
 const money = (c: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -285,8 +285,7 @@ function Footer({ compact = false }: { compact?: boolean }) {
             <p>
               Allow an estimated 7–12 business days after payment for US home
               delivery. This is a planning estimate, not a guaranteed arrival
-              date. We email confirmation and tracking when available. Photo
-              prints and larger prints are ordered separately.
+              date. We email confirmation and tracking when available. Both products can share one order and shipping fee, but may arrive in separate packages.
             </p>
           </Faq>
         </div>
@@ -415,7 +414,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
         </article>
       </div>
       <p className="store-delivery">
-        Currently shipping within the United States only. {shippingSummary} Tax shown before approval.
+        Currently shipping within the United States only. {shippingSummary} Combine both products in one order. Tax shown before approval.
         <br />
         {sandbox ? "Illustrative prices and delivery estimates only. Nothing will be printed or shipped." : "Estimated delivery: 7–12 business days after payment."}
       </p>
@@ -534,8 +533,7 @@ function Guide({ config }: { config: Config }) {
       <p>
         Read <code>GET /api/catalog</code>. Only attempt a real payment when{" "}
         <code>mode</code> is <code>live</code>. Choose <code>prints</code> for
-        4×6 lustre photos or <code>poster</code> for one 12×16 matte print. One
-        product per order; read prices and quantity limits from the catalog.
+        4×6 lustre photos or <code>poster</code> for one 12×16 matte print. Both products can share one order: set product on each item. Shipping applies once to the combined subtotal; items may arrive separately. Read prices and quantity limits from the catalog.
       </p>
       <h2>2. Start a session</h2>
       <p>
@@ -679,15 +677,12 @@ function OrderSummary({ quote: q }: { quote: any }) {
   return (
     <>
       <p className="eyebrow">ORDER SUMMARY</p>
-      <h3>{q.items.reduce((n: number, i: any) => n + i.quantity, 0)} prints</h3>
+      <h3>{q.items.reduce((n: number, i: any) => n + i.quantity, 0)} {orderProducts(q).length > 1 ? "items" : "prints"}</h3>
       <p className="muted">
-        {productOf(q).name} · {q.finish}
+        {orderLabel(q)} · {q.finish}
       </p>
       <dl className="price-list">
-        <div>
-          <dt>Photo prints</dt>
-          <dd>{money(q.subtotal)}</dd>
-        </div>
+        {orderProducts(q).map(group => <div key={group.product}><dt>{group.label} × {group.quantity}</dt><dd>{money(group.subtotal)}</dd></div>)}
         <div>
           <dt>Home delivery</dt>
           <dd>{q.shipping === 0 ? "Included" : money(q.shipping)}</dd>
@@ -920,11 +915,11 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
                 </div>
               ))}
               <div className="photo-grid">
-                {order.quote.previews.map((p: any) => (
-                  <figure key={p.photoId}>
+                {order.quote.previews.map((p: any, index: number) => (
+                  <figure key={`${p.photoId}:${index}`}>
                     <img src={p.url} alt={p.name} />
                     <figcaption>
-                      {p.quantity} × {p.name}
+                      {p.quantity} × {p.name} · {productOf({ product: p.product ?? order.quote.product }).label}
                     </figcaption>
                   </figure>
                 ))}
