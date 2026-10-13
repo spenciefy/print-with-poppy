@@ -1711,3 +1711,24 @@ test("cost guard blocks supplier increases before checkout and fulfillment while
     await assert.rejects(prodigi("/orders", {}), (e: any) => e.code === "fulfillment_rejected" && e.message.includes("recipient.address.line2") && !e.message.includes("private-address"));
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("native Poppy supports square and 8x10 items with correctly sized approved previews", async () => {
+  const f = await fixture();
+  const response = await f.a.request("/api/orders", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() }, body: JSON.stringify({ ...f.proposal, items: [
+    { photoId: f.photo.id, product: "square", quantity: 5, fit: "cover" },
+    { photoId: f.photo.id, product: "enlargement", quantity: 1, fit: "contain" },
+  ] }) });
+  assert.equal(response.status, 202, JSON.stringify(response.body));
+  const q = response.body.operation.terms;
+  assert.equal(q.subtotal, 2400);
+  assert.equal(q.shipping, 500);
+  assert.match(q.summary, /4 × 4/);
+  assert.match(q.summary, /8 × 10/);
+  for (const [index, width, height] of [[0, 1200, 1200], [1, 3000, 2400]]) {
+    const image = await fetch(q.previews[index].url);
+    assert.equal(image.status, 200);
+    const meta = await sharp(Buffer.from(await image.arrayBuffer())).metadata();
+    assert.equal(meta.width, width);
+    assert.equal(meta.height, height);
+  }
+});

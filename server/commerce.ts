@@ -72,7 +72,7 @@ export async function propose(body: unknown, session: Session, key: string) {
   const photos = p.items.map((i) => ownedPhoto(i.photoId, session.id));
   const groups = orderProducts(p);
   for (const [n, item] of p.items.entries()) {
-    if (itemProduct(p, item) === "poster") await preparePoster(photos[n], item.fit);
+    if (itemProduct(p, item) !== "prints") await preparePoster(photos[n], item.fit, itemProduct(p, item));
   }
   const price = await getPrice(p);
   const created = Date.now();

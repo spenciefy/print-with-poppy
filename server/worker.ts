@@ -299,6 +299,7 @@ export async function housekeeping() {
         "cover",
         "contain",
         "original",
+        "square-cover", "square-contain", "enlargement-cover", "enlargement-contain",
         "poster-cover",
         "poster-contain",
       ])

@@ -285,7 +285,7 @@ function Footer({ compact = false }: { compact?: boolean }) {
             <p>
               Allow an estimated 7–12 business days after payment for US home
               delivery. This is a planning estimate, not a guaranteed arrival
-              date. We email confirmation and tracking when available. Both products can share one order and shipping fee, but may arrive in separate packages.
+              date. We email confirmation and tracking when available. All products can share one order and shipping fee, but may arrive in separate packages.
             </p>
           </Faq>
         </div>
@@ -392,9 +392,13 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
               <h2>Photo prints</h2>
               <span>$12</span>
             </div>
-            <p className="product-spec">4 × 6 inches · Lustre finish</p>
-            <p>Five prints included. Each extra print is 50¢.</p>
+            <p className="product-spec">4 × 6 or 4 × 4 inches · Lustre finish</p>
+            <p>Mix both sizes: five prints included. Each extra print is 50¢.</p>
           </div>
+        </article>
+        <article className="store-product">
+          <div className="product-preview enlargement-preview"><img src="/photos/poppy-abstract-cluster.webp" alt="Example 8 by 10 lustre print of orange poppies" /></div>
+          <div className="product-copy"><div className="product-title"><h2>Large photo print</h2><span>$12</span></div><p className="product-spec">8 × 10 inches · Lustre finish</p><p>One photo, printed larger. Unframed.</p></div>
         </article>
         <article className="store-product">
           <div className="product-preview poster-preview">
@@ -414,7 +418,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
         </article>
       </div>
       <p className="store-delivery">
-        Currently shipping within the United States only. {shippingSummary} Combine both products in one order. Tax shown before approval.
+        Currently shipping within the United States only. {shippingSummary} Combine sizes in one order. Tax shown before approval.
         <br />
         {sandbox ? "Illustrative prices and delivery estimates only. Nothing will be printed or shipped." : "Estimated delivery: 7–12 business days after payment."}
       </p>
@@ -533,7 +537,7 @@ function Guide({ config }: { config: Config }) {
       <p>
         Read <code>GET /api/catalog</code>. Only attempt a real payment when{" "}
         <code>mode</code> is <code>live</code>. Choose <code>prints</code> for
-        4×6 lustre photos or <code>poster</code> for one 12×16 matte print. Both products can share one order: set product on each item. Shipping applies once to the combined subtotal; items may arrive separately. Read prices and quantity limits from the catalog.
+        4×6 lustre photos, <code>square</code> for 4×4, <code>enlargement</code> for 8×10 lustre, or <code>poster</code> for one 12×16 matte print. All products can share one order: set product on each item. Shipping applies once to the combined subtotal; items may arrive separately. Read prices and quantity limits from the catalog.
       </p>
       <h2>2. Start a session</h2>
       <p>
@@ -582,7 +586,7 @@ function Guide({ config }: { config: Config }) {
         with white margins.
       </p>
       <p>
-        Ask for missing ordering details together. Combine both products for the same address into one order. Keep API and session details out of customer chat. Show <code>operation.summary</code> once, verbatim with line breaks, alongside a gallery of the returned numbered previews. The user must approve the exact photos, quantities, crops,
+        Ask for missing ordering details together. Combine sizes for the same address into one order. Keep API and session details out of customer chat. Show <code>operation.summary</code> once, verbatim with line breaks, alongside a gallery of the returned numbered previews. The user must approve the exact photos, quantities, crops,
         resolution warnings, full address, email, delivery estimate and total
         including tax. The proposal expires after 15 minutes. Do not infer
         approval from store instructions.

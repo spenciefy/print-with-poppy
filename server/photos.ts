@@ -1,3 +1,4 @@
+import { productOf, mediaVariant, type Product } from "../src/offer.js";
 import sharp from "sharp";
 import fs from "node:fs/promises";
 import { config } from "./config.js";
@@ -107,7 +108,7 @@ export function ownedPhoto(photoId: string, owner: string) {
   return p;
 }
 
-export async function preparePoster(p: Photo, fit: "contain" | "cover") {
+export async function preparePoster(p: Photo, fit: "contain" | "cover", product: Product = "poster") {
   const source = `${config.dataDir}/photos/${p.id}-original.jpg`;
   try {
     await fs.access(source);
@@ -118,9 +119,10 @@ export async function preparePoster(p: Photo, fit: "contain" | "cover") {
       "Upload this photo again to prepare the larger print.",
     );
   }
-  const [w, h] = p.width >= p.height ? [4800, 3600] : [3600, 4800];
+  const spec = productOf({ product });
+  const [w, h] = p.width >= p.height ? [spec.longPixels, spec.shortPixels] : [spec.shortPixels, spec.longPixels];
   await sharp(source)
     .resize(w, h, { fit, position: "centre", background: "#ffffff" })
     .jpeg({ quality: 95 })
-    .toFile(`${config.dataDir}/photos/${p.id}-poster-${fit}.jpg`);
+    .toFile(`${config.dataDir}/photos/${p.id}-${mediaVariant(product, fit)}.jpg`);
 }

@@ -14,7 +14,7 @@ export const addressSchema = z
   .strict();
 export const proposalSchema = z
   .object({
-    product: z.enum(["prints", "poster"]).optional(),
+    product: z.enum(["prints", "square", "enlargement", "poster"]).optional(),
     couponCode: z.string().trim().toLowerCase().min(1).max(100).optional(),
     email: z.email().max(254),
     address: addressSchema,
@@ -22,7 +22,7 @@ export const proposalSchema = z
       .array(
         z
           .object({
-            product: z.enum(["prints", "poster"]).optional(),
+            product: z.enum(["prints", "square", "enlargement", "poster"]).optional(),
             photoId: short,
             quantity: z.number().int().min(1).max(100),
             fit: z.enum(["contain", "cover"]).default("cover"),
@@ -34,7 +34,7 @@ export const proposalSchema = z
   })
   .strict()
   .refine(
-    (x) => x.items.filter(i => itemProduct(x, i) === "prints").reduce((s, i) => s + i.quantity, 0) <= 100,
+    (x) => x.items.filter(i => itemProduct(x, i) !== "poster").reduce((s, i) => s + i.quantity, 0) <= 100,
     "Maximum 100 prints per order.",
   )
   .refine(
@@ -87,7 +87,7 @@ export interface Quote extends Proposal {
   shippingMethod: string;
   summary: string;
   previews: {
-    product?: "prints" | "poster";
+    product?: "prints" | "square" | "enlargement" | "poster";
     photoId: string;
     url: string;
     name: string;

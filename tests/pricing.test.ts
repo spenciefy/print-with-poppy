@@ -41,3 +41,12 @@ test("all supported quantities cover conservative quoted costs on both sides of 
   assert.ok(contributionBudget(1700, 204, 795, 1000) < 0);
   assert.ok(contributionBudget(1700, 10000, 795, 0) < 0);
 });
+
+import { orderProducts } from "../src/offer.js";
+test("square and standard prints share one minimum while 8x10 prints cost $12 each", () => {
+  const groups = orderProducts({ items: [{ product: "prints", quantity: 3 }, { product: "square", quantity: 3 }, { product: "enlargement", quantity: 1 }] });
+  assert.equal(groups.reduce((n, g) => n + g.subtotal, 0), 2450);
+  assert.equal(groups.find(g => g.product === "enlargement")!.subtotal, 1200);
+  assert.equal(orderProducts({ items: [{ product: "square", quantity: 5 }] })[0].subtotal, 1200);
+  assert.ok(contributionBudget(1700, 204, 870, 0) > 0);
+});

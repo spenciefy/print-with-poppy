@@ -158,6 +158,8 @@ app.get("/api/catalog", (_req, res) =>
     tax: "Added before approval",
     deliveryEstimate: offer.delivery,
     oneProductPerOrder: false,
+    smallPrintBundle: { products: ["prints", "square"], minimumPrice: 1200, includedQuantity: 5, additionalPrintPrice: 50 },
+    maxPhotoPrints: 100,
     mode: config.APP_MODE,
     environment: config.agentSandbox ? "agent-sandbox" : config.APP_MODE,
     sandboxEmailDelivery: config.agentSandbox && config.sandboxEmailDelivery,
@@ -268,7 +270,7 @@ app.get("/media/:id/:fit", (req, res) => {
     sig = String(req.query.sig || "");
   if (
     !/^photo_[A-Za-z0-9_-]+$/.test(photoId) ||
-    !["contain", "cover", "poster-contain", "poster-cover"].includes(fit) ||
+    !["contain", "cover", "poster-contain", "poster-cover", "square-contain", "square-cover", "enlargement-contain", "enlargement-cover"].includes(fit) ||
     !/^\d+$/.test(exp) ||
     Number(exp) < Date.now() / 1000 ||
     !equal(sig, sign(`${photoId}:${fit}:${exp}`))
