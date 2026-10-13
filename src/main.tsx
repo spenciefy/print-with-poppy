@@ -242,6 +242,15 @@ function Footer({ compact = false }: { compact?: boolean }) {
         </div>
         <div className="store-faq">
           <h2>FAQ</h2>
+          <Faq title="This seems expensive for just photo prints.">
+            <p>
+              For small orders, shipping costs more than printing the photos.
+              That cost is spread across more prints when you order more, so
+              the price per print comes down. I’m aiming to run this close to
+              break-even, with around $1–$2 left per order after printing,
+              shipping and fees.
+            </p>
+          </Faq>
           <Faq title="Does this work with Muse or Instinct?">
             <p>
               There are two integration paths: native Poppy sessions and a plain
