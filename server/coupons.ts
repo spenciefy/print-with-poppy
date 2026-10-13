@@ -3,10 +3,10 @@ import { db, get, put, hash, HttpError } from "./store.js";
 export interface Coupon { percent: number; created: number; orderId?: string }
 const peaks = ["mountwhitney", "mountshasta", "mountrainier", "mountbaker", "mountadams", "mounthood", "mountelbert", "longspeak", "pikespeak", "mountlangley"];
 export function generateCoupons(count: number, percent: number) {
-  if (!Number.isInteger(count) || count < 1 || count > 100 || !Number.isInteger(percent) || percent < 1 || percent > 100)
-    throw new Error("Use count 1–100 and percent 1–100.");
+  if (!Number.isInteger(count) || count < 1 || count > peaks.length || !Number.isInteger(percent) || percent < 1 || percent > 100)
+    throw new Error("Use count 1–10 and percent 1–100.");
   return db.transaction(() => Array.from({ length: count }, (_, i) => {
-    const code = `${peaks[i % peaks.length]}-${randomBytes(6).toString("hex")}`;
+    const code = `${peaks[i]}-${randomBytes(6).toString("hex")}`;
     put("coupon", hash(code), { percent, created: Date.now() } satisfies Coupon);
     return code;
   }))();
