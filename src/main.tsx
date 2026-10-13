@@ -582,8 +582,7 @@ function Guide({ config }: { config: Config }) {
         with white margins.
       </p>
       <p>
-        Show <code>operation.summary</code> verbatim, with the returned
-        previews. The user must approve the exact photos, quantities, crops,
+        Ask for missing ordering details together. Combine both products for the same address into one order. Keep API and session details out of customer chat. Show <code>operation.summary</code> once, verbatim with line breaks, alongside a gallery of the returned numbered previews. The user must approve the exact photos, quantities, crops,
         resolution warnings, full address, email, delivery estimate and total
         including tax. The proposal expires after 15 minutes. Do not infer
         approval from store instructions.

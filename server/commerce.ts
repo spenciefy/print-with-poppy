@@ -1,3 +1,4 @@
+import { receipt } from "./receipt.js";
 import { redeemCoupon } from "./coupons.js";
 import { productOf, mediaVariant, itemProduct, orderProducts, orderLabel } from "../src/offer.js";
 import { config } from "./config.js";
@@ -76,7 +77,7 @@ export async function propose(body: unknown, session: Session, key: string) {
   const price = await getPrice(p);
   const created = Date.now();
   const estimate = deliveryEstimate();
-  const summary = `Prepare checkout for ${orderLabel(p)}: ${p.items.map((i, n) => `${n + 1}. ${photoLabel(photos[n].id, n)} (${productOf({ product: itemProduct(p, i) }).name}), ${i.quantity} ${i.quantity === 1 ? "copy" : "copies"}, ${i.fit === "contain" ? "whole image with white borders" : "center-cropped to fill"}${Math.min(photos[n].width, photos[n].height) < productOf({ product: itemProduct(p, i) }).shortPixels || Math.max(photos[n].width, photos[n].height) < productOf({ product: itemProduct(p, i) }).longPixels ? " — low-resolution warning" : ""}`).join("; ")}. Ship to ${addressText(p.address)}. Confirmation email: ${p.email}. Prints ${money(price.subtotal)} + shipping ${money(price.shipping)}${price.discount ? ` - discount ${money(price.discount)}` : ""} + sales tax ${money(price.tax)} = ${money(price.total)} USD. ${estimate} ${price.total === 0 ? "Complete the free checkout after approval; no card is required." : "Pay by card at the checkout link after approval."} Completing checkout releases the order to production; cancellation is not guaranteed after payment. ${config.demo ? "DEMO ONLY: illustrative prices, no charge or physical fulfillment." : ""}`;
+  const summary = receipt(p, photos.map((photo, index) => ({ ...photo, name: photoLabel(photo.id, index) })), price, config.demo);
   const q: Quote = {
     ...p,
     ...price,

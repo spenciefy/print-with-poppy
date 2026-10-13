@@ -1,3 +1,4 @@
+import { orderingGuidance } from "./agent-guidance.js";
 import type { Express, Request } from "express";
 import { config } from "./config.js";
 import { authenticate } from "./auth.js";
@@ -16,6 +17,7 @@ ${sandboxDescription}
 Origin: ${config.origin}. Test guide: ${config.origin}/sandbox. Read /api/config and require environment=agent-sandbox before simulating anything.
 1. Register your HTTPS client metadata URL with hello@printwithpoppy.com (DPA is already registered). Discover /.well-known/poppy.json and /openapi.json on this origin. Start a native signed-out Poppy session with client/session assertions and DPoP. Keep the same session for the whole order; do not use compatibility sessions.
 2. Read getCatalog. Upload sample JPEG/PNG/WebP images with uploadPhoto (multipart field photo). Use only synthetic recipient details and US addresses for test quotes.
+${orderingGuidance}
 3. Call proposeOrder with a JSON object, an Idempotency-Key, email, address, items and optional product. Show the returned summary and obtain explicit approval through your interface. Confirm the operation through the Operations extension with the approved revision; poll until succeeded. This means checkout is prepared, not paid.
 4. Call simulatePayment with result.data.order_id. No card details, Stripe visit or real payment. Poll getOrder until printing.
 5. Call simulateShipment with the same order ID, then poll getOrder and getSandboxEmails until shipped and two captured emails are available. Carrier and tracking are simulated. Order emails reach only the order email address when delivery is enabled; otherwise they are captured only. Payment/shipment simulation is safe to repeat on the same order.

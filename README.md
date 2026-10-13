@@ -155,3 +155,7 @@ One-use mountain-peak codes can sponsor part or all of an order, including shipp
 ### Order cost protection
 
 Live orders check current supplier costs at proposal, checkout creation and fulfillment. Coupon discounts are intentional merchant subsidies; ordinary orders must cover conservative costs and reserves. A cost increase after payment holds printing for review/refund. See [margin policy and combined-shipping research](docs/ORDER-MARGINS.md) for assumptions and limits.
+
+### Agent conversation
+
+Approval summaries are compact receipts: photos with matching quantities/crops are grouped, with exceptions and low-resolution warnings retained. Agents should collect missing details together, use a single mixed order for one destination, show numbered previews alongside the receipt, and keep API mechanics out of customer chat. The same guidance is published for native Poppy, HTTP compatibility, and sandbox clients. Explicit approval of the complete terms is still required. Client agents control their own UI and may not follow every presentation instruction.

@@ -738,7 +738,7 @@ test("poster catalog, approval, full-size artwork and fulfillment use the larger
   const op = response.body.operation;
   assert.equal(op.terms.subtotal, 3500);
   assert.match(op.summary, /12 × 16 matte print/);
-  assert.match(op.summary, /low-resolution warning/);
+  assert.match(op.summary, /low-resolution warning/i);
   assert.match(op.summary, /123 Market Street/);
   const imageResponse = await fetch(op.terms.previews[0].url);
   assert.equal(imageResponse.status, 200);
