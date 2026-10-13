@@ -96,7 +96,7 @@ export function openapi(compatibility = false) {
               description:
                 "One product per order. Poster requires exactly one photo and one copy.",
             },
-            couponCode: { type: "string", maxLength: 100, description: "Optional private one-use code supplied by the user. Apply before approval; the quote includes the discount and recalculated tax. Never guess codes." },
+            couponCode: { type: "string", maxLength: 100, description: "Optional private limited-use code supplied by the user. Apply before approval; the quote includes the discount and recalculated tax. Never guess codes." },
             email: { type: "string", format: "email" },
             address: ref("Address"),
             items: {
