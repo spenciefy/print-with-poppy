@@ -26,7 +26,7 @@ Sources checked: [Stripe US card pricing](https://stripe.com/en-us/pricing) (2.9
 
 The following notes are historical research and are superseded by the current policy above.
 
-> Current implementation: the smaller $12/5-print offer and $35 poster below now replace the original $20/20 offer. Both are supported by the API; live ordering still requires deployment activation. Historical comparisons remain below.
+> Historical implementation: the smaller $12/5-print offer and $35 poster below now replace the original $20/20 offer. Both are supported by the API; live ordering still requires deployment activation. Historical comparisons remain below.
 
 # Pricing and product decisions — 2026-10-11
 

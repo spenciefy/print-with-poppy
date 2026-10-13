@@ -246,9 +246,9 @@ function Footer({ compact = false }: { compact?: boolean }) {
             <p>
               For small orders, shipping costs more than printing the photos.
               That cost is spread across more prints when you order more, so
-              the price per print comes down. I’m aiming to run this close to
-              break-even, with around $1–$2 left per order after printing,
-              shipping and fees.
+              the price per print comes down. I’m aiming to run small orders
+              close to break-even, with around $1–$2 left after printing,
+              shipping and fees. Larger orders contribute a little more.
             </p>
           </Faq>
           <Faq title="Does this work with Muse or Instinct?">
@@ -294,7 +294,7 @@ function Footer({ compact = false }: { compact?: boolean }) {
             <p>
               Allow an estimated 7–12 business days after payment for US home
               delivery. This is a planning estimate, not a guaranteed arrival
-              date. We email confirmation and tracking when available. All products can share one order and shipping fee, but may arrive in separate packages.
+              date. We email confirmation and tracking when available. US shipping is included. Products can share one order but may arrive in separate packages.
             </p>
           </Faq>
         </div>
