@@ -382,8 +382,8 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   }
   const heading = (
     <div className="store-heading">
-      <h1 id="home-title">Your photos are better printed</h1>
-      <p>Use your personal agent to get photo prints delivered.</p>
+      <h1 id="home-title">You should print your photos</h1>
+      <p>Get your personal agent to deliver photo prints to your door</p>
     </div>
   );
   const productSection = (
