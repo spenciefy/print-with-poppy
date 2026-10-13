@@ -17,3 +17,5 @@ Arguments are count (1–10, with a different peak for each code in the batch) p
 Output is private: save it securely, never commit it or publish it in the catalog. The coupon registry stores hashes. Codes are redeemed atomically at approval, so competing proposals cannot spend a code twice. Retries of the approved operation reuse the same order. If a checkout is abandoned or expires, issue a replacement code only after verifying that checkout can no longer complete; codes are not automatically released while payment status might be uncertain.
 
 Sandbox and production have separate databases; generate sandbox codes separately. No live provider keys or generated codes belong in this repository.
+
+Shared campaigns can set `maxUses` on the private coupon record. Missing `maxUses` means one use. Each approval atomically reserves one use; retrying the same order does not consume another. `orderIds` records reservations; legacy `orderId` records remain supported.

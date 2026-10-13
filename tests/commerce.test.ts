@@ -1542,3 +1542,20 @@ test("coupon cap limits prints and shipping together and stale approvals cannot 
   assert.equal(price.discount, 1500);
   assert.equal(price.total, 200 + Math.round(200 * 0.0875));
 });
+
+
+test("shared coupon allows exactly ten distinct approved orders and retries do not consume uses", async () => {
+  const { coupon, redeemCoupon } = await import("../server/coupons.js");
+  const code = "shared-test-code";
+  store.put("coupon", store.hash(code), { percent: 100, maxAmount: 1500, maxUses: 10, created: Date.now() });
+  for (let n = 0; n < 10; n++) {
+    assert.equal(coupon(code)?.maxUses, 10);
+    redeemCoupon(code, `shared-order-${n}`, 1500);
+    redeemCoupon(code, `shared-order-${n}`, 1500);
+  }
+  assert.equal(store.get("coupon", store.hash(code)).orderIds.length, 10);
+  assert.throws(() => coupon(code), /already been used/);
+  assert.throws(() => redeemCoupon(code, "eleventh-order", 1500), /already been used/);
+  redeemCoupon(code, "shared-order-0", 1500);
+  assert.equal(store.get("coupon", store.hash(code)).orderIds.length, 10);
+});
