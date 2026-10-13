@@ -286,10 +286,9 @@ function Footer({ compact = false }: { compact?: boolean }) {
           </Faq>
           <Faq title="Does this work with Muse or Instinct?">
             <p>
-              There are two integration paths: native Poppy sessions and a plain
-              HTTP guest API for agents that can upload files and call APIs. The
-              guest path uses the same order approval and payment flow, but does
-              not verify the agent’s identity through Poppy.
+              Yes, but currently only through the HTTP guest API. Muse and
+              Instinct do not currently support Personal Agent Protocol, although
+              support should be coming soon as the Poppy spec is finalized.
             </p>
           </Faq>
 
@@ -334,7 +333,7 @@ function Footer({ compact = false }: { compact?: boolean }) {
               That cost is spread across more prints when you order more, so
               the price per print comes down. I’m aiming to run small orders
               close to break-even, with around $1–$2 left after printing,
-              shipping and fees. Larger orders contribute a little more.
+              shipping and fees.
             </p>
           </Faq>
         </div>
