@@ -2001,3 +2001,21 @@ header {
 @media (prefers-reduced-motion: reduce) {
   .order-loading-photos img { animation: none; }
 }
+
+.order-heading { padding-bottom: 20px; }
+.order-heading .order-reference {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.order-shell .photo-grid { margin-top: 0; }
+.order-shell .photo-grid figure { margin: 0; min-width: 0; }
+.order-shell .photo-grid figure > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  box-shadow: 0 2px 5px rgb(48 41 31 / 7%), 0 8px 20px rgb(48 41 31 / 8%);
+}
+.order-shell .photo-grid figcaption { margin-top: 10px; }

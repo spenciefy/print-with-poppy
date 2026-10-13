@@ -807,6 +807,7 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
             ? "Ready when you are."
             : labels[order.status] || "Your print order."}
         </h1>
+        <p className="order-reference">Order {order.id}</p>
         <p>
           {checkout
             ? "In a live order, your agent uses its card on Stripe’s secure checkout page."
@@ -954,7 +955,6 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
         </div>
         <aside className="order-paper">
           <OrderSummary quote={order.quote} />
-          <p className="order-id">Order {order.id}</p>
           <p className="small muted">
             After payment, printing starts automatically. Contact support
             promptly for changes; cancellation isn’t guaranteed.
