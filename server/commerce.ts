@@ -259,6 +259,7 @@ export function paid(
 }
 export function orderView(o: Order) {
   return {
+    status_url: `${config.origin}/order/${o.id}#${o.viewToken}`,
     id: o.id,
     status: o.status,
     created: o.created,

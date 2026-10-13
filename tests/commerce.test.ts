@@ -1487,6 +1487,7 @@ test("private coupons discount before approval, reserve once, and free orders fu
   assert.equal(store.get("order", order.id).status, "paid");
   assert.equal((store.db.prepare("SELECT count(*) AS n FROM jobs WHERE kind='fulfill' AND record_id=?").get(order.id) as any).n, 1);
   assert.equal(commerce.orderView(store.get("order", order.id)!).quote.couponCode, undefined);
+  assert.equal(commerce.orderView(order).status_url, `${origin}/order/${order.id}#${order.viewToken}`);
 });
 
 test("percentage coupons recalculate tax on discounted prints and shipping", async () => {

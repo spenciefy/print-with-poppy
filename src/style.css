@@ -1953,3 +1953,10 @@ header {
 
 .sandbox-banner { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 20px; padding: 12px 24px; background: #ffead6; color: #71320d; border-bottom: 1px solid #e8c6a6; font-size: 14px; text-align: center; }
 .sandbox-banner a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Status and access messages should read as receipts, not landing-page heroes. */
+.order-message { padding-top: 24px; padding-bottom: 32px; }
+.order-message h1, .order-heading h1 { font-size: clamp(28px, 3vw, 40px); line-height: 1.15; margin: 0; }
+.order-message p { max-width: 520px; font-size: 16px; line-height: 1.6; margin: 16px 0 24px; }
+.order-message > a { display: block; width: fit-content; margin-top: 20px; font-size: 15px; }
+.order-heading { padding: 24px 0; }
