@@ -1,3 +1,5 @@
+> Historical pricing research below. Superseded by the shipping-inclusive pricing in [ORDER-MARGINS.md](ORDER-MARGINS.md) and `src/offer.ts`.
+
 # Current shipping policy — 2026-10-11
 
 $12 for up to five 4×6 prints, 50¢ each extra; one 12×16 print remains $35. **$5 US shipping below $25; free at $25 or more in merchandise, before tax, per order.** Different products remain separate orders. The threshold is inclusive, so 31 small prints qualify; the wall print always qualifies.

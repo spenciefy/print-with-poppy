@@ -4,8 +4,7 @@ export const offer = {
   baseCents: 1200,
   extraPrintCents: 50,
   maxPrints: 100,
-  shippingCents: 500,
-  freeShippingMinimumCents: 2500,
+  shippingCents: 0,
   delivery:
     "Estimated delivery: 7–12 business days after payment. This is our estimate, not a guaranteed arrival date.",
 } as const;
@@ -20,11 +19,11 @@ export function printSubtotal(quantity: number) {
 export function shippingPrice(subtotal: number) {
   if (!Number.isSafeInteger(subtotal) || subtotal < 0)
     throw new RangeError("Invalid subtotal.");
-  return subtotal >= offer.freeShippingMinimumCents ? 0 : offer.shippingCents;
+  return 0;
 }
 export const shippingSummary =
-  "$5 US shipping; free on orders of $25 or more before tax.";
-export const priceSummary = `Mix 4×4 and 4×6: up to 5 prints together for $12, plus shipping. Additional prints 50¢ each, up to 100 total. ${shippingSummary} Tax added before approval. Orders with fewer than 5 prints still cost $12; we print only the quantity you approve.`;
+  "US shipping included.";
+export const priceSummary = `Mix 4×4 and 4×6: up to 5 prints together for $12, including US shipping. Additional prints 50¢ each, up to 100 total. ${shippingSummary} Tax added before approval. Orders with fewer than 5 prints still cost $12; we print only the quantity you approve.`;
 
 export const products = {
   prints: {
@@ -65,10 +64,16 @@ export const productOf = (p: { product?: Product }) =>
   products[p.product || "prints"];
 export const mediaVariant = (product: Product | undefined, fit: string) =>
   product && product !== "prints" ? `${product}-${fit}` : fit;
-export const posterPrice = 3500;
+export const posterPrice = 2800;
+export const mixedPhotoSaving = 500;
+export function enlargementSubtotal(quantity: number) {
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > offer.maxPrints)
+    throw new RangeError("Choose 1–100 prints.");
+  return quantity === 1 ? 1200 : 1750 + (quantity - 2) * 250;
+}
 export const catalog = [
   { id: "square", name: products.square.name, minimumPrice: 1200, includedQuantity: 5, additionalPrintPrice: 50, maxQuantity: 100, pricingGroup: "small-prints" },
-  { id: "enlargement", name: products.enlargement.name, price: 1200, maxQuantity: 100 },
+  { id: "enlargement", name: products.enlargement.name, minimumPrice: 1200, includedQuantity: 1, twoPrintPrice: 1750, additionalPrintPrice: 250, additionalPrintPriceAppliesAfter: 2, maxQuantity: 100 },
   {
     id: "prints",
     pricingGroup: "small-prints",
@@ -91,11 +96,11 @@ export const itemProduct = (order: { product?: Product }, item: { product?: Prod
 export function orderProducts(order: ProductOrder) {
   const quantities = Object.fromEntries(Object.keys(products).map(product => [product, order.items.filter(i => itemProduct(order, i) === product).reduce((n, i) => n + i.quantity, 0)])) as Record<Product, number>;
   const smallCount = quantities.prints + quantities.square;
-  const smallTotal = smallCount ? printSubtotal(smallCount) : 0;
+  const smallTotal = smallCount ? printSubtotal(smallCount) - (quantities.enlargement ? mixedPhotoSaving : 0) : 0;
   const printsTotal = smallCount ? Math.round(smallTotal * quantities.prints / smallCount) : 0;
   return (Object.keys(products) as Product[]).flatMap(product => {
     const quantity = quantities[product];
-    const subtotal = product === "prints" ? printsTotal : product === "square" ? smallTotal - printsTotal : product === "enlargement" ? 1200 * quantity : posterPrice * quantity;
+    const subtotal = !quantity ? 0 : product === "prints" ? printsTotal : product === "square" ? smallTotal - printsTotal : product === "enlargement" ? enlargementSubtotal(quantity) : posterPrice * quantity;
     return quantity ? [{ product, quantity, subtotal, ...products[product] }] : [];
   });
 }

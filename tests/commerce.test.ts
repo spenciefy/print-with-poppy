@@ -472,7 +472,7 @@ test("provider contracts preserve approved terms and use stable idempotency keys
       taxParams = params;
       return {
         id: "taxcalc_contract",
-        amount_total: 1805,
+        amount_total: 1305,
         tax_amount_exclusive: 105,
       };
     }) as any;
@@ -485,11 +485,11 @@ test("provider contracts preserve approved terms and use stable idempotency keys
       };
     }) as any;
     const price = await providers.getPrice(f.proposal as any);
-    assert.equal(price.total, 1805);
+    assert.equal(price.total, 1305);
     assert.equal(price.subtotal, 1200);
-    assert.equal(price.shipping, 500);
+    assert.equal(price.shipping, 0);
     assert.equal(taxParams.line_items[0].amount, 1200);
-    assert.equal(taxParams.shipping_cost.amount, 500);
+    assert.equal(taxParams.shipping_cost.amount, 0);
     assert.equal(price.tax, 105);
     assert.equal(taxParams.customer_details.address.line2, "Unit 9");
     assert.equal(taxParams.customer_details.address_source, "shipping");
@@ -707,7 +707,7 @@ test("poster catalog, approval, full-size artwork and fulfillment use the larger
   const catalog = await (await fetch(origin + "/api/catalog")).json();
   assert.equal(
     catalog.products.find((p: any) => p.id === "poster").price,
-    3500,
+    2800,
   );
   const f = await fixture();
   const proposal = {
@@ -736,7 +736,7 @@ test("poster catalog, approval, full-size artwork and fulfillment use the larger
   const response = await send(proposal);
   assert.equal(response.status, 202, JSON.stringify(response.body));
   const op = response.body.operation;
-  assert.equal(op.terms.subtotal, 3500);
+  assert.equal(op.terms.subtotal, 2800);
   assert.match(op.summary, /12 × 16 matte print/);
   assert.match(op.summary, /low-resolution warning/i);
   assert.match(op.summary, /123 Market Street/);
@@ -803,7 +803,7 @@ test("poster catalog, approval, full-size artwork and fulfillment use the larger
       amount_total: params.line_items[0].amount,
       tax_amount_exclusive: 0,
     })) as any;
-    assert.equal((await providers.getPrice(proposal as any)).subtotal, 3500);
+    assert.equal((await providers.getPrice(proposal as any)).subtotal, 2800);
     await providers.submitPrint(order);
     assert.match(sent.items[0].assets[0].url, /poster-contain/);
     assert.equal(sent.items[0].copies, 1);
@@ -1496,9 +1496,9 @@ test("percentage coupons recalculate tax on discounted prints and shipping", asy
   const [couponCode] = generateCoupons(1, 50);
   const f = await fixture();
   const price = await getPrice({ ...f.proposal, couponCode } as any);
-  assert.equal(price.discount, 850);
-  assert.equal(price.tax, Math.round(850 * 0.0875));
-  assert.equal(price.total, 850 + price.tax);
+  assert.equal(price.discount, 600);
+  assert.equal(price.tax, Math.round(600 * 0.0875));
+  assert.equal(price.total, 600 + price.tax);
   await assert.rejects(getPrice({ ...f.proposal, couponCode: "not-a-code" } as any), /invalid/);
 });
 
@@ -1543,9 +1543,9 @@ test("coupon cap limits prints and shipping together and stale approvals cannot 
   assert.throws(() => redeemCoupon(code, "order_test", 1700), /limit changed/);
   const { getPrice } = await import("../server/providers.js");
   const f = await fixture();
-  const price = await getPrice({ ...f.proposal, couponCode: code } as any);
+  const price = await getPrice({ ...f.proposal, items: [{ ...f.proposal.items[0], quantity: 12 }], couponCode: code } as any);
   assert.equal(price.discount, 1500);
-  assert.equal(price.total, 200 + Math.round(200 * 0.0875));
+  assert.equal(price.total, 50 + Math.round(50 * 0.0875));
 });
 
 
@@ -1579,7 +1579,7 @@ test("mixed products share pricing, checkout and fulfillment without losing prod
   const response = await send(proposal);
   assert.equal(response.status, 202, JSON.stringify(response.body));
   const op = response.body.operation;
-  assert.equal(op.terms.subtotal, 4700);
+  assert.equal(op.terms.subtotal, 4000);
   assert.equal(op.terms.shipping, 0);
   assert.deepEqual(op.terms.previews.map((p: any) => p.product), ["prints", "poster"]);
   assert.match(op.terms.previews[1].url, /poster-contain/);
@@ -1628,7 +1628,7 @@ test("mixed products share pricing, checkout and fulfillment without losing prod
     providers.stripe!.tax.calculations.create = (async (params: any) => ({ id: "tax_mixed", amount_total: params.line_items[0].amount, tax_amount_exclusive: 0 })) as any;
     providers.stripe!.checkout.sessions.create = (async (params: any) => { checkout = params; return { id: "cs_mixed", url: "https://checkout.example/mixed", expires_at: 1 }; }) as any;
     const price = await providers.getPrice(proposal as any);
-    assert.equal(price.subtotal, 4700);
+    assert.equal(price.subtotal, 4000);
     assert.equal(price.shipping, 0);
     assert.equal(quoteCalls, 1);
     await providers.checkout(order);
@@ -1720,8 +1720,8 @@ test("native Poppy supports square and 8x10 items with correctly sized approved 
   ] }) });
   assert.equal(response.status, 202, JSON.stringify(response.body));
   const q = response.body.operation.terms;
-  assert.equal(q.subtotal, 2400);
-  assert.equal(q.shipping, 500);
+  assert.equal(q.subtotal, 1900);
+  assert.equal(q.shipping, 0);
   assert.match(q.summary, /4 × 4/);
   assert.match(q.summary, /8 × 10/);
   for (const [index, width, height] of [[0, 1200, 1200], [1, 3000, 2400]]) {

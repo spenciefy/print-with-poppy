@@ -70,7 +70,7 @@ export function emailFor(o: Order, kind: string, shipment?: Shipment) {
     `Order ${o.id}`,
     productLine,
     ...orderedPhotos.map(p => `${p.name} — ${p.quantity} × ${p.details.label}, ${p.details.dimensions}, ${p.fit === "contain" ? "whole image with white margins" : "cropped to fill"}`),
-    `Prints: ${money(o.quote.subtotal)} · Shipping: ${money(o.quote.shipping)} · Tax: ${money(o.quote.tax)}`,
+    `Prints: ${money(o.quote.subtotal)} · Shipping: ${o.quote.shipping ? money(o.quote.shipping) : "Included"} · Tax: ${money(o.quote.tax)}`,
     o.quote.discount ? `Discount: -${money(o.quote.discount)}` : "",
     addressText(o.quote.address),
     `${config.demo ? "Simulated total" : "Total paid"}: ${money(o.quote.total)}`,

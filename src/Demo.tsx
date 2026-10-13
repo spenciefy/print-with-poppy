@@ -148,8 +148,8 @@ export default function Demo() {
       content: (
         <>
           <p>
-            Three 4×6 prints are $12, plus $5 shipping. Or choose one photo for
-            a 12×16 poster at $35, with shipping included.
+            Three 4×6 prints are $12, with US shipping included. Or choose one photo for
+            a 12×16 poster at $28, with shipping included.
           </p>
           <small>Tax is shown before approval. Which would you like?</small>
           {step === 4 && (
@@ -158,7 +158,7 @@ export default function Demo() {
                 3 photo prints <span>$12</span>
               </button>
               <button onClick={() => choose("poster")}>
-                1 red poppy poster <span>$35</span>
+                1 red poppy poster <span>$28</span>
               </button>
             </div>
           )}

@@ -407,7 +407,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
         </article>
         <article className="store-product">
           <div className="product-preview enlargement-preview"><img src="/photos/poppy-abstract-cluster.webp" alt="Example 8 by 10 lustre print of orange poppies" /></div>
-          <div className="product-copy"><div className="product-title"><h2>Large photo print</h2><span>$12</span></div><p className="product-spec">8 × 10 inches · Lustre finish</p><p>One photo, printed larger. Unframed.</p></div>
+          <div className="product-copy"><div className="product-title"><h2>Large photo print</h2><span>$12</span></div><p className="product-spec">8 × 10 inches · Lustre finish</p><p>One for $12, two for $17.50. Each additional print is $2.50. Unframed.</p></div>
         </article>
         <article className="store-product">
           <div className="product-preview poster-preview">
@@ -419,7 +419,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
           <div className="product-copy">
             <div className="product-title">
               <h2>Poster print</h2>
-              <span>$35</span>
+              <span>$28</span>
             </div>
             <p className="product-spec">12 × 16 inches · Portrait · Matte</p>
             <p>A portrait photo on heavyweight paper. Unframed.</p>
@@ -427,7 +427,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
         </article>
       </div>
       <p className="store-delivery">
-        Currently shipping within the United States only. {shippingSummary} Combine sizes in one order. Tax shown before approval.
+        Currently shipping within the United States only. {shippingSummary} Save $5 when combining small prints and 8×10s in one order. Tax shown before approval.
         <br />
         {sandbox ? "Illustrative prices and delivery estimates only. Nothing will be printed or shipped." : "Estimated delivery: 7–12 business days after payment."}
       </p>
@@ -546,7 +546,7 @@ function Guide({ config }: { config: Config }) {
       <p>
         Read <code>GET /api/catalog</code>. Only attempt a real payment when{" "}
         <code>mode</code> is <code>live</code>. Choose <code>prints</code> for
-        4×6 lustre photos, <code>square</code> for 4×4, <code>enlargement</code> for 8×10 lustre, or <code>poster</code> for one 12×16 matte print. All products can share one order: set product on each item. Shipping applies once to the combined subtotal; items may arrive separately. Read prices and quantity limits from the catalog.
+        4×6 lustre photos, <code>square</code> for 4×4, <code>enlargement</code> for 8×10 lustre, or <code>poster</code> for one 12×16 matte print. All products can share one order: set product on each item. US shipping is included; combining small prints and 8×10s saves $5 once per order. Items may arrive separately. Read prices and quantity limits from the catalog.
       </p>
       <h2>2. Start a session</h2>
       <p>
@@ -694,7 +694,7 @@ function OrderSummary({ quote: q }: { quote: any }) {
         {orderLabel(q)} · {q.finish}
       </p>
       <dl className="price-list">
-        {orderProducts(q).map(group => <div key={group.product}><dt>{group.label} × {group.quantity}</dt><dd>{money(group.subtotal)}</dd></div>)}
+        <div><dt>Prints</dt><dd>{money(q.subtotal)}</dd></div>
         <div>
           <dt>Home delivery</dt>
           <dd>{q.shipping === 0 ? "Included" : money(q.shipping)}</dd>

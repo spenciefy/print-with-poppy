@@ -4,7 +4,7 @@ Verified October 12, 2026 using the live Prodigi US/Budget quote endpoint. No pr
 
 ## Margin guard
 
-Live proposals, checkout creation, and fulfillment submission check a fresh combined supplier quote. The guard includes products, all shipping charges, branding, quoted supplier tax (or a conservative 10% allowance), estimated payment fees of 6% + $0.30, $0.55 for tax services and a $1 operating reserve. Customer sales tax is excluded from revenue but included in estimated payment fees. Any additional amount in the supplier's quoted total is counted too.
+Live proposals, checkout creation, and fulfillment submission check a fresh combined supplier quote. The guard includes products, all shipping charges, branding, quoted supplier tax (or a conservative 10% allowance), standard domestic card fees of 2.9% + $0.30, $0.50 for tax services and a $1 operating reserve. Customer sales tax is excluded from revenue but included in estimated payment fees. Any additional amount in the supplier's quoted total is counted too.
 
 Coupons are explicitly permitted to lose money: approved discounts are added back for this check as an intentional merchant subsidy. An otherwise unprofitable order is still blocked even with a coupon. Sandbox orders are simulated and exempt.
 
@@ -28,6 +28,8 @@ The five 4×6 prints cost $1.25 to produce. The following values are current quo
 
 GLOBAL-PHO-12X16 was not found, and GLOBAL-PHO-12X18 did not return a usable quote. Do not advertise either based on this research.
 
-Recommendation: evaluate the 8×10 lustre photo print as the larger option. It is a different size/material from the existing 12×16 matte poster and must not silently replace an approved product. Product catalog remains unchanged pending that decision.
+Recommendation: evaluate the 8×10 lustre photo print as the larger option. It is a different size/material from the existing 12×16 matte poster and must not silently replace an approved product. All four sizes are now supported. See `src/offer.ts` for current shipping-inclusive prices.
 
 Sources: https://www.prodigi.com/products/prints-and-posters/photo-prints/c-types/ and https://support.prodigi.com/hc/en-us/articles/13168991692572-How-does-pricing-work-when-shipping-multiple-items . Lab assignments and prices above come from authenticated live API quotes.
+
+Current pricing: $12 for up to five small prints, then 50¢ each; 8×10s $12 for one, $17.50 for two, then $2.50 each; poster $28. US shipping included without a threshold. A $5 combined-delivery saving applies once when small prints and 8×10s are both present, allocated to the small-print subtotal. Posters do not share that shipment. The $1 guard is an estimate with a 10% supplier-tax allowance; international-card uplifts, overhead and exceptional costs are not included. Existing approved quote amounts remain frozen.
