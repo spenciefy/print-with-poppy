@@ -2057,3 +2057,8 @@ header {
 @media (max-width: 600px) { .shirt-extra { grid-template-columns: 1fr; gap: 12px; } .shirt-extra svg { max-width: 280px; margin: auto; } }
 
 .shirt-extra .copy-btn { padding: 12px 18px; border: 1px solid #b4aaa0; border-radius: 8px; color: var(--ink); background: transparent; font: inherit; cursor: pointer; }
+
+.shirt-quantities { display: flex; gap: 16px; flex-wrap: wrap; }
+.shirt-quantities label { display: grid; gap: 6px; }
+.shirt-quantities input { width: 64px; padding: 8px; font: inherit; color: var(--ink); background: transparent; border: 1px solid #b4aaa0; border-radius: 6px; }
+.shirt-extra .copy-btn:disabled { opacity: .5; cursor: default; }

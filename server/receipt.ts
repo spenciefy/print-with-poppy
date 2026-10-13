@@ -25,6 +25,7 @@ export function receipt(p: Proposal, photos: Pick<Photo, "name" | "width" | "hei
     const entries = new Map<string, { photo: typeof photos[number]; quantity: number; fit: string }>();
     p.items.forEach((item, index) => {
       if (itemProduct(p, item) !== group.product) return;
+      if (group.product === "tshirt" && (item.color !== ("color" in group.attributes ? group.attributes.color : undefined) || item.size !== ("size" in group.attributes ? group.attributes.size : undefined))) return;
       const photo = photos[index];
       const key = `${photo.name}:${item.fit}`;
       const existing = entries.get(key);
@@ -42,6 +43,7 @@ export function receipt(p: Proposal, photos: Pick<Photo, "name" | "width" | "hei
     for (const row of settings.values()) lines.push(`${photoList(row.names)} · ${row.quantity} ${row.quantity === 1 ? "copy" : "copies"} each · ${row.fit === "contain" ? group.product === "tshirt" ? "whole photo on front; unprinted margins" : "whole image with white margins" : "cropped to fill"}`);
     if (soft.length) lines.push(`Low-resolution warning: ${photoList(soft)} may look soft at this size.`);
   }
+  if (p.items.some(i => itemProduct(p, i) === "tshirt")) lines.push("Please approve the shirt previews, including print placement, color and size quantities, before checkout.");
   lines.push("", `Deliver to: ${addressText(p.address)}`, `Email: ${p.email}`, "Delivery: estimated 7–12 business days after payment; not guaranteed.", "", `${merchandiseLabel(p)} ${money(price.subtotal)} ${price.shipping ? `+ shipping ${money(price.shipping)}` : "· US shipping included"}${price.discount ? ` − discount ${money(price.discount)}` : ""} + tax ${money(price.tax)}`, `Total: ${money(price.total)} USD`, "", price.total === 0 ? "Approve to continue to free checkout; no card required." : "Approve to continue to payment.", "Completing checkout starts printing; cancellation is not guaranteed afterward.");
   if (demo) lines.push("SANDBOX: simulated payment and fulfillment. No prints will be shipped.");
   return lines.join("\n");

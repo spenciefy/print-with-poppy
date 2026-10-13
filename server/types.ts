@@ -33,7 +33,7 @@ export const proposalSchema = z
           .strict(),
       )
       .min(1)
-      .max(102),
+      .max(121),
   })
   .strict()
   .refine(
@@ -46,8 +46,8 @@ export const proposalSchema = z
     "Maximum one poster per order. Photo prints can be included in the same order.",
   )
   .refine(
-    x => x.items.filter(i => itemProduct(x, i) === "tshirt").reduce((sum, i) => sum + i.quantity, 0) <= 1,
-    "Maximum one T-shirt per order.",
+    x => x.items.filter(i => itemProduct(x, i) === "tshirt").reduce((sum, i) => sum + i.quantity, 0) <= 20,
+    "Maximum 20 T-shirts per order; specify quantity for each size and color.",
   ).superRefine((p, ctx) => {
     p.items.forEach((item, index) => {
       if (itemProduct(p, item) === "tshirt") {
@@ -103,6 +103,7 @@ export interface Quote extends Proposal {
   previews: {
     product?: "prints" | "square" | "enlargement" | "poster" | "mug" | "tshirt";
     photoId: string;
+    previewId?: string;
     color?: string;
     size?: string;
     url: string;
@@ -126,6 +127,7 @@ export interface Operation {
   terms: Quote;
   expires_at: string;
   user_approval_required: true;
+  shirtPreviewApproval?: { revision: number; previewIds: string[]; approved_by: "user"; approved_at: string };
   confirmation: null | {
     revision: number;
     approved_by: "user";

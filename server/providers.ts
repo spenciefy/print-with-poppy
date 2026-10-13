@@ -71,10 +71,14 @@ const cents = (m: any) => {
   return Math.round(Number(m.amount) * 100);
 };
 async function supplierCosts(p: Proposal) {
+  const detailsBySku = new Map<string, any>();
+  async function productDetails(sku: string) {
+    if (!detailsBySku.has(sku)) detailsBySku.set(sku, (await prodigi(`/products/${sku}`)).product);
+    return detailsBySku.get(sku);
+  }
   // Verify the exact finish is available for the selected SKU/destination, rather than guessing attributes.
   for (const selected of orderProducts(p)) {
-    const product = await prodigi(`/products/${selected.sku}`);
-    const details = product.product;
+    const details = await productDetails(selected.sku);
     if (
       !Object.entries(selected.attributes).every(([key, value]) =>
         details?.attributes?.[key]?.includes(value),
@@ -87,7 +91,7 @@ async function supplierCosts(p: Proposal) {
       );
   }
   for (const i of p.items.filter(i => itemProduct(p, i) === "tshirt")) {
-    const details = (await prodigi("/products/GLOBAL-TEE-BC-3001")).product;
+    const details = await productDetails("GLOBAL-TEE-BC-3001");
     if (!details?.variants?.some((v: any) => v.attributes?.color === i.color && v.attributes?.size === i.size && v.shipsTo?.includes("US")))
       throw new HttpError(422, "variant_unavailable", "That T-shirt color and size cannot currently ship to the US. Choose another combination.");
   }
@@ -176,7 +180,7 @@ export async function getPrice(p: Proposal) {
       return groups.map((g, index) => {
         const amount = index === groups.length - 1 ? netSubtotal - allocated : Math.floor(g.subtotal * netSubtotal / subtotal);
         allocated += amount;
-        return { amount, reference: g.product, tax_behavior: "exclusive" as const, tax_code: g.product === "tshirt" ? "txcd_30011000" : "txcd_99999999" };
+        return { amount, reference: `${g.product}-${index}`, tax_behavior: "exclusive" as const, tax_code: g.product === "tshirt" ? "txcd_30011000" : "txcd_99999999" };
       });
     })() : [{ amount: netSubtotal, reference: "photo-prints", tax_behavior: "exclusive", tax_code: "txcd_99999999" }],
     shipping_cost: { amount: netShipping, tax_behavior: "exclusive" },
@@ -222,7 +226,7 @@ export async function checkout(order: Order) {
             currency: "usd",
             unit_amount: q.subtotal - (q.printDiscount || 0),
             product_data: {
-              name: orderLabel(q),
+              name: orderLabel(q).slice(0, 250),
               description: `${q.items.reduce((s, i) => s + i.quantity, 0)} ${merchandiseLabel(q).toLowerCase()} · ${q.finish} · delivered to ${q.address.name}`,
             },
           },

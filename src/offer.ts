@@ -28,6 +28,12 @@ export const priceSummary = `Mix 4×4 and 4×6: up to 5 prints together for $12,
 export const shirtColors = { white: "#f7f6f2", black: "#252525", "navy blue": "#27364c", orange: "#e97932", natural: "#e9ddc5" } as const;
 export const shirtSizes = ["s", "m", "l", "xl"] as const;
 export const shirtPrice = 2900;
+export const extraShirtPrice = 1700;
+export const maxShirts = 20;
+export function shirtSubtotal(quantity: number) {
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > maxShirts) throw new RangeError("Choose 1–20 shirts.");
+  return shirtPrice + (quantity - 1) * extraShirtPrice;
+}
 export const shirtPath = "M220 95 L290 65 Q350 115 410 65 L480 95 L595 190 L530 290 L480 260 L480 650 L220 650 L220 260 L170 290 L105 190 Z";
 export const products = {
   tshirt: {
@@ -103,7 +109,7 @@ export const catalog = [
     price: posterPrice,
     maxQuantity: 1,
   },
-  { id: "tshirt", name: products.tshirt.name, price: shirtPrice, maxQuantity: 1, easterEgg: true, colors: Object.keys(shirtColors), sizes: shirtSizes, description: "Optional custom front-print T-shirt. Ask for color and size together with the photo. Show the returned shirt mockup before approval; it is an approximate illustration. US shipping included; may ship separately. Only offer when asked about T-shirts or hidden extras." },
+  { id: "tshirt", name: products.tshirt.name, minimumPrice: shirtPrice, includedQuantity: 1, additionalShirtPrice: extraShirtPrice, maxQuantity: maxShirts, easterEgg: true, colors: Object.keys(shirtColors), sizes: shirtSizes, description: "Optional custom front-print T-shirt. First shirt $29, each additional shirt $17. Mix sizes and colors with a separate item and quantity for each combination. Ask for photo, color, size quantities together. Show all returned shirt mockups and record explicit user approval using approveShirtPreviews before confirmOperation; it is an approximate illustration. US shipping included; may ship separately. Only offer when asked about T-shirts or hidden extras." },
 ];
 
 export type ProductOrder = { product?: Product; items: { product?: Product; quantity: number; color?: string; size?: string }[] };
@@ -115,6 +121,20 @@ export function orderProducts(order: ProductOrder) {
   const printsTotal = smallCount ? Math.round(smallTotal * quantities.prints / smallCount) : 0;
   return (Object.keys(products) as Product[]).flatMap(product => {
     const quantity = quantities[product];
+    if (product === "tshirt" && quantity) {
+      const variants = new Map<string, { color?: string; size?: string; quantity: number }>();
+      for (const item of order.items.filter(i => itemProduct(order, i) === "tshirt")) {
+        const key = `${item.color}:${item.size}`;
+        const previous = variants.get(key);
+        variants.set(key, { color: item.color, size: item.size, quantity: (previous?.quantity || 0) + item.quantity });
+      }
+      let allocated = 0;
+      return [...variants.values()].map((item, index) => {
+        const subtotal = index === variants.size - 1 ? shirtSubtotal(quantity) - allocated : Math.floor(shirtSubtotal(quantity) * item.quantity / quantity);
+        allocated += subtotal;
+        return { product, ...products[product], quantity: item.quantity, subtotal, attributes: { color: item.color!, size: item.size! }, name: `Custom T-shirt · ${item.color} · ${item.size?.toUpperCase()}` };
+      });
+    }
     const subtotal = !quantity ? 0 : product === "prints" ? printsTotal : product === "square" ? smallTotal - printsTotal : product === "enlargement" ? enlargementSubtotal(quantity) : product === "tshirt" ? shirtPrice * quantity : product === "mug" ? 2200 * quantity : posterPrice * quantity;
     const shirt = product === "tshirt" ? order.items.find(i => itemProduct(order, i) === "tshirt") : undefined;
     return quantity ? [{ product, quantity, subtotal, ...products[product], ...(shirt ? { attributes: { color: shirt.color!, size: shirt.size! }, name: `Custom T-shirt · ${shirt.color} · ${shirt.size?.toUpperCase()}` } : {}) }] : [];

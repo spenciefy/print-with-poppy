@@ -1575,7 +1575,7 @@ test("mixed products share pricing, checkout and fulfillment without losing prod
   const send = (body: unknown) => f.a.request("/api/orders", {
     method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() }, body: JSON.stringify(body),
   });
-  assert.equal((await send({ ...proposal, items: [proposal.items[0], { ...proposal.items[1], quantity: 2 }] })).status, 400);
+  assert.equal((await send({ ...proposal, items: [proposal.items[0], { ...proposal.items[1], quantity: 21 }] })).status, 400);
   assert.equal((await send({ ...proposal, items: [{ ...proposal.items[0], quantity: 101 }, proposal.items[1]] })).status, 400);
   const response = await send(proposal);
   assert.equal(response.status, 202, JSON.stringify(response.body));
@@ -1809,8 +1809,8 @@ test("hidden shirt requires options and separates mockup from print artwork", as
   const meta = await sharp(Buffer.from(await preview.arrayBuffer())).metadata();
   assert.equal(meta.width, 700);
   assert.equal(meta.height, 760);
-  assert.equal((await send({ ...proposal, items: [{ ...proposal.items[1], quantity: 2 }] })).status, 400);
-  assert.equal((await send({ ...proposal, items: [proposal.items[1], proposal.items[1]] })).status, 400);
+  assert.equal((await send({ ...proposal, items: [{ ...proposal.items[1], quantity: 21 }] })).status, 400);
+  assert.equal((await send({ ...proposal, items: [{ ...proposal.items[1], quantity: 11 }, { ...proposal.items[1], quantity: 10 }] })).status, 400);
   for (const change of [{ color: undefined }, { size: undefined }, { color: "pink" }, { size: "xxl" }])
     assert.equal((await send({ ...proposal, items: [{ ...proposal.items[1], ...change }] })).status, 400);
   assert.equal((await send({ ...proposal, items: [{ ...proposal.items[0], color: "white" }] })).status, 400);
@@ -1820,6 +1820,7 @@ test("hidden shirt requires options and separates mockup from print artwork", as
   const black = await send({ ...proposal, items: [{ ...proposal.items[1], color: "black" }] });
   assert.equal(black.status, 202);
   assert.notEqual(black.body.operation.terms.previews[0].url, r.body.operation.terms.previews[1].url);
+  commerce.approveShirtPreviews(r.body.operation.operation_id, f.a.session.session_id, 1, r.body.operation.terms.previews.filter((p: any) => p.product === "tshirt").map((p: any) => p.previewId), "user");
   await commerce.confirm(r.body.operation.operation_id, f.a.session.session_id, 1, "user");
   await worker.tick();
   const op = commerce.readOperation(r.body.operation.operation_id, f.a.session.session_id);
@@ -1851,7 +1852,7 @@ test("hidden shirt requires options and separates mockup from print artwork", as
     }) as any;
     providers.stripe!.tax.calculations.create = (async (params: any) => { taxRequest = params; return { id: "tax_shirt", amount_total: params.line_items.reduce((n: number, i: any) => n + i.amount, 0), tax_amount_exclusive: 0 }; }) as any;
     await providers.getPrice(proposal as any);
-    assert.deepEqual(taxRequest.line_items.map((i: any) => [i.reference, i.amount, i.tax_code]), [["tshirt", 2900, "txcd_30011000"], ["prints", 1200, "txcd_99999999"]]);
+    assert.deepEqual(taxRequest.line_items.map((i: any) => [i.reference, i.amount, i.tax_code]), [["tshirt-0", 2900, "txcd_30011000"], ["prints-1", 1200, "txcd_99999999"]]);
     await providers.submitPrint(order);
     assert.match(sent.items[1].assets[0].url, /tshirt-contain/);
     assert.doesNotMatch(sent.items[1].assets[0].url, /preview/);
@@ -1876,4 +1877,63 @@ test("invalid revocation assertions return invalid_client rather than a retryabl
     body: new URLSearchParams({ client_id: clientId, client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", client_assertion: await a.assertion(clientId, origin + "/oauth/revoke"), token: "unknown-account-token" }),
   });
   assert.equal(r.status, 200);
+});
+
+test("mixed shirt sizes use quantity pricing and require every preview approval before checkout", async () => {
+  const f = await fixture();
+  const { shirtSubtotal, orderProducts } = await import("../src/offer.js");
+  assert.deepEqual([1, 2, 3, 5, 10, 20].map(shirtSubtotal), [2900, 4600, 6300, 9700, 18200, 35200]);
+  const items = [
+    { product: "tshirt", photoId: f.photo.id, color: "orange", size: "m", quantity: 2, fit: "contain" },
+    { product: "tshirt", photoId: f.photo.id, color: "black", size: "xl", quantity: 1, fit: "cover" },
+  ];
+  const proposed = await f.a.request("/api/orders", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() }, body: JSON.stringify({ ...f.proposal, items }) });
+  assert.equal(proposed.status, 202);
+  const op = proposed.body.operation;
+  assert.equal(op.terms.subtotal, 6300);
+  assert.match(op.summary, /2 × Custom T-shirt · orange · M/);
+  assert.match(op.summary, /1 × Custom T-shirt · black · XL/);
+  const groups = orderProducts(op.terms);
+  assert.equal(groups.reduce((n, g) => n + g.subtotal, 0), 6300);
+  assert.deepEqual(groups.map(g => [g.quantity, g.attributes]), [[2, { color: "orange", size: "m" }], [1, { color: "black", size: "xl" }]]);
+  const request = (agent: typeof f.a, suffix: string, body: unknown) => agent.request(`/api/operations/${op.operation_id}/${suffix}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const ids = op.terms.previews.map((p: any) => p.previewId);
+  const approval = { revision: 1, approved_by: "user", previewIds: ids };
+  const blocked = await request(f.a, "confirm", { revision: 1, approved_by: "user" });
+  assert.equal(blocked.status, 409);
+  assert.equal(blocked.body.error, "shirt_preview_approval_required");
+  assert.equal(commerce.readOperation(op.operation_id, f.a.session.session_id).orderId, undefined);
+  assert.equal((await request(f.a, "shirt-previews", { ...approval, previewIds: [ids[0]] })).status, 400);
+  assert.equal((await request(f.a, "shirt-previews", { ...approval, previewIds: [ids[0], ids[0]] })).status, 400);
+  assert.equal((await request(f.a, "shirt-previews", { ...approval, revision: 2 })).status, 409);
+  const other = await makeAgent();
+  assert.equal((await request(other, "shirt-previews", approval)).status, 404);
+  assert.equal((await request(f.a, "shirt-previews", approval)).status, 200);
+  assert.equal((await request(f.a, "shirt-previews", approval)).status, 200);
+  const confirmed = await request(f.a, "confirm", { revision: 1, approved_by: "user" });
+  assert.equal(confirmed.status, 200);
+  const stored = commerce.readOperation(op.operation_id, f.a.session.session_id);
+  const order = store.get("order", stored.orderId!);
+  const providers = await import("../server/providers.js");
+  const { config } = await import("../server/config.js");
+  const originalFetch = globalThis.fetch;
+  try {
+    config.demo = false;
+    let sent: any;
+    globalThis.fetch = (async (url: any, init: any) => {
+      if (String(url).includes("/products/")) return Response.json({ outcome: "Ok", product: { attributes: { color: ["orange", "black"], size: ["m", "xl"] }, variants: [{ attributes: { color: "orange", size: "m" }, shipsTo: ["US"] }, { attributes: { color: "black", size: "xl" }, shipsTo: ["US"] }] } });
+      if (String(url).endsWith("/quotes")) return Response.json({ outcome: "Created", quotes: [{ shipmentMethod: "Budget", shipments: [{ fulfillmentLocation: { countryCode: "US" } }], costSummary: { items: { amount: "36", currency: "USD" }, shipping: { amount: "15.25", currency: "USD" } } }] });
+      sent = JSON.parse(init.body); return Response.json({ outcome: "Created", order: { id: "mixed-shirts" } });
+    }) as any;
+    await providers.submitPrint(order);
+    assert.deepEqual(sent.items.map((i: any) => [i.copies, i.attributes]), [[2, { color: "orange", size: "m" }], [1, { color: "black", size: "xl" }]]);
+    assert.ok(sent.items.every((i: any) => i.assets[0].printArea === "front" && !i.assets[0].url.includes("preview")));
+  } finally { config.demo = true; globalThis.fetch = originalFetch; }
+  const changed = await f.a.request("/api/orders", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() }, body: JSON.stringify({ ...f.proposal, items: [{ ...items[0], size: "l" }] }) });
+  assert.equal(changed.status, 202);
+  assert.throws(() => commerce.confirm(changed.body.operation.operation_id, f.a.session.session_id, 1, "user"), /shirt mockup/);
+  const expired = commerce.readOperation(changed.body.operation.operation_id, f.a.session.session_id);
+  expired.terms.expires = Date.now() - 1;
+  store.put("operation", expired.operation_id, expired, f.a.session.session_id);
+  assert.throws(() => commerce.approveShirtPreviews(expired.operation_id, f.a.session.session_id, 1, expired.terms.previews.map(p => p.previewId!), "user"), /active proposal/);
 });

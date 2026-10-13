@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import "./style.css";
 import Demo from "./Demo";
 import { orderSubtitle, visibleShipment } from "./order-copy";
-import { shirtColors, shirtSizes, shirtPath, productOf, shippingSummary, orderProducts, orderLabel, merchandiseLabel } from "./offer";
+import { shirtColors, shirtSizes, shirtSubtotal, shirtPath, productOf, shippingSummary, orderProducts, orderLabel, merchandiseLabel } from "./offer";
 type Config = { environment?: string; mode: string; origin: string; support: string };
 const money = (c: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -21,7 +21,9 @@ async function api(url: string, init: RequestInit = {}) {
 const Arrow = () => <span aria-hidden="true">↗</span>;
 function ShirtExtra() {
   const [color, setColor] = useState<keyof typeof shirtColors>("natural");
-  const [size, setSize] = useState("m");
+  const [quantities, setQuantities] = useState<Record<string, number>>({ s: 0, m: 1, l: 0, xl: 0 });
+  const count = Object.values(quantities).reduce((a, b) => a + b, 0);
+  const valid = count > 0 && count <= 20;
   const [copied, setCopied] = useState(false);
   return <details className="secret-goody">
     <summary>One more thing 👕</summary>
@@ -34,11 +36,12 @@ function ShirtExtra() {
         <text x="350" y="720" textAnchor="middle" fontSize="16" fill="#635c55">Sample artwork · approximate color and placement</text>
       </svg>
       <div><h3>Your photo. On a T-shirt.</h3>
-        <p>Bella+Canvas 3001, with your photo printed on the front. $29 including US shipping, plus tax.</p>
-        <fieldset><legend>Color: {color}</legend><div className="shirt-swatches">{Object.entries(shirtColors).map(([name, hex]) => <button key={name} type="button" aria-label={name} aria-pressed={color === name} style={{ background: hex }} onClick={() => setColor(name as keyof typeof shirtColors)} />)}</div></fieldset>
-        <label>Size <select value={size} onChange={e => setSize(e.target.value)}>{shirtSizes.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></label>
+        <p>Bella+Canvas 3001, with your photo printed on the front. First shirt $29, each additional shirt $17. US shipping included; tax added before approval.</p>
+        <fieldset><legend>Color: {color}</legend><div className="shirt-swatches">{Object.entries(shirtColors).map(([name, hex]) => <button key={name} type="button" aria-label={name} aria-pressed={color === name} style={{ background: hex }} onClick={() => { setColor(name as keyof typeof shirtColors); setCopied(false); }} />)}</div></fieldset>
+        <fieldset><legend>How many of each size?</legend><div className="shirt-quantities">{shirtSizes.map(size => <label key={size}>{size.toUpperCase()}<input aria-label={`Quantity size ${size.toUpperCase()}`} type="number" min="0" max="20" step="1" value={quantities[size]} onChange={e => { setQuantities(q => ({ ...q, [size]: Math.max(0, Math.min(20, Math.floor(Number(e.target.value) || 0))) })); setCopied(false); }} /></label>)}</div></fieldset>
+        <p aria-live="polite">{valid ? `${count} ${count === 1 ? "shirt" : "shirts"} · ${money(shirtSubtotal(count))} before tax${count > 1 ? ` · ${money(shirtSubtotal(count) / count)} each on average` : ""}` : "Choose 1–20 shirts in total."}</p>
         <p>Send your agent a photo and these choices. You’ll see your own shirt preview before approving. Shirts may ship separately from prints.</p>
-        <button className="copy-btn" type="button" onClick={async () => { try { await navigator.clipboard.writeText(`Please help me order a custom T-shirt from https://printwithpoppy.com in ${color}, size ${size.toUpperCase()}. Ask me for the photo and show my custom shirt preview before approval. If you support native Poppy sessions, use /.well-known/poppy.json. Otherwise use https://printwithpoppy.com/api/compat/instructions.`); setCopied(true); } catch { setCopied(false); } }}>{copied ? "Copied" : "Copy T-shirt request"}</button>
+        <button className="copy-btn" type="button" disabled={!valid} onClick={async () => { try { await navigator.clipboard.writeText(`Please help me order custom T-shirts from https://printwithpoppy.com in ${color}: ${shirtSizes.filter(s => quantities[s]).map(s => `${quantities[s]} × ${s.toUpperCase()}`).join(", ")}. Ask me for the photo and show every custom shirt preview with color, size and quantity. Get my explicit approval of the previews before preparing checkout. If you support native Poppy sessions, use /.well-known/poppy.json. Otherwise use https://printwithpoppy.com/api/compat/instructions.`); setCopied(true); } catch { setCopied(false); } }}>{copied ? "Copied" : "Copy T-shirt request"}</button>
       </div>
     </div>
   </details>;

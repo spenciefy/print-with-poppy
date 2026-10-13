@@ -94,6 +94,7 @@ export async function propose(body: unknown, session: Session, key: string) {
     shippingMethod: config.shipping,
     summary,
     previews: photos.map((ph, n) => ({
+      previewId: id("preview"),
       product: itemProduct(p, p.items[n]),
       photoId: ph.id,
       color: p.items[n].color, size: p.items[n].size,
@@ -153,7 +154,7 @@ function displayPhotoLabels(quote: Quote) {
   const previews = quote.previews.map((preview, index) => {
     const name = photoLabel(preview.photoId, index);
     if (preview.name && preview.name !== name) summary = summary.split(preview.name).join(name);
-    return { ...preview, name };
+    return { ...preview, previewId: preview.previewId || `${quote.id}:${index}`, name };
   });
   return { ...quote, summary, previews };
 }
@@ -169,6 +170,23 @@ export function operationView(op: Operation) {
       couponCode: undefined,
     },
   };
+}
+function requiredShirtPreviews(op: Operation) {
+  return op.terms.previews.flatMap((preview, index) => preview.product === "tshirt" ? [preview.previewId || `${op.terms.id}:${index}`] : []);
+}
+export function approveShirtPreviews(opId: string, owner: string, revision: number, previewIds: string[], approvedBy: string) {
+  return db.transaction(() => {
+    const op = readOperation(opId, owner);
+    if (revision !== op.revision) throw new HttpError(409, "terms_changed", "Show and approve the current proposal and shirt previews.");
+    if (approvedBy !== "user") throw new HttpError(403, "user_approval_required", "The user must explicitly approve all shirt previews.");
+    if (op.state !== "proposed") throw new HttpError(409, "invalid_state", "Only an active proposal can receive preview approval.");
+    const expected = requiredShirtPreviews(op);
+    if (!expected.length || previewIds.length !== expected.length || new Set(previewIds).size !== expected.length || expected.some(id => !previewIds.includes(id)))
+      throw new HttpError(400, "invalid_preview_approval", "Show every shirt preview with its size, color and quantity, then submit exactly their previewIds after user approval.");
+    op.shirtPreviewApproval = { revision, previewIds: expected, approved_by: "user", approved_at: new Date().toISOString() };
+    put("operation", opId, op, owner);
+    return op;
+  })();
 }
 export function confirm(
   opId: string,
@@ -189,6 +207,9 @@ export function confirm(
         "Show the summary, including full address, and obtain the user’s approval.",
       );
     if (op.state !== "proposed") return op;
+    const expected = requiredShirtPreviews(op);
+    if (expected.length && (op.shirtPreviewApproval?.revision !== revision || expected.some(id => !op.shirtPreviewApproval?.previewIds.includes(id))))
+      throw new HttpError(409, "shirt_preview_approval_required", "Show every shirt mockup with its color, size and quantity. Obtain explicit user approval, call approveShirtPreviews with revision and all shirt previewIds, then confirm this operation.", { previewIds: expected, approvalUrl: `/api/operations/${opId}/shirt-previews` });
     op.terms.items.forEach((i) => ownedPhoto(i.photoId, owner));
     const order: Order = {
       id: id("ord"),

@@ -156,7 +156,7 @@ const { operation } = await call("/api/orders", {
     },
     items: [
       { photoId: uploaded.id, product: "prints", quantity: 3, fit: "contain" },
-      ...(process.argv.includes("--tshirt") ? [{ photoId: uploaded.id, product: "tshirt", color: "orange", size: "m", quantity: 1, fit: "contain" }] : []),
+      ...(process.argv.includes("--tshirt") ? [{ photoId: uploaded.id, product: "tshirt", color: "orange", size: "m", quantity: 2, fit: "contain" }, { photoId: uploaded.id, product: "tshirt", color: "black", size: "xl", quantity: 1, fit: "contain" }] : []),
     ],
   }),
 });
@@ -166,6 +166,9 @@ if (!process.argv.includes("--approve-demo")) {
     "\nStopped before approval. Rerun with --approve-demo to exercise demo payment/fulfillment.",
   );
   process.exit(0);
+}
+if (process.argv.includes("--tshirt")) {
+  await call(`/api/operations/${operation.operation_id}/shirt-previews`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: operation.revision, approved_by: "user", previewIds: operation.terms.previews.filter((p: any) => p.product === "tshirt").map((p: any) => p.previewId) }) });
 }
 let confirmed = await call(
   `/api/operations/${operation.operation_id}/confirm`,

@@ -38,6 +38,7 @@ import {
   operationView,
   orderView,
   paid,
+  approveShirtPreviews,
 } from "./commerce.js";
 import { stripe, stripeCheckoutComplete, stripeReceipt } from "./providers.js";
 import { tick, housekeeping, syncProvider } from "./worker.js";
@@ -477,6 +478,13 @@ app.get("/api/operations/:id", (req, res) => {
       data: { order_id: view.result.data.order_id },
     };
   res.json(view);
+});
+app.post("/api/operations/:id/shirt-previews", (req, res) => {
+  const b = z.object({ revision: z.number().int(), previewIds: z.array(z.string()).min(1).max(102), approved_by: z.literal("user") }).strict().parse(req.body);
+  const pending = readOperation(String(req.params.id), res.locals.session.id);
+  if (pending.terms.accountId && requireAccount(res.locals.session, "poppy:write") !== pending.terms.accountId)
+    throw new HttpError(403, "sign_in_required", "Sign in to the account that proposed this order.");
+  res.json(operationView(approveShirtPreviews(String(req.params.id), res.locals.session.id, b.revision, b.previewIds, b.approved_by)));
 });
 app.post("/api/operations/:id/confirm", (req, res) => {
   const b = z
