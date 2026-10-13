@@ -200,7 +200,7 @@ app.get("/.well-known/poppy.json", (_req, res) =>
         url: `${config.origin}/openapi.json`,
         description: config.agentSandbox
           ? sandboxDescription
-          : "Live store: browse the catalog, upload photos, approve home-delivered prints, pay by card and track orders. For sample orders without payment or physical fulfillment, discover https://sandbox.printwithpoppy.com/.well-known/poppy.json and start a separate session on that sandbox origin. Never send live tokens to the sandbox.",
+          : "Live store: browse the catalog, upload photos, approve home-delivered prints, pay by card and track orders. Agents without native Poppy session support should read /api/compat/instructions for the separate HTTP compatibility API; no private signing key is required.",
       },
     ],
     extensions: {
