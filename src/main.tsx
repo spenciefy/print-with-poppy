@@ -818,7 +818,12 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
             ? "Ready when you are."
             : labels[order.status] || "Your print order."}
         </h1>
-        <p className="order-reference">Order {order.id}</p>
+        <div className="order-reference-row">
+          <p className="order-reference">Order {order.id}</p>
+          {!order.demo && !!order.paidAt && order.quote.total > 0 && <button className="text-button receipt-link" disabled={receiptBusy} onClick={() => void openReceipt()}>{receiptBusy ? "Loading payment…" : "View Stripe payment"}</button>}
+          {!order.demo && !order.paidAt && order.status === "awaiting_payment" && order.checkoutUrl && !order.checkoutExpired && <a className="text-link receipt-link" href={order.checkoutUrl}>View Stripe payment</a>}
+        </div>
+        {receiptError && <p className="error" role="alert">{receiptError}</p>}
         <p>
           {checkout
             ? "In a live order, your agent uses its card on Stripe’s secure checkout page."
@@ -966,9 +971,6 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
         </div>
         <aside className="order-paper">
           <OrderSummary quote={order.quote} />
-          {!order.demo && !!order.paidAt && order.quote.total > 0 && <button className="text-button receipt-link" disabled={receiptBusy} onClick={() => void openReceipt()}>{receiptBusy ? "Loading receipt…" : "View Stripe receipt"}</button>}
-          {!order.demo && !order.paidAt && order.status === "awaiting_payment" && order.checkoutUrl && !order.checkoutExpired && <a className="text-link receipt-link" href={order.checkoutUrl}>Continue payment on Stripe</a>}
-          {receiptError && <p className="error" role="alert">{receiptError}</p>}
           <p className="small muted">
             After payment, printing starts automatically. Contact support
             promptly for changes; cancellation isn’t guaranteed.

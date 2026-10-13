@@ -2025,3 +2025,7 @@ header {
 .price-list dd { text-align: right; font-variant-numeric: tabular-nums; }
 .price-list .total { align-items: baseline; }
 .receipt-link { display: inline-block; font-size: 14px; margin-top: 20px; color: var(--rust); }
+
+.order-reference-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 18px; margin-top: 8px; }
+.order-reference-row .order-reference { margin: 0; }
+.order-reference-row .receipt-link { margin: 0; padding: 0; font-size: 13px; line-height: 1.5; text-decoration: underline; text-underline-offset: 3px; }
