@@ -69,11 +69,11 @@ export const mixedPhotoSaving = 500;
 export function enlargementSubtotal(quantity: number) {
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > offer.maxPrints)
     throw new RangeError("Choose 1–100 prints.");
-  return quantity === 1 ? 1200 : 1750 + (quantity - 2) * 250;
+  return 1200 + (quantity - 1) * 300;
 }
 export const catalog = [
   { id: "square", name: products.square.name, minimumPrice: 1200, includedQuantity: 5, additionalPrintPrice: 50, maxQuantity: 100, pricingGroup: "small-prints" },
-  { id: "enlargement", name: products.enlargement.name, minimumPrice: 1200, includedQuantity: 1, twoPrintPrice: 1750, additionalPrintPrice: 250, additionalPrintPriceAppliesAfter: 2, maxQuantity: 100 },
+  { id: "enlargement", name: products.enlargement.name, minimumPrice: 1200, includedQuantity: 1, additionalPrintPrice: 300, additionalPrintPriceAppliesAfter: 1, maxQuantity: 100 },
   {
     id: "prints",
     pricingGroup: "small-prints",

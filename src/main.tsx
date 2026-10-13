@@ -407,7 +407,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
         </article>
         <article className="store-product">
           <div className="product-preview enlargement-preview"><img src="/photos/poppy-abstract-cluster.webp" alt="Example 8 by 10 lustre print of orange poppies" /></div>
-          <div className="product-copy"><div className="product-title"><h2>Large photo print</h2><span>$12</span></div><p className="product-spec">8 × 10 inches · Lustre finish</p><p>One for $12, two for $17.50. Each additional print is $2.50. Unframed.</p></div>
+          <div className="product-copy"><div className="product-title"><h2>Large photo print</h2><span>$12</span></div><p className="product-spec">8 × 10 inches · Lustre finish</p><p>One for $12. Each additional print is $3</p></div>
         </article>
         <article className="store-product">
           <div className="product-preview poster-preview">

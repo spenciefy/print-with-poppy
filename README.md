@@ -89,12 +89,12 @@ All prices are USD and **include US shipping**. Sales tax is calculated before a
 | Product | Price |
 |---|---|
 | 4×4 and 4×6 lustre, mixed together | $12 for up to five; 50¢ per additional print |
-| 8×10 lustre | $12 for one; $17.50 for two; $2.50 per additional print after two |
+| 8×10 lustre | $12 for one; $3 per additional print |
 | 12×16 matte poster | $28, maximum one per order |
 
 Combine small prints and 8×10s in one order to save **$5 once**, already included in the quoted subtotal. Small sizes share one five-print minimum across all photos. The 8×10 tier also applies across all photos, not separately to each image. Posters do not receive the shared-delivery saving and may ship separately.
 
-Examples before sales tax: ten small prints **$14.50**; five 8×10s **$25**; five small prints + one 8×10 **$19**; five small prints + a poster **$40**. Maximum 100 non-poster prints plus one poster. Orders below five small prints still cost $12; only the approved quantity is printed.
+Examples before sales tax: ten small prints **$14.50**; five 8×10s **$24**; five small prints + one 8×10 **$19**; five small prints + a poster **$40**. Maximum 100 non-poster prints plus one poster. Orders below five small prints still cost $12; only the approved quantity is printed.
 
 Set `items[].product` to `prints` (4×6), `square` (4×4), `enlargement` (8×10), or `poster` (12×16). The top-level `product` is the default for older clients. `/api/catalog` publishes prices in **integer USD cents**, tier rules, `shippingIncluded: true`, and the mixed-order saving. Native Poppy and HTTP compatibility use the same pricing functions in `src/offer.ts`.
 

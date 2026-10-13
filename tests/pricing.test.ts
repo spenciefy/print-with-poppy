@@ -45,10 +45,10 @@ test("square and standard prints share one minimum and one mixed delivery saving
 
 import { enlargementSubtotal } from "../src/offer.js";
 test("8x10 volume tiers apply across different photos and item splits", () => {
-  for (const [n, price] of [[1,1200],[2,1750],[3,2000],[5,2500],[10,3750],[100,26250]]) assert.equal(enlargementSubtotal(n), price);
+  for (const [n, price] of [[1,1200],[2,1500],[3,1800],[5,2400],[10,3900],[100,30900]]) assert.equal(enlargementSubtotal(n), price);
   for (const n of [0,-1,101,1.5,NaN]) assert.throws(() => enlargementSubtotal(n));
   const split = orderProducts({items:[{product:"enlargement",quantity:1},{product:"enlargement",quantity:1}]});
-  assert.equal(split[0].subtotal,1750);
+  assert.equal(split[0].subtotal,1500);
 });
 test("all supported mixed carts cover the one dollar floor at quoted costs", () => {
   for (let small=0;small<=100;small++) for (let large=0;large<=100-small;large++) for (let poster=0;poster<=1;poster++) {
