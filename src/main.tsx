@@ -380,12 +380,15 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
       setError("Select and copy the instructions below.");
     }
   }
+  const heading = (
+    <div className="store-heading">
+      <h1 id="home-title">Your photos are better printed</h1>
+      <p>Use your personal agent to get photo prints delivered.</p>
+    </div>
+  );
   const productSection = (
     <section className="store-products" aria-labelledby="home-title">
-      <div className="store-heading">
-        <h1 id="home-title">Your photos are better printed.</h1>
-        <p>Use your personal agent to get photo prints delivered</p>
-      </div>
+      {variant && heading}
       <div className="product-list">
         <article className="store-product">
           <div
@@ -482,7 +485,8 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   return (
     <div className={variant ? `home-variant variant-${variant}` : undefined}>
       {variant && <VariantNav current={variant} />}
-      <main className="home-minimal store-home">
+      <main className={`home-minimal store-home${variant ? "" : " store-home-standard"}`}>
+        {!variant && heading}
         {variant === "agent-first" ? (
           <>
             {promptSection}

@@ -2030,6 +2030,13 @@ header {
 .order-reference-row .order-reference { margin: 0; }
 .order-reference-row .receipt-link { margin: 0; padding: 0; font-size: 13px; line-height: 1.5; text-decoration: underline; text-underline-offset: 3px; }
 
+/* Put the heading in its own row so both columns start at the product separator. */
+.store-home-standard { row-gap: 0; }
 @media (min-width: 861px) {
-  .store-home > .store-order { align-self: center; }
+  .store-home-standard > .store-heading { grid-column: 1; grid-row: 1; }
+  .store-home-standard > .store-products { grid-column: 1; grid-row: 2; }
+  .store-home-standard > .store-order { grid-column: 2; grid-row: 2; align-self: start; }
+}
+@media (max-width: 860px) {
+  .store-home-standard > .store-order { margin-top: 32px; }
 }
