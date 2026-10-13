@@ -45,8 +45,8 @@ function ShirtExtra() {
     </div>
   </main>;
 }
-function Brand() {
-  return (
+function Brand({ credit = false }: { credit?: boolean }) {
+  const logo = (
     <a className="brand" href="/" aria-label="Print with Poppy home">
       <span className="brand-stack" aria-hidden="true">
         <img
@@ -65,11 +65,12 @@ function Brand() {
           alt=""
         />
       </span>
-      <span>
+      <span className="brand-wordmark">
         Print with <strong>Poppy</strong>
       </span>
     </a>
   );
+  return credit ? <div className="header-brand">{logo}<a className="protocol-credit" href="https://personalagentprotocol.org/">Built on Personal Agent Protocol</a></div> : logo;
 }
 function Header({
   route,
@@ -81,10 +82,7 @@ function Header({
   const agents = route === "/for-agents";
   return (
     <header>
-      <div className="header-brand">
-        <Brand />
-        <a className="protocol-credit" href="https://personalagentprotocol.org/">Built on Personal Agent Protocol</a>
-      </div>
+      <Brand credit />
       {!route.startsWith("/order/") && !route.startsWith("/checkout/") && <nav
         className="audience-toggle"
         data-agents={agents}
