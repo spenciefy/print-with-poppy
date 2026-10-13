@@ -242,13 +242,16 @@ function Footer({ compact = false }: { compact?: boolean }) {
         </div>
         <div className="store-faq">
           <h2>FAQ</h2>
-          <Faq title="This seems expensive for just photo prints.">
+          <Faq title="What's the point of this?">
             <p>
-              For small orders, shipping costs more than printing the photos.
-              That cost is spread across more prints when you order more, so
-              the price per print comes down. I’m aiming to run small orders
-              close to break-even, with around $1–$2 left after printing,
-              shipping and fees. Larger orders contribute a little more.
+              Printed photos are a little delight: something to put on the
+              fridge, keep on your desk or give to someone you love.
+            </p>
+            <p>
+              This store also implements Personal Agent Protocol. It’s a small
+              working example of a future where your personal agent can work
+              with businesses on your behalf—from choosing prints to placing
+              an order, with your approval.
             </p>
           </Faq>
           <Faq title="Does this work with Muse or Instinct?">
@@ -295,6 +298,15 @@ function Footer({ compact = false }: { compact?: boolean }) {
               Allow an estimated 7–12 business days after payment for US home
               delivery. This is a planning estimate, not a guaranteed arrival
               date. We email confirmation and tracking when available. US shipping is included. Products can share one order but may arrive in separate packages.
+            </p>
+          </Faq>
+          <Faq title="This seems expensive for just photo prints.">
+            <p>
+              For small orders, shipping costs more than printing the photos.
+              That cost is spread across more prints when you order more, so
+              the price per print comes down. I’m aiming to run small orders
+              close to break-even, with around $1–$2 left after printing,
+              shipping and fees. Larger orders contribute a little more.
             </p>
           </Faq>
         </div>
