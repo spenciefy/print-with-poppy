@@ -6,7 +6,7 @@
 
 <h1 align="center">Print with Poppy</h1>
 
-<p align="center">Your photos, in print.<br />Ordered by your personal agent. Delivered to your door.</p>
+<p align="center">You should print your photos.<br />Get your personal agent to deliver photo prints to your door.</p>
 
 <p align="center">
   <a href="https://printwithpoppy.com">Visit the store</a> ·
@@ -15,7 +15,7 @@
   <a href="https://personalagentprotocol.org/docs/spec">Poppy protocol</a>
 </p>
 
-[![Print with Poppy homepage showing photo prints, a poster print, and copyable personal-agent instructions](docs/images/homepage.png)](https://printwithpoppy.com)
+[![Print with Poppy homepage showing small prints, large prints, a poster, and personal-agent instructions](docs/images/homepage.png)](https://printwithpoppy.com)
 
 A real photo-printing store and an open-source example of **[Personal Agent Protocol](https://personalagentprotocol.org/)**. The website presents the products; your personal agent handles the order. There is no human-facing cart or checkout button.
 
@@ -29,6 +29,29 @@ A real photo-printing store and an open-source example of **[Personal Agent Prot
 The [interactive demo](https://printwithpoppy.com/demo) walks through the journey with sample poppy artwork and simulated payment. See [SPEC.md](SPEC.md) for the product decisions and [authentication options](#native-poppy-and-compatibility-access) for native and compatibility integrations.
 
 **Built with:** React + Vite · TypeScript · Express · SQLite · Sharp · JOSE · Stripe · Prodigi · Resend
+
+### Agent conversation
+
+Approval summaries are compact receipts: photos with matching quantities/crops are grouped, with exceptions and low-resolution warnings retained. Agents should collect missing details together, use a single mixed order for one destination, show numbered previews alongside the receipt, and keep API mechanics out of customer chat. The same guidance is published for native Poppy, HTTP compatibility, and sandbox clients. Explicit approval of the complete terms is still required. Client agents control their own UI and may not follow every presentation instruction.
+
+### Ordering method and native Poppy verification
+
+Orders record `quote.orderingMethod` on the server when proposed. The order response also returns `orderingMethod`. After verified payment, successful order states include `successMessage` for the agent to say once alongside the verified status and exact private order link. Pending, attention, cancelled and unknown-method orders omit it. Sandbox messages explicitly identify simulated payment and fulfillment. HTTP use does not establish that an agent lacks native support. The private order page and confirmation email show its readable label:
+
+- `native-poppy`: authenticated Poppy client with a DPoP-bound session, signed out or signed in.
+- `http-compatibility`: the separate Bearer-token HTTP API; not Personal Agent Protocol and not a verified agent identity.
+- `visual-demo`: the local scripted demo identity.
+
+Customer account sign-in is independent of the integration method. Clients cannot submit or override this field. Old orders use their original session if available; missing historical evidence is left unlabeled. A native authentication failure must not silently switch an order to compatibility access.
+
+The native schema remains `/openapi.json`, discovered through `/.well-known/poppy.json`. Non-native agents use `/api/compat/instructions` and `/api/compat/openapi.json`. The hosted sandbox allows native sessions only. See [sandbox testing](docs/SANDBOX.md) for DPA and reference-client tests. Passing the reference client does not establish that the deployed DPA chat UI passed.
+
+<details>
+<summary>See the personal-agent integration page</summary>
+
+[![Personal-agent page showing native Poppy discovery and authentication instructions](docs/images/for-agents.png)](https://printwithpoppy.com/for-agents)
+
+</details>
 
 ## Test with a personal agent
 
@@ -82,29 +105,21 @@ Poppy operations v1 is required for ordering. Guest sessions need no customer lo
 
 The card stays at **Stripe-hosted Checkout**. An agent with an authorized card may complete the page. Issuer authentication can require the user. No raw-card or direct-charge endpoint exists.
 
-## Prices, email and delivery
+## Products and pricing
 
-All prices are USD and **include US shipping**. Sales tax is calculated before approval. There is no shipping minimum or free-shipping threshold.
+USD, **US shipping included**. US delivery only; sales tax shown before approval.
 
-| Product | Price |
-|---|---|
-| 4×4 and 4×6 lustre, mixed together | $12 for up to five; 50¢ per additional print |
-| 8×10 lustre | $12 for one; $3 per additional print |
-| 12×16 matte poster | $28, maximum one per order |
+| Product | Size and finish | Price |
+|---|---|---|
+| Photo prints | 4×4 or 4×6, lustre; mix both sizes | $12 for up to 5, then 50¢ each |
+| Large photo prints | 8×10, lustre | $12 for one, then $3 each |
+| Poster print | 12×16, matte; unframed | $28; one per order |
 
-Combine small prints and 8×10s in one order to save **$5 once**, already included in the quoted subtotal. Small sizes share one five-print minimum across all photos. The 8×10 tier also applies across all photos, not separately to each image. Posters do not receive the shared-delivery saving and may ship separately.
+Small prints and 8×10s share a **$5 saving** when combined in one order. For example, five small prints plus one 8×10 cost **$19 before tax**. Mixed orders share checkout but may arrive separately.
 
-Examples before sales tax: ten small prints **$14.50**; five 8×10s **$24**; five small prints + one 8×10 **$19**; five small prints + a poster **$40**. Maximum 100 non-poster prints plus one poster. Orders below five small prints still cost $12; only the approved quantity is printed.
+Confirmation emails and the private order page show the actual photos, quantities and approved total. Shipping updates follow the printer’s confirmed dispatch; estimated delivery is **7–12 business days after payment**.
 
-Set `items[].product` to `prints` (4×6), `square` (4×4), `enlargement` (8×10), or `poster` (12×16). The top-level `product` is the default for older clients. `/api/catalog` publishes prices in **integer USD cents**, tier rules, `shippingIncluded: true`, and the mixed-order saving. Native Poppy and HTTP compatibility use the same pricing functions in `src/offer.ts`.
-
-- **Quotes and existing orders:** quotes expire after 15 minutes; checkout expires roughly one hour after order creation. Approved amounts are frozen. Existing orders and Stripe sessions keep their original prices, including any old shipping charge. Changes require a new proposal and approval.
-- **Coupons:** applied before approval, capped at the remaining order value. Fully covered orders can complete free checkout. Discounts may intentionally be loss-making; no cash credit remains.
-- **Stripe itemization:** one combined prints line, reduced by the coupon, plus tax when applicable. New quotes have no separate shipping charge. This is not a per-photo Stripe itemization. The order page and confirmation email show ordered photos, quantities and saved totals.
-- **Receipts:** paid nonzero orders have a private “View Stripe payment” action; unpaid orders link to checkout while valid. Free and simulated orders have no Stripe charge receipt.
-- **Costs:** fresh supplier quotes are checked before checkout and fulfillment. The model includes supplier tax (quoted tax or a 10% allowance), standard domestic card fees of 2.9% + 30¢, 50¢ for Stripe Tax, and a $1 contribution floor. This is not guaranteed net profit; international-card fees, overhead and exceptional costs are excluded. See [current margin policy](docs/ORDER-MARGINS.md); [older pricing research](docs/PRICING-RESEARCH.md) is historical.
-- **Emails and tracking:** confirmation includes ordered photos, full shipping address, saved total and private order link. Shipment emails are queued when the provider confirms dispatch; tracking is included when available. Empty shipment placeholders are hidden on the order page.
-- **Delivery:** the 7–12-business-day arrival window is our planning estimate, not a provider guarantee or measured delivery performance. The app never infers delivery from shipment.
+See [pricing, payment and delivery details](docs/PRICING.md) for API product IDs, limits, coupons, Stripe itemization and cost checks.
 
 ## Hosted example
 
@@ -171,29 +186,3 @@ Private codes can sponsor part or all of an order. Codes may be single-use or ha
 ### Order cost protection
 
 Live orders check current supplier costs at proposal, checkout creation and fulfillment. Coupon discounts are intentional merchant subsidies; ordinary orders must cover conservative costs and reserves. A cost increase after payment holds printing for review/refund. See [margin policy and combined-shipping research](docs/ORDER-MARGINS.md) for assumptions and limits.
-
-### Agent conversation
-
-Approval summaries are compact receipts: photos with matching quantities/crops are grouped, with exceptions and low-resolution warnings retained. Agents should collect missing details together, use a single mixed order for one destination, show numbered previews alongside the receipt, and keep API mechanics out of customer chat. The same guidance is published for native Poppy, HTTP compatibility, and sandbox clients. Explicit approval of the complete terms is still required. Client agents control their own UI and may not follow every presentation instruction.
-
-### Ordering method and native Poppy verification
-
-Orders record `quote.orderingMethod` on the server when proposed. The order response also returns `orderingMethod`. After verified payment, successful order states include `successMessage` for the agent to say once alongside the verified status and exact private order link. Pending, attention, cancelled and unknown-method orders omit it. Sandbox messages explicitly identify simulated payment and fulfillment. HTTP use does not establish that an agent lacks native support. The the private order page and confirmation email show its readable label:
-
-- `native-poppy`: authenticated Poppy client with a DPoP-bound session, signed out or signed in.
-- `http-compatibility`: the separate Bearer-token HTTP API; not Personal Agent Protocol and not a verified agent identity.
-- `visual-demo`: the local scripted demo identity.
-
-Customer account sign-in is independent of the integration method. Clients cannot submit or override this field. Old orders use their original session if available; missing historical evidence is left unlabeled. A native authentication failure must not silently switch an order to compatibility access.
-
-The native schema remains `/openapi.json`, discovered through `/.well-known/poppy.json`. Non-native agents use `/api/compat/instructions` and `/api/compat/openapi.json`. The hosted sandbox allows native sessions only. See [sandbox testing](docs/SANDBOX.md) for DPA and reference-client tests. Passing the reference client does not establish that the deployed DPA chat UI passed.
-
-### Hidden extra: custom T-shirt
-
-The unlinked `/shirt` page offers a **Bella+Canvas 3001 T-shirt: $29 for the first, $17 for each additional shirt, including US shipping, plus tax**, with sample color previews. Shirts replace mugs as the only new Easter egg product. Existing mug records remain readable.
-
-Agents use `items[].product: "tshirt"`, `color` (white, black, navy blue, orange, natural) and `size` (s, m, l, xl). Ask for these choices and the photo together. Use separate items with quantities for each photo/color/size/fit combination, up to 20 shirts per order; prints may share checkout but can ship separately. Show every returned custom mockup with its color, size and quantity. Record explicit user approval using `POST /api/operations/{id}/shirt-previews` (`approveShirtPreviews`) with `revision`, `approved_by: "user"` and exactly all shirt `previewIds` before standard operation confirmation. Checkout rejects missing approval. This is a store API, not a change to the Poppy protocol. A change to color, size, photo or crop requires a new proposal and explicit approval. Both native Poppy and HTTP compatibility use the same validation and fulfillment.
-
-The mockup is an approximate illustration, not a photograph or exact garment measurement. It shows the selected color and the same front artwork used for fulfillment. `contain` preserves the photo with transparent, unprinted margins; `cover` fills the portrait print area. Source photos remain rectangular; white within a photo is printed. The server sends only the 4680 × 5790 PNG artwork to Prodigi's `front` print area, never the shirt mockup. Signed preview URLs, email refresh and retention cleanup include these assets.
-
-Live US quotes on 2026-10-12 returned $12 production + $10.75 shipping for one shirt, with $14.25 incremental production/shipping for each additional shirt (mixed M/XL, black/orange, tested through 20). Current exact variant availability, US routing and contribution checks run before every real order. Stripe Tax classifies shirts as clothing separately from photos and allocates coupon discounts across those categories. See [T-shirt details](docs/PHOTO-TSHIRT.md).
