@@ -30,10 +30,6 @@ The [interactive demo](https://printwithpoppy.com/demo) walks through the journe
 
 **Built with:** React + Vite · TypeScript · Express · SQLite · Sharp · JOSE · Stripe · Prodigi · Resend
 
-### Agent conversation
-
-Approval summaries are compact receipts: photos with matching quantities/crops are grouped, with exceptions and low-resolution warnings retained. Agents should collect missing details together, use a single mixed order for one destination, show numbered previews alongside the receipt, and keep API mechanics out of customer chat. The same guidance is published for native Poppy, HTTP compatibility, and sandbox clients. Explicit approval of the complete terms is still required. Client agents control their own UI and may not follow every presentation instruction.
-
 ### Ordering method and native Poppy verification
 
 Orders record `quote.orderingMethod` on the server when proposed. The order response also returns `orderingMethod`. After verified payment, successful order states include `successMessage` for the agent to say once alongside the verified status and exact private order link. Pending, attention, cancelled and unknown-method orders omit it. Sandbox messages explicitly identify simulated payment and fulfillment. HTTP use does not establish that an agent lacks native support. The private order page and confirmation email show its readable label:
@@ -178,11 +174,3 @@ Malformed JSON bodies return `400 invalid_request`; oversized JSON bodies return
 ## License
 
 Project code is available under the [MIT License](LICENSE). Third-party fonts retain their accompanying licenses.
-
-### Private discounts
-
-Private codes can sponsor part or all of an order. Codes may be single-use or have a shared campaign redemption limit. Agents supply `couponCode` before approval; the quote, checkout and confirmation reflect the discount. See [code generation and redemption](docs/COUPONS.md). Generated codes are private and are never committed.
-
-### Order cost protection
-
-Live orders check current supplier costs at proposal, checkout creation and fulfillment. Coupon discounts are intentional merchant subsidies; ordinary orders must cover conservative costs and reserves. A cost increase after payment holds printing for review/refund. See [margin policy and combined-shipping research](docs/ORDER-MARGINS.md) for assumptions and limits.
