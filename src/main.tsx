@@ -270,6 +270,9 @@ function Footer({ compact = false }: { compact?: boolean }) {
         </div>
         <div className="store-faq">
           <h2>FAQ</h2>
+          <Faq title="Do I need my own photos?">
+            <p>You can upload your own photos to your personal agent, or ask for our yellow, orange and red poppy artwork. Your agent will show you the prints and confirm your choices before checkout. The same print prices apply.</p>
+          </Faq>
           <Faq title="What's the point of this?">
             <p>
               Printed photos are a little delight: something to put on the
@@ -413,7 +416,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const sandbox = config.environment === "agent-sandbox";
-  const prompt = sandbox ? `I want to test ordering photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and verify /api/config says environment=agent-sandbox. Ask me for sample photos and use fictional shipping details and my email address for test emails. Show the proposal and ask for approval, then use simulatePayment and simulateShipment and show the captured confirmation and shipping emails. No real card or prints. Order emails may be sent to the order email address. Keep all requests and session tokens on this sandbox origin.` : `Please help me order photo prints from https://printwithpoppy.com. If you support Personal Agent Protocol and native Poppy sessions, read /.well-known/poppy.json and the catalog. If you do not support native Poppy sessions, use https://printwithpoppy.com/api/compat/instructions for HTTP compatibility access; no private signing key is needed.`;
+  const prompt = sandbox ? `I want to test ordering photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and verify /api/config says environment=agent-sandbox. Offer me the yellow, orange and red sample poppy artwork or ask me to upload photos, and use fictional shipping details and my email address for test emails. Show the proposal and ask for approval, then use simulatePayment and simulateShipment and show the captured confirmation and shipping emails. No real card or prints. Order emails may be sent to the order email address. Keep all requests and session tokens on this sandbox origin.` : `Please help me order photo prints from https://printwithpoppy.com. Ask me to upload my photos, or offer the yellow, orange and red poppy artwork if I do not have photos ready. If you support Personal Agent Protocol and native Poppy sessions, read /.well-known/poppy.json and the catalog. If you do not support native Poppy sessions, use https://printwithpoppy.com/api/compat/instructions for HTTP compatibility access; no private signing key is needed.`;
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -428,6 +431,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
     <div className="store-heading">
       <h1 id="home-title">You should print your photos.</h1>
       <p>Get your personal agent to deliver photo prints to your door</p>
+      <p>Upload your own photos, or ask your agent for the yellow, orange and red poppy prints shown below.</p>
     </div>
   );
   const productSection = (
@@ -628,12 +632,13 @@ function Guide({ config }: { config: Config }) {
         <code> /oauth/token</code>. Disconnect at <code>/oauth/revoke</code>.
         Older guest orders are not automatically linked.
       </p>
-      <h2>3. Upload the user’s photos</h2>
+      <h2>3. Upload photos or choose poppy artwork</h2>
       <p>
         <code>POST /api/photos</code> with multipart field <code>photo</code>.
         Accepts JPEG, PNG or WebP, up to 20 MB and 40 megapixels per file. Keep
         each returned photo ID. Do not send remote image URLs.
       </p>
+      <p>No photos ready? Offer yellow, orange or red poppies. After the user chooses, call <code>POST /api/photos/samples</code> with <code>{'{"color":"orange"}'}</code> in the same authenticated session. Use the returned photo ID and previews just like an upload. Normal print prices apply.</p>
       <h2>4. Propose the order and ask for approval</h2>
       <p>
         <code>POST /api/orders</code> with an <code>Idempotency-Key</code>,

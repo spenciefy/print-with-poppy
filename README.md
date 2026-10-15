@@ -28,6 +28,8 @@ A real photo-printing store and an open-source example of **[Personal Agent Prot
 
 The [interactive demo](https://printwithpoppy.com/demo) walks through the journey with sample poppy artwork and simulated payment. See [SPEC.md](SPEC.md) for the product decisions and [authentication options](#native-poppy-and-compatibility-access) for native and compatibility integrations.
 
+No photos ready? Ask your agent for the yellow, orange or red poppy artwork. Both native Poppy and HTTP compatibility clients can call `addSamplePhoto` (`POST /api/photos/samples`, JSON `{"color":"orange"}`) in their existing authenticated session. The catalog lists all three samples. Use the returned photo ID with `proposeOrder`, show previews, and obtain the usual approval. These are real printable images at normal prices in production; only the sandbox simulates payment and fulfillment.
+
 **Built with:** React + Vite · TypeScript · Express · SQLite · Sharp · JOSE · Stripe · Prodigi · Resend
 
 ### Ordering method and native Poppy verification
