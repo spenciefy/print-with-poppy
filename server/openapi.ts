@@ -228,6 +228,22 @@ export function openapi(compatibility = false) {
             },
           }
         : {}),
+      "/api/photos/samples": {
+        post: {
+          ...secured,
+          operationId: "addSamplePhoto",
+          summary: "Use a yellow, orange or red poppy artwork instead of uploading a photo",
+          description: "Offer these samples when the user has no photos. Only add artwork the user chooses. Returns a session-owned Photo ID and previews for proposeOrder, just like uploadPhoto. This does not place an order; normal prices, preview approval and payment still apply in the live store.",
+          requestBody: { required: true, content: { "application/json": { schema: {
+            type: "object", additionalProperties: false, required: ["color"],
+            properties: { color: { type: "string", enum: ["yellow", "orange", "red"] } },
+          } } } },
+          responses: {
+            201: response("Photo ID, label, dimensions and signed previews"),
+            400: response("Invalid sample selection", ref("Error")),
+          },
+        },
+      },
       "/api/photos": {
         post: {
           ...secured,

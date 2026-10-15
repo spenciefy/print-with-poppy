@@ -901,6 +901,43 @@ test("malformed JSON is actionable, not a retryable server error", async () => {
   assert.equal(oversized.status, 413);
 });
 
+test("sample poppies work with native and compatibility sessions and remain private", async () => {
+  const a = await makeAgent();
+  for (const color of ["yellow", "orange", "red"]) {
+    const r = await a.request("/api/photos/samples", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ color }),
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    assert.equal(r.body.sampleColor, color);
+    assert.match(r.body.name, /^Photo \d+$/);
+    assert.ok(r.body.previews.cover);
+    assert.equal(photos.ownedPhoto(r.body.id, a.session.session_id).id, r.body.id);
+    assert.throws(() => photos.ownedPhoto(r.body.id, "other-session"));
+    const proposal = await a.request("/api/orders", {
+      method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+      body: JSON.stringify({ email: "test@example.com", address, items: [{ photoId: r.body.id, quantity: 5, fit: "contain" }] }),
+    });
+    assert.equal(proposal.status, 202, JSON.stringify(proposal.body));
+    assert.ok(proposal.body.operation);
+  }
+  const invalid = await a.request("/api/photos/samples", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ color: "../../.env" }),
+  });
+  assert.equal(invalid.status, 400);
+  const denied = await fetch(origin + "/api/photos/samples", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"color":"red"}' });
+  assert.equal(denied.status, 401);
+  const { config } = await import("../server/config.js");
+  const previous = config.compatibility;
+  try {
+    config.compatibility = true;
+    const session = await (await fetch(origin + "/api/agent-sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+    const sample = await fetch(origin + "/api/photos/samples", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: '{"color":"orange"}' });
+    assert.equal(sample.status, 201);
+    const photo = await sample.json();
+    assert.equal(photos.ownedPhoto(photo.id, session.session_id).id, photo.id);
+  } finally { config.compatibility = previous; }
+});
+
 test("discovery stays native while compatibility is documented separately", async () => {
   const discovery = await (
     await fetch(origin + "/.well-known/poppy.json")
@@ -911,6 +948,7 @@ test("discovery stays native while compatibility is documented separately", asyn
   assert.equal(native.components.securitySchemes.AgentGuest, undefined);
   assert.doesNotMatch(native.info.description, /\/api\/agent-sessions|Bearer/);
   assert.deepEqual(native.paths["/api/photos"].post.security, [{ DPoP: [] }]);
+  assert.deepEqual(native.paths["/api/photos/samples"].post.security, [{ DPoP: [] }]);
   assert.equal(native.components.securitySchemes.DPoP.scheme, "DPoP");
   for (const path of ["/api/account", "/api/account/orders"]) {
     assert.deepEqual(native.paths[path].get.security, [
@@ -943,6 +981,7 @@ test("discovery stays native while compatibility is documented separately", asyn
   ).json();
   assert.ok(compat.paths["/api/agent-sessions"]);
   assert.equal(compat.components.securitySchemes.DPoP, undefined);
+  assert.deepEqual(compat.paths["/api/photos/samples"].post.security, [{ AgentGuest: [] }]);
   assert.deepEqual(compat.paths["/api/photos"].post.security, [
     { AgentGuest: [] },
   ]);

@@ -1,4 +1,5 @@
 import { shirtMediaVariants } from "../src/offer.js";
+import { samplePhotos, addSamplePhoto } from "./sample-photos.js";
 import express from "express";
 import { catalog, offer } from "../src/offer.js";
 import helmet from "helmet";
@@ -149,6 +150,7 @@ app.post(
 app.get("/api/catalog", (_req, res) =>
   res.json({
     products: catalog,
+    samplePhotos,
     currency: "USD",
     shippingIncluded: true,
     shipping: {
@@ -436,6 +438,9 @@ app.use(
     next();
   },
 );
+app.post("/api/photos/samples", async (req, res) => {
+  res.status(201).json(await addSamplePhoto(req.body, res.locals.session.id));
+});
 app.post("/api/photos", fileUpload.single("photo"), async (req, res) => {
   if (!req.file) throw new HttpError(400, "photo_required", "Attach a photo.");
   res
