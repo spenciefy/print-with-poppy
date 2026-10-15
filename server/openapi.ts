@@ -192,6 +192,7 @@ export function openapi(compatibility = false) {
               get: {
                 ...secured,
                 operationId: "getAccount",
+                security: [{ DPoP: ["poppy:read"] }],
                 summary: "View the signed-in account",
                 description:
                   "Requires poppy:read. Returns sign_in_required for a signed-out token; use discovery sign-in, then retry.",
@@ -205,6 +206,7 @@ export function openapi(compatibility = false) {
               get: {
                 ...secured,
                 operationId: "listAccountOrders",
+                security: [{ DPoP: ["poppy:read"] }],
                 summary: "List previous orders",
                 description:
                   "Requires poppy:read. Newest first, up to 50 orders. Use next_cursor for the next page. Only orders placed while signed in are linked; older guest orders remain private to their original session.",
