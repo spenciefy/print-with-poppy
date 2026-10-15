@@ -282,6 +282,12 @@ function Footer({ compact = false }: { compact?: boolean }) {
               an order, with your approval.
             </p>
           </Faq>
+          <Faq title="Where can I try a personal agent?">
+            <p>
+              Try <a href="https://poppydemoagent.dev/">Poppy Demo Agent</a>,
+              a demo personal agent built for Personal Agent Protocol.
+            </p>
+          </Faq>
           <Faq title="Does this work with Muse or Instinct?">
             <p>
               Yes, but currently only through the HTTP guest API. Muse and
