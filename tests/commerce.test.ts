@@ -912,6 +912,11 @@ test("discovery stays native while compatibility is documented separately", asyn
   assert.doesNotMatch(native.info.description, /\/api\/agent-sessions|Bearer/);
   assert.deepEqual(native.paths["/api/photos"].post.security, [{ DPoP: [] }]);
   assert.equal(native.components.securitySchemes.DPoP.scheme, "DPoP");
+  for (const path of ["/api/account", "/api/account/orders"]) {
+    assert.deepEqual(native.paths[path].get.security, [
+      { DPoP: ["poppy:read"] },
+    ]);
+  }
   // DPA validates required operation parameters before its transport signs the request.
   // Upload must be callable with only the photo, without a model-supplied proof.
   assert.deepEqual(native.paths["/api/photos"].post.parameters, []);
@@ -1504,6 +1509,9 @@ test("percentage coupons recalculate tax on discounted prints and shipping", asy
 });
 
 test("free Stripe checkout has zero line items and no tax charge", async () => {
+  const f = await fixture();
+  const confirmed = commerce.confirm(f.op.operation_id, f.a.session.session_id, 1, "user");
+  const sample = store.get("order", confirmed.orderId!);
   const { config } = await import("../server/config.js");
   const { stripe, checkout } = await import("../server/providers.js");
   const original = stripe!.checkout.sessions.create;
@@ -1518,7 +1526,6 @@ test("free Stripe checkout has zero line items and no tax charge", async () => {
       sent = params;
       return { id: "cs_free", url: "https://checkout.stripe.com/free", expires_at: params.expires_at };
     }) as any;
-    const sample = store.all<any>("order")[0];
     await checkout({ ...sample, quote: { ...sample.quote, subtotal: 1200, shipping: 500, tax: 0, total: 0, printDiscount: 1200, shippingDiscount: 500, discount: 1700 } });
     assert.equal(sent.line_items.length, 1);
     assert.equal(sent.line_items[0].price_data.unit_amount, 0);
