@@ -150,6 +150,7 @@ app.post(
 app.get("/api/catalog", (_req, res) =>
   res.json({
     products: catalog,
+    httpOrderingEnabled: config.compatibility,
     samplePhotos,
     currency: "USD",
     shippingIncluded: true,
@@ -171,6 +172,7 @@ app.get("/api/catalog", (_req, res) =>
 );
 app.get("/api/config", (_req, res) =>
   res.json({
+    httpOrderingEnabled: config.compatibility,
     mode: config.APP_MODE,
     environment: config.agentSandbox ? "agent-sandbox" : config.APP_MODE,
     sandboxEmailDelivery: config.agentSandbox && config.sandboxEmailDelivery,
@@ -206,7 +208,7 @@ app.get("/.well-known/poppy.json", (_req, res) =>
         url: `${config.origin}/openapi.json`,
         description: config.agentSandbox
           ? sandboxDescription
-          : "Live store: browse the catalog, upload photos, approve home-delivered prints, pay by card and track orders. Agents without native Poppy session support should read /api/compat/instructions for the separate HTTP compatibility API; no private signing key is required.",
+          : `Live store: browse the catalog, upload photos, approve home-delivered prints, pay by card and track orders. ${config.compatibility ? "Agents without native Poppy session support should read /api/compat/instructions for the separate HTTP compatibility API; no private signing key is required." : "Native Personal Agent Protocol sessions are required. HTTP compatibility ordering is disabled; do not fall back to Bearer sessions."}`,
       },
     ],
     extensions: {
@@ -233,7 +235,10 @@ app.get("/.well-known/oauth-authorization-server", (_req, res) =>
     dpop_signing_alg_values_supported: ["ES256", "RS256", "EdDSA"],
   }),
 );
-app.get("/api/compat/openapi.json", (_req, res) => res.json(openapi(true)));
+app.get("/api/compat/openapi.json", (_req, res) => {
+  if (!config.compatibility) throw new HttpError(404, "compatibility_disabled", "HTTP compatibility ordering is disabled. Use /.well-known/poppy.json for native Poppy sessions.");
+  res.json(openapi(true));
+});
 app.get("/api/compat/instructions", (_req, res) =>
   res.type("text/plain").send(agentInstructions(true)),
 );

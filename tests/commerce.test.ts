@@ -938,6 +938,32 @@ test("sample poppies work with native and compatibility sessions and remain priv
   } finally { config.compatibility = previous; }
 });
 
+test("native-only mode rejects existing HTTP tokens while native ordering continues", async () => {
+  const { config } = await import("../server/config.js");
+  const old = config.compatibility;
+  try {
+    config.compatibility = true;
+    const guest = await (await fetch(origin + "/api/agent-sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+    const native = await fixture();
+    config.compatibility = false;
+    for (const path of ["/api/photos", "/api/photos/samples", "/api/orders", `/api/operations/${native.op.operation_id}/confirm`]) {
+      const r = await fetch(origin + path, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${guest.access_token}` }, body: "{}" });
+      assert.equal(r.status, 401, path);
+    }
+    assert.equal((await fetch(origin + "/api/compat/openapi.json")).status, 404);
+    assert.match(await (await fetch(origin + "/api/compat/instructions")).text(), /disabled/);
+    assert.doesNotMatch(await (await fetch(origin + "/agent.txt")).text(), /use \/api\/compat\/instructions/);
+    const discovery = await (await fetch(origin + "/.well-known/poppy.json")).json();
+    assert.match(discovery.apis[0].description, /HTTP compatibility ordering is disabled/);
+    for (const path of ["/api/config", "/api/catalog"]) assert.equal((await (await fetch(origin + path)).json()).httpOrderingEnabled, false);
+    const confirmed = await native.a.request(`/api/operations/${native.op.operation_id}/confirm`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: 1, approved_by: "user" }) });
+    assert.equal(confirmed.status, 200, JSON.stringify(confirmed.body));
+    config.compatibility = true;
+    assert.equal((await fetch(origin + "/api/compat/openapi.json")).status, 200);
+    assert.equal((await (await fetch(origin + "/api/config")).json()).httpOrderingEnabled, true);
+  } finally { config.compatibility = old; }
+});
+
 test("discovery stays native while compatibility is documented separately", async () => {
   const discovery = await (
     await fetch(origin + "/.well-known/poppy.json")

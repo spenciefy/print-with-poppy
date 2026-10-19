@@ -6,7 +6,7 @@ import "./style.css";
 import Demo from "./Demo";
 import { orderSubtitle, visibleShipment } from "./order-copy";
 import { shirtColors, shirtSizes, shirtSubtotal, shirtPath, productOf, shippingSummary, orderProducts, orderLabel, merchandiseLabel } from "./offer";
-type Config = { environment?: string; mode: string; origin: string; support: string };
+type Config = { httpOrderingEnabled?: boolean; environment?: string; mode: string; origin: string; support: string };
 const money = (c: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
     c / 100,
@@ -19,7 +19,7 @@ async function api(url: string, init: RequestInit = {}) {
   return data;
 }
 const Arrow = () => <span aria-hidden="true">↗</span>;
-function ShirtExtra() {
+function ShirtExtra({ config }: { config: Config }) {
   const [color, setColor] = useState<keyof typeof shirtColors>("natural");
   const [quantities, setQuantities] = useState<Record<string, number>>({ s: 0, m: 1, l: 0, xl: 0 });
   const count = Object.values(quantities).reduce((a, b) => a + b, 0);
@@ -40,7 +40,7 @@ function ShirtExtra() {
         <fieldset><legend>How many of each size?</legend><div className="shirt-quantities">{shirtSizes.map(size => <label key={size}>{size.toUpperCase()}<input aria-label={`Quantity size ${size.toUpperCase()}`} type="number" min="0" max="20" step="1" value={quantities[size]} onChange={e => { setQuantities(q => ({ ...q, [size]: Math.max(0, Math.min(20, Math.floor(Number(e.target.value) || 0))) })); setCopied(false); }} /></label>)}</div></fieldset>
         <p aria-live="polite">{valid ? `${count} ${count === 1 ? "shirt" : "shirts"} · ${money(shirtSubtotal(count))} before tax${count > 1 ? ` · ${money(shirtSubtotal(count) / count)} each on average` : ""}` : "Choose 1–20 shirts in total."}</p>
         <p>Send your agent a photo and these choices. You’ll see your own shirt preview before approving. Shirts may ship separately from prints.</p>
-        <button className="copy-btn" type="button" disabled={!valid} onClick={async () => { try { await navigator.clipboard.writeText(`Please help me order custom T-shirts from https://printwithpoppy.com in ${color}: ${shirtSizes.filter(s => quantities[s]).map(s => `${quantities[s]} × ${s.toUpperCase()}`).join(", ")}. Ask me for the photo and show every custom shirt preview with color, size and quantity. Get my explicit approval of the previews before preparing checkout. If you support native Poppy sessions, use /.well-known/poppy.json. Otherwise use https://printwithpoppy.com/api/compat/instructions.`); setCopied(true); } catch { setCopied(false); } }}>{copied ? "Copied" : "Copy T-shirt request"}</button>
+        <button className="copy-btn" type="button" disabled={!valid} onClick={async () => { try { await navigator.clipboard.writeText(`Please help me order custom T-shirts from https://printwithpoppy.com in ${color}: ${shirtSizes.filter(s => quantities[s]).map(s => `${quantities[s]} × ${s.toUpperCase()}`).join(", ")}. Ask me for the photo and show every custom shirt preview with color, size and quantity. Get my explicit approval of the previews before preparing checkout. If you support native Poppy sessions, use /.well-known/poppy.json. ${config.httpOrderingEnabled ? "Otherwise use https://printwithpoppy.com/api/compat/instructions." : "Native Personal Agent Protocol is required; HTTP compatibility ordering is disabled."}`); setCopied(true); } catch { setCopied(false); } }}>{copied ? "Copied" : "Copy T-shirt request"}</button>
       </div>
     </div>
   </main>;
@@ -175,7 +175,7 @@ function DiscoveryBox() {
     </div>
   );
 }
-function Footer({ compact = false }: { compact?: boolean }) {
+function Footer({ compact = false, httpOrderingEnabled = false }: { compact?: boolean; httpOrderingEnabled?: boolean }) {
   return (
     <footer className={`protocol-footer${compact ? " protocol-concise" : ""}`}>
       <section aria-labelledby="protocol-title">
@@ -293,7 +293,7 @@ function Footer({ compact = false }: { compact?: boolean }) {
           </Faq>
           <Faq title="Does this work with Muse or Instinct?">
             <p>
-              Yes, but currently only through the HTTP guest API. Muse and
+              {httpOrderingEnabled ? "Yes, but currently only through the HTTP guest API." : "HTTP guest ordering is disabled on this environment. A native Personal Agent Protocol session is required."} Muse and
               Instinct do not currently support Personal Agent Protocol, although
               support should be coming soon as the Poppy spec is finalized.
             </p>
@@ -416,7 +416,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const sandbox = config.environment === "agent-sandbox";
-  const prompt = sandbox ? `I want to test ordering photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and verify /api/config says environment=agent-sandbox. Offer me the yellow, orange and red sample poppy artwork or ask me to upload photos, and use fictional shipping details and my email address for test emails. Show the proposal and ask for approval, then use simulatePayment and simulateShipment and show the captured confirmation and shipping emails. No real card or prints. Order emails may be sent to the order email address. Keep all requests and session tokens on this sandbox origin.` : `Please help me order photo prints from https://printwithpoppy.com. Ask me to upload my photos, or offer the yellow, orange and red poppy artwork if I do not have photos ready. If you support Personal Agent Protocol and native Poppy sessions, read /.well-known/poppy.json and the catalog. If you do not support native Poppy sessions, use https://printwithpoppy.com/api/compat/instructions for HTTP compatibility access; no private signing key is needed.`;
+  const prompt = sandbox ? `I want to test ordering photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and verify /api/config says environment=agent-sandbox. Offer me the yellow, orange and red sample poppy artwork or ask me to upload photos, and use fictional shipping details and my email address for test emails. Show the proposal and ask for approval, then use simulatePayment and simulateShipment and show the captured confirmation and shipping emails. No real card or prints. Order emails may be sent to the order email address. Keep all requests and session tokens on this sandbox origin.` : `Please help me order photo prints from https://printwithpoppy.com. Ask me to upload my photos, or offer the yellow, orange and red poppy artwork if I do not have photos ready. If you support Personal Agent Protocol and native Poppy sessions, read /.well-known/poppy.json and the catalog. ${config.httpOrderingEnabled ? "If you do not support native Poppy sessions, use https://printwithpoppy.com/api/compat/instructions for HTTP compatibility access; no private signing key is needed." : "Native Personal Agent Protocol is required; HTTP compatibility ordering is disabled."}`;
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -547,7 +547,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
           </>
         )}
       </main>
-      <Footer compact={Boolean(variant)} />
+      <Footer httpOrderingEnabled={config.httpOrderingEnabled} compact={Boolean(variant)} />
     </div>
   );
 }
@@ -610,7 +610,7 @@ function Guide({ config }: { config: Config }) {
         metadata URLs require registration with{" "}
         <a href={`mailto:${config.support}`}>{config.support}</a>.
       </p>
-      {!sandbox && <p>
+      {!sandbox && config.httpOrderingEnabled && <p>
         <strong>Without native Poppy support:</strong> read the separate{" "}
         <a href="/api/compat/instructions">HTTP compatibility instructions</a>{" "}
         and <a href="/api/compat/openapi.json">compatibility API reference</a>.
@@ -1081,7 +1081,7 @@ function App() {
       {config.environment === "agent-sandbox" && <aside className="sandbox-banner" aria-label="Sandbox environment"><strong>Sandbox environment</strong><span>Sample orders only. No real payments or prints. Test emails are sent to your order email address when enabled.</span><a href="/sandbox">Testing guide ↗</a></aside>}
       <Header route={route} navigate={navigate} />
       {route === "/shirt" ? (
-        <ShirtExtra />
+        <ShirtExtra config={config} />
       ) : route === "/demo" ? (
         <Demo />
       ) : route === "/variants" ? (
@@ -1110,7 +1110,7 @@ function App() {
         route !== "/for-agents" &&
         !route.startsWith("/variants") &&
         !route.startsWith("/order/") &&
-        !route.startsWith("/checkout/") && <Footer />}
+        !route.startsWith("/checkout/") && <Footer httpOrderingEnabled={config.httpOrderingEnabled} />}
     </>
   );
 }
