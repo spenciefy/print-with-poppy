@@ -171,6 +171,14 @@ Brand and sample artwork use abstract orange, red and yellow poppies. The homepa
 
 For agents without native Poppy support, `/api/compat/instructions` and `/api/compat/openapi.json` document the separate HTTP compatibility path. It uses unverified Bearer sessions and does **not** enforce the native identity allowlist or DPoP binding. `ALLOW_COMPAT_AGENT_SESSIONS=false` disables it in every mode; when unset it defaults on only in demo mode. Existing compatibility tokens remain supported when enabled.
 
+### Require native Poppy ordering
+
+Set `ALLOW_COMPAT_AGENT_SESSIONS=false` in the target service's environment and redeploy. Set it to `true` and redeploy to restore HTTP guest ordering. Native Poppy still uses HTTPS; this flag controls the separate Bearer-token compatibility authentication path, not the shared order URL.
+
+With the flag off, new guest sessions and requests using existing guest tokens are rejected, including uploads, samples, order proposals and confirmations. `/api/config` and `/api/catalog` expose `httpOrderingEnabled: false`; the website prompt and discovery stop recommending compatibility, and its OpenAPI endpoint returns 404. Native sessions remain available. Disabling compatibility does not cancel existing paid orders or remove their private status pages.
+
+For a native-only test, verify the flag via `/api/config`, use a registered agent's client identity and DPoP session, add photos, approve a proposal, and complete the sandbox payment/shipping flow. Check that the final order reports `orderingMethod: "native-poppy"`. A successful HTTP request alone does not prove Poppy authentication. The hosted agent sandbox already requires compatibility to be disabled; leave production enabled while non-Poppy agents still need it.
+
 Malformed JSON bodies return `400 invalid_request`; oversized JSON bodies return `413 request_too_large`. Correct the request rather than retrying it unchanged.
 
 ## License
