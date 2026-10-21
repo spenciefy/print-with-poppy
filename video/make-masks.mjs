@@ -15,8 +15,9 @@ for(let start=0;start<w*h;start++){
  const x=sx/points.length,y=sy/points.length;
  let best=0,dist=Infinity;centers.forEach(([cx,cy],j)=>{let d=Infinity;for(const pixel of points){const px=pixel%w,py=Math.floor(pixel/w);d=Math.min(d,(px-cx)**2+(py-cy)**2);}if(d<dist){dist=d;best=j;}});
  // These touching petal components belong to the large central and edge blooms.
- if(x>610&&x<820&&y>230&&y<460)best=5;
+ if(points.includes(350*w+700))best=5;
  if(x<300&&y>600)best=8;
+ if(points.some(v=>{const px=v%w,py=Math.floor(v/w);return ((px-420)**2+(py-700)**2)<1800;}))best=9;
  for(const i of points)masks[best][i]=255;
 }
 for(let j=0;j<masks.length;j++){
