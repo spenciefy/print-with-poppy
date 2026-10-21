@@ -17,7 +17,7 @@ function Poppy() {
   const frame=useCurrentFrame(); const {durationInFrames}=useVideoConfig();
   const phase=frame/durationInFrames*Math.PI*2;
   return <AbsoluteFill style={{background:'#eee7db',padding:18,overflow:'hidden'}}>
-    <div style={{width:'100%',height:'100%',padding:22,background:'#fff',boxSizing:'border-box',boxShadow:'0 4px 14px rgba(62,42,20,.16)'}}> 
+    <div style={{width:'100%',height:'100%',padding:22,background:'#fff',boxSizing:'border-box',boxShadow:'0 4px 14px rgba(62,42,20,.16)'}}>
     <svg width="100%" height="100%" viewBox="0 0 1200 630" preserveAspectRatio="xMidYMid slice" style={{display:'block',background:'#faf5e9'}} aria-label="A white-bordered photo print of gently swaying orange, yellow and red poppies">
       {flowers.map(([x,y,size,angle,color],i)=>{
         // Periodic motion keeps the full print visible and loops without a reset.
