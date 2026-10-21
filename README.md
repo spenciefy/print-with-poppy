@@ -6,7 +6,7 @@
 
 <h1 align="center">Print with Poppy</h1>
 
-<p align="center">You should print your photos.<br />Get your personal agent to deliver photo prints to your door.</p>
+<p align="center">Your photos, printed<br />Get your personal agent to deliver photo prints to your door.</p>
 
 <p align="center">
   <a href="https://printwithpoppy.com">Visit the store</a> ·
