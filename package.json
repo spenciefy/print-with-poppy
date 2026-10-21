@@ -18,7 +18,9 @@
     "build:cloudflare": "npm run build && tsc -p tsconfig.workers.json && node scripts/cloudflare/build.mjs",
     "dev:cloudflare": "wrangler dev",
     "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy --env sandbox",
-    "test:cloudflare": "npm run build:cloudflare && node scripts/cloudflare/test.mjs"
+    "test:cloudflare": "npm run build:cloudflare && node scripts/cloudflare/test.mjs",
+    "deploy:cloudflare:production": "npm run build:cloudflare && wrangler deploy --env production",
+    "test:cloudflare:production": "npm run build:cloudflare && node scripts/cloudflare/test-production.mjs"
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.7",

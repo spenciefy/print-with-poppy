@@ -7,7 +7,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { ZodError } from "zod";
 import { config } from "./config.js";
-import { HttpError } from "./store.js";
+import { get, HttpError } from "./store.js";
 import { paid } from "./commerce.js";
 import { stripe, stripeCheckoutComplete } from "./providers.js";
 import { tick, housekeeping } from "./worker.js";
@@ -84,7 +84,7 @@ app.post(
       ].includes(event.type)
     ) {
       const s = event.data.object as any;
-      if (s.metadata?.order_id)
+      if (s.metadata?.order_id && get("order", s.metadata.order_id))
         paid(s.metadata.order_id, {
           id: s.id,
           amount: s.amount_total,
@@ -179,14 +179,12 @@ app.use(
           `DPoP error="${e.code}"${e.extra.scope ? `, scope="${e.extra.scope}"` : ""}${e.extra.extension ? `, extension="${e.extra.extension}"` : ""}`,
         );
       if (e.status === 429) res.set("Retry-After", "3600");
-      res
-        .status(e.status)
-        .json({
-          error: e.code,
-          error_description: e.message,
-          message: e.message,
-          ...e.extra,
-        });
+      res.status(e.status).json({
+        error: e.code,
+        error_description: e.message,
+        message: e.message,
+        ...e.extra,
+      });
       return;
     }
     console.error(

@@ -160,6 +160,75 @@
         },
       ],
     },
+    "production": {
+      "name": "pwp-cf-production",
+      "vars": {
+        "CF_DEPLOYMENT": "production",
+        "APP_MODE": "live",
+        "AGENT_SANDBOX": "false",
+        "SANDBOX_EMAIL_DELIVERY": "false",
+        "ALLOW_COMPAT_AGENT_SESSIONS": "false",
+        "PUBLIC_URL": "https://pwp-cf-production.spencersyen.workers.dev",
+        "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json",
+        "LIVE_ORDERS_ENABLED": "true",
+        "ORDER_EMAIL_ALLOWLIST": "spencersyen@gmail.com",
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COMMERCE",
+            "class_name": "CommerceState",
+          },
+          {
+            "name": "MEDIA",
+            "class_name": "MediaContainer",
+          },
+          {
+            "name": "PROTOCOL",
+            "class_name": "ProtocolContainer",
+          },
+        ],
+      },
+      "r2_buckets": [
+        {
+          "binding": "PHOTOS",
+          "bucket_name": "pwp-cf-production-photos",
+        },
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "JOBS",
+            "queue": "pwp-cf-production-jobs",
+          },
+        ],
+        "consumers": [
+          {
+            "queue": "pwp-cf-production-jobs",
+            "max_batch_size": 5,
+            "max_batch_timeout": 1,
+            "max_retries": 5,
+            "dead_letter_queue": "pwp-cf-production-jobs-dlq",
+          },
+        ],
+      },
+      "containers": [
+        {
+          "class_name": "MediaContainer",
+          "image": "./containers/media/Dockerfile",
+          "image_build_context": ".",
+          "instance_type": "standard-1",
+          "max_instances": 1,
+        },
+        {
+          "class_name": "ProtocolContainer",
+          "image": "./containers/protocol-fetch/Dockerfile",
+          "image_build_context": ".",
+          "instance_type": "lite",
+          "max_instances": 1,
+        },
+      ],
+    },
   },
   "workers_dev": true,
   "preview_urls": false,

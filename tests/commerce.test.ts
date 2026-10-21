@@ -667,6 +667,14 @@ test("Stripe webhook signature and approved total are verified before accepting 
       });
       assert.equal(r.status, 200);
     }
+    // Parallel deployments sharing a Stripe account must ignore each other's orders.
+    const foreignEvent = JSON.parse(event(o.quote.total));
+    foreignEvent.data.object.metadata.order_id = "ord_other_deployment";
+    const foreign = JSON.stringify(foreignEvent);
+    const ignored = await fetch(origin + "/api/webhooks/stripe", {
+      method: "POST", headers: {"Content-Type":"application/json", "stripe-signature":stripe!.webhooks.generateTestHeaderString({payload:foreign,secret})}, body:foreign,
+    });
+    assert.equal(ignored.status, 200);
     const mismatch = event(1);
     const r = await fetch(origin + "/api/webhooks/stripe", {
       method: "POST",

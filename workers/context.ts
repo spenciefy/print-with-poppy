@@ -32,21 +32,4 @@ export function runtime() {
 export function withRuntime<T>(value: Runtime, fn: () => T): T {
   return scope.run(value, fn);
 }
-export function configuration(env: Env) {
-  const values = Object.fromEntries(
-    Object.entries(env).filter(([, v]) => typeof v === "string"),
-  ) as Record<string, string>;
-  if (!values.APP_SECRET || values.APP_SECRET.length < 32)
-    throw new Error("Install a unique APP_SECRET of at least 32 characters.");
-  // The parallel deployment cannot accidentally become a real store.
-  if (
-    values.APP_MODE !== "demo" ||
-    values.STRIPE_SECRET_KEY ||
-    values.PRODIGI_API_KEY ||
-    values.STRIPE_WEBHOOK_SECRET
-  )
-    throw new Error(
-      "Cloudflare parallel environment requires simulated providers without payment/printing credentials.",
-    );
-  return parseConfig(values);
-}
+export { configuration } from "./configuration.js";

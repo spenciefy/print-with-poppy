@@ -148,7 +148,15 @@ export default {
         else if (path === "/api/config") {
           const result = await commerce(env).fetch(request);
           response = Response.json(
-            { ...(await result.json()), hosting: "cloudflare" },
+            {
+              ...(await result.json()),
+              hosting: "cloudflare",
+              liveOrdersEnabled:
+                env.CF_DEPLOYMENT === "production"
+                  ? env.LIVE_ORDERS_ENABLED === "true"
+                  : false,
+              restrictedLaunch: !!env.ORDER_EMAIL_ALLOWLIST,
+            },
             { status: result.status },
           );
         } else if (path.startsWith("/media/"))

@@ -1,3 +1,9 @@
+import { recordJobFailure } from "../server/job-failure.js";
+import {
+  verifyStripeEvent,
+  acceptStripeEvent,
+} from "../server/stripe-events.js";
+import { paid } from "../server/commerce.js";
 import { DurableObject } from "cloudflare:workers";
 import { configuration, withRuntime, type Env } from "./context.js";
 import { sqlite } from "./sqlite.js";
@@ -83,6 +89,107 @@ export class CommerceState extends DurableObject<Env> {
     return this.inContext(async () => {
       try {
         this.rate(request);
+        const path = new URL(request.url).pathname;
+        if (path === "/api/webhooks/stripe" && request.method === "POST") {
+          if (this.env.CF_DEPLOYMENT !== "production")
+            throw new HttpError(
+              503,
+              "not_configured",
+              "Stripe is disabled in this environment.",
+            );
+          const reader = request.body?.getReader();
+          const chunks: Uint8Array[] = [];
+          let size = 0;
+          if (reader)
+            for (;;) {
+              const part = await reader.read();
+              if (part.done) break;
+              size += part.value.length;
+              if (size > 1048576) {
+                await reader.cancel();
+                throw new HttpError(
+                  413,
+                  "request_too_large",
+                  "Webhook exceeds size limit.",
+                );
+              }
+              chunks.push(part.value);
+            }
+          const event = await verifyStripeEvent(
+            Buffer.concat(chunks).toString(),
+            request.headers.get("stripe-signature") || "",
+            String(this.env.STRIPE_WEBHOOK_SECRET),
+          );
+          acceptStripeEvent(event, true, (id) => !!get("order", id), paid);
+          await this.scheduleSoon();
+          return Response.json({ received: true });
+        }
+        if (
+          this.env.CF_DEPLOYMENT === "production" &&
+          path === "/api/orders" &&
+          request.method === "POST"
+        ) {
+          if (this.env.LIVE_ORDERS_ENABLED !== "true")
+            throw new HttpError(
+              503,
+              "orders_paused",
+              "New orders are temporarily paused. Existing orders continue processing.",
+            );
+          const allowed = String(this.env.ORDER_EMAIL_ALLOWLIST || "")
+            .split(",")
+            .map((v) => v.trim().toLowerCase())
+            .filter(Boolean);
+          if (allowed.length) {
+            // The shared route still validates/authenticates the request and all order terms.
+            const length = Number(request.headers.get("content-length"));
+            if (length > 131072)
+              throw new HttpError(
+                413,
+                "request_too_large",
+                "Request body exceeds the size limit.",
+              );
+            const reader = request.body?.getReader();
+            const parts: Uint8Array[] = [];
+            let count = 0;
+            if (reader)
+              for (;;) {
+                const item = await reader.read();
+                if (item.done) break;
+                count += item.value.length;
+                if (count > 131072) {
+                  await reader.cancel();
+                  throw new HttpError(
+                    413,
+                    "request_too_large",
+                    "Request body exceeds the size limit.",
+                  );
+                }
+                parts.push(item.value);
+              }
+            const bytes = Buffer.concat(parts);
+            request = new Request(request.url, {
+              method: request.method,
+              headers: request.headers,
+              body: new Uint8Array(bytes),
+            });
+            let body: any;
+            try {
+              body = JSON.parse(bytes.toString());
+            } catch {
+              throw new HttpError(
+                400,
+                "invalid_request",
+                "Send a JSON object.",
+              );
+            }
+            if (!allowed.includes(String(body?.email || "").toLowerCase()))
+              throw new HttpError(
+                403,
+                "restricted_launch",
+                "This parallel production deployment currently accepts only approved test recipients.",
+              );
+          }
+        }
         const response = await this.routes!.app.fetch(request);
         // Alarm already exists before a mutation is acknowledged; outbox delivery is recoverable.
         await this.scheduleSoon();
@@ -269,18 +376,11 @@ export class CommerceState extends DurableObject<Env> {
       } catch {
         return;
       }
-      const terminal = ["pricing_unavailable", "fulfillment_rejected"].includes(
-        (e as any)?.code,
+      this.inContext(
+        () => this.ctx.storage.transactionSync(() => recordJobFailure(job, e)),
+        fence,
       );
-      sql.exec(
-        "UPDATE jobs SET state=?,attempts=attempts+1,next_at=?,error=? WHERE id=?",
-        terminal ? "failed" : "pending",
-        Date.now() +
-          Math.min(3600000, 1000 * 2 ** Math.min(job.attempts + 1, 12)),
-        e instanceof Error ? e.message : "Job failed",
-        jobId,
-      );
-      console.error("Job needs retry", { jobId, kind: job.kind, terminal });
+      console.error("Job needs attention", { jobId, kind: job.kind });
     } finally {
       sql.exec("DELETE FROM leases WHERE id=? AND token=?", jobId, token);
       await this.scheduleSoon();

@@ -32,9 +32,9 @@ No photos ready? Ask your agent for the yellow, orange or red poppy artwork. Bot
 
 **Built with:** React + Vite · TypeScript · Express · SQLite · Sharp · JOSE · Stripe · Prodigi · Resend
 
-### Parallel Cloudflare sandbox
+### Parallel Cloudflare environments
 
-An isolated [Cloudflare sandbox](https://pwp-cf-sandbox.spencersyen.workers.dev) runs native Poppy 0.2 on Workers, Durable Objects, R2 and private containers. It simulates payment/printing and sends labeled sandbox emails. Production remains on its existing infrastructure. See [setup, validation and remaining migration gates](docs/CLOUDFLARE.md).
+An isolated [Cloudflare sandbox](https://pwp-cf-sandbox.spencersyen.workers.dev) runs native Poppy 0.2 on Workers, Durable Objects, R2 and private containers. It simulates payment/printing and sends labeled sandbox emails. A separate [Cloudflare production preview](https://pwp-cf-production.spencersyen.workers.dev) uses real payments and printing, restricted to approved test orders. It has independent storage and provider webhooks. The main production domain remains on its existing infrastructure; a paid end-to-end test and migration checks are still required. See [setup, validation and remaining migration gates](docs/CLOUDFLARE.md).
 
 ### Protocol version
 
