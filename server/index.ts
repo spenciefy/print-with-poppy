@@ -249,8 +249,9 @@ app.get("/agent.txt", (_req, res) =>
 );
 app.post("/oauth/token", async (req, res) => res.json(await issueToken(req)));
 app.post("/oauth/revoke", async (req, res) => {
+  const body = req.body || {};
   if (
-    req.body.client_assertion_type !==
+    body.client_assertion_type !==
     "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
   )
     throw new HttpError(
@@ -258,20 +259,20 @@ app.post("/oauth/revoke", async (req, res) => {
       "invalid_client",
       "A signed client assertion is required.",
     );
-  const c = await client(req.body.client_id);
+  const c = await client(body.client_id);
   let assertion;
   try {
     assertion = await verifyAssertion(
-      req.body.client_assertion,
+      body.client_assertion,
       c.keys,
-      req.body.client_id,
+      body.client_id,
       config.origin,
     );
-    once(`assertion:${req.body.client_id}:${assertion.jti}`, assertion.exp! * 1000 + 5000);
+    once(`assertion:${body.client_id}:${assertion.jti}`, assertion.exp! * 1000 + 5000);
   } catch {
     throw new HttpError(401, "invalid_client", "Invalid client assertion for revocation.");
   }
-  revokeAccount(req.body.token, req.body.client_id);
+  revokeAccount(body.token, body.client_id);
   res.sendStatus(200);
 });
 accountRoutes(app);

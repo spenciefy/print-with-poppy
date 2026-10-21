@@ -2271,6 +2271,12 @@ test("0.2 protocol error bodies, extension challenge and revocation without DPoP
   );
   assert.equal(unknown.status, 404);
   assert.equal(unknown.body.error, "sign_in_not_found");
+  const emptyToken = await fetch(origin + "/oauth/token", { method: "POST" });
+  assert.equal(emptyToken.status, 400);
+  assert.equal((await emptyToken.json()).error, "unsupported_grant_type");
+  const emptyRevoke = await fetch(origin + "/oauth/revoke", { method: "POST" });
+  assert.equal(emptyRevoke.status, 401);
+  assert.equal((await emptyRevoke.json()).error, "invalid_client");
   const ca = await a.assertion(clientId);
   const revoke = () =>
     fetch(origin + "/oauth/revoke", {

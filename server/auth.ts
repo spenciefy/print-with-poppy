@@ -202,7 +202,7 @@ export async function dpop(
   }
 }
 export async function issueToken(req: Request) {
-  const b = req.body;
+  const b = req.body || {};
   if (
     ![
       "urn:ietf:params:oauth:grant-type:jwt-bearer",
