@@ -1,6 +1,6 @@
 # Social preview animation
 
-Eight-second, silent 1200 × 630 H.264 loop using hand-shaped vector flowers inspired by the poppy print artwork. Individual orange, yellow and red flowers with olive leaves fall from above, settle into a full-bleed pattern, hold, and drop away before the loop restarts. No text, logos or photo borders. All animation is frame-driven.
+Eight-second, silent 1200 × 630 H.264 loop using hand-shaped vector flowers inspired by the poppy print artwork. The complete floral pattern is visible from the first frame, inside a white photo-print border with a subtle paper shadow. Flowers gently sway in a seamless periodic loop; nothing falls, enters or exits. No text or logos. All animation is frame-driven.
 
 From this directory:
 
