@@ -269,7 +269,7 @@ export function verifyCode(
   return db.transaction(() => {
     const c = get("signin-code", challengeId);
     if (!c || c.owner !== owner)
-      throw new HttpError(404, "not_found", "Sign-in request not found.");
+      throw new HttpError(404, "sign_in_not_found", "Sign-in request not found.");
     if (c.used || c.attempts >= 5) return { status: "failed" };
     if (c.expires <= Date.now()) return { status: "expired" };
     c.attempts++;

@@ -97,3 +97,7 @@ OTP sign-in remains captured-only with synthetic accounts. Enabling order email 
 Use the deployed [DPA](https://personal-agent.adewale-883.workers.dev/) with its existing GitHub login. A fresh chat should explicitly request the sandbox and **native Poppy**, without the compatibility instructions. Attach sample poppy artwork and use fictional US recipient details. Complete upload and operation approval through DPA's cards, then simulate payment and shipment. Verify the returned private order link, two captured emails, and `orderingMethod: native-poppy`. Separately test mediated sign-in with a synthetic account and check account history. Do not count a reference-client or local test as a completed DPA UI journey.
 
 For operator reference-client coverage, append `--sandbox-account` to the documented command to exercise captured OTP and order history. Append `--tshirt` to include the custom orange, size M T-shirt in the same order. The script verifies native ordering provenance and two captured emails. It uses sample poppy artwork; it never pays or prints a real order.
+
+## Poppy 0.2 migration
+
+The reference client targets draft 0.2 and refuses other advertised versions. Both assertions use `auth.issuer` as their audience; DPoP still targets the requested endpoint. Keep `ALLOW_COMPAT_AGENT_SESSIONS=false` for native verification. Follow [the upgrade checklist](POPPY-0.2.md) before deploying the change to production; a successful local reference run is not a hosted PDA browser test.

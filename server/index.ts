@@ -35,7 +35,7 @@ import {
   propose,
   confirm,
   cancel,
-  readOperation,
+  authorizedOperation,
   operationView,
   orderView,
   paid,
@@ -73,9 +73,10 @@ export const limiter = rateLimit({
   limit: 180,
   standardHeaders: "draft-8",
   legacyHeaders: false,
+  message: { error: "rate_limited", error_description: "Too many requests. Retry after the Retry-After interval." },
 });
 app.use("/api", limiter);
-export const oauthLimiter = rateLimit({ windowMs: 60000, limit: 30 });
+export const oauthLimiter = rateLimit({ windowMs: 60000, limit: 30, message: { error: "rate_limited", error_description: "Too many requests. Retry after the Retry-After interval." } });
 app.use("/oauth", oauthLimiter);
 app.post(
   "/api/webhooks/stripe",
@@ -186,7 +187,7 @@ app.get("/api/health", (_req, res) => {
 });
 app.get("/.well-known/poppy.json", (_req, res) =>
   res.json({
-    protocol_version: "0.1",
+    protocol_version: "0.2",
     organization: {
       name: config.agentSandbox
         ? "Print with Poppy — Agent Sandbox"
@@ -248,8 +249,9 @@ app.get("/agent.txt", (_req, res) =>
 );
 app.post("/oauth/token", async (req, res) => res.json(await issueToken(req)));
 app.post("/oauth/revoke", async (req, res) => {
+  const body = req.body || {};
   if (
-    req.body.client_assertion_type !==
+    body.client_assertion_type !==
     "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
   )
     throw new HttpError(
@@ -257,23 +259,20 @@ app.post("/oauth/revoke", async (req, res) => {
       "invalid_client",
       "A signed client assertion is required.",
     );
-  const c = await client(req.body.client_id);
+  const c = await client(body.client_id);
   let assertion;
   try {
     assertion = await verifyAssertion(
-      req.body.client_assertion,
+      body.client_assertion,
       c.keys,
-      req.body.client_id,
-      `${config.origin}/oauth/revoke`,
+      body.client_id,
+      config.origin,
     );
+    once(`assertion:${body.client_id}:${assertion.jti}`, assertion.exp! * 1000 + 5000);
   } catch {
     throw new HttpError(401, "invalid_client", "Invalid client assertion for revocation.");
   }
-  once(
-    `assertion:${req.body.client_id}:${assertion.jti}`,
-    assertion.exp! * 1000,
-  );
-  revokeAccount(req.body.token, req.body.client_id);
+  revokeAccount(body.token, body.client_id);
   res.sendStatus(200);
 });
 accountRoutes(app);
@@ -470,12 +469,7 @@ app.post("/api/orders", async (req, res) =>
   }),
 );
 app.get("/api/operations/:id", (req, res) => {
-  const op = readOperation(String(req.params.id), res.locals.session.id);
-  if (
-    op.terms.accountId &&
-    requireAccount(res.locals.session) !== op.terms.accountId
-  )
-    throw new HttpError(404, "not_found", "Not found.");
+  const op = authorizedOperation(String(req.params.id), res.locals.session);
   if (op.state === "in_progress") res.set("Retry-After", "2");
   const view = operationView(op);
   if (
@@ -491,31 +485,18 @@ app.get("/api/operations/:id", (req, res) => {
 });
 app.post("/api/operations/:id/shirt-previews", (req, res) => {
   const b = z.object({ revision: z.number().int(), previewIds: z.array(z.string()).min(1).max(102), approved_by: z.literal("user") }).strict().parse(req.body);
-  const pending = readOperation(String(req.params.id), res.locals.session.id);
-  if (pending.terms.accountId && requireAccount(res.locals.session, "poppy:write") !== pending.terms.accountId)
-    throw new HttpError(403, "sign_in_required", "Sign in to the account that proposed this order.");
-  res.json(operationView(approveShirtPreviews(String(req.params.id), res.locals.session.id, b.revision, b.previewIds, b.approved_by)));
+  const pending = authorizedOperation(String(req.params.id), res.locals.session, "poppy:write");
+  res.json(operationView(approveShirtPreviews(String(req.params.id), pending.owner, b.revision, b.previewIds, b.approved_by)));
 });
 app.post("/api/operations/:id/confirm", (req, res) => {
   const b = z
     .object({ revision: z.number().int(), approved_by: z.string() })
     .strict()
     .parse(req.body);
-  const pending = readOperation(String(req.params.id), res.locals.session.id);
-  if (pending.terms.accountId) {
-    if (
-      requireAccount(res.locals.session, "poppy:write") !==
-      pending.terms.accountId
-    )
-      throw new HttpError(
-        403,
-        "sign_in_required",
-        "Sign in to the account that proposed this order.",
-      );
-  }
+  const pending = authorizedOperation(String(req.params.id), res.locals.session, "poppy:write");
   const op = confirm(
     String(req.params.id),
-    res.locals.session.id,
+    pending.owner,
     b.revision,
     b.approved_by,
   );
@@ -524,13 +505,8 @@ app.post("/api/operations/:id/confirm", (req, res) => {
   void tick();
 });
 app.post("/api/operations/:id/cancel", (req, res) => {
-  const op = readOperation(String(req.params.id), res.locals.session.id);
-  if (
-    op.terms.accountId &&
-    requireAccount(res.locals.session, "poppy:write") !== op.terms.accountId
-  )
-    throw new HttpError(404, "not_found", "Not found.");
-  res.json(operationView(cancel(String(req.params.id), res.locals.session.id)));
+  const op = authorizedOperation(String(req.params.id), res.locals.session, "poppy:write");
+  res.json(operationView(cancel(String(req.params.id), op.owner)));
 });
 app.get("/api/orders/:id", (req, res) => {
   const session: Session = res.locals.session;
@@ -598,16 +574,16 @@ app.use(
     if (e instanceof HttpError) {
       if (
         e.status === 401 ||
-        ["sign_in_required", "insufficient_scope"].includes(e.code)
+        ["sign_in_required", "insufficient_scope", "extension_required"].includes(e.code)
       )
         res.set(
           "WWW-Authenticate",
-          `DPoP error="${e.code}"${e.extra.scope ? `, scope="${e.extra.scope}"` : ""}`,
+          `DPoP error="${e.code}"${e.extra.scope ? `, scope="${e.extra.scope}"` : ""}${e.extra.extension ? `, extension="${e.extra.extension}"` : ""}`,
         );
       if (e.status === 429) res.set("Retry-After", "3600");
       res
         .status(e.status)
-        .json({ error: e.code, message: e.message, ...e.extra });
+        .json({ error: e.code, error_description: e.message, message: e.message, ...e.extra });
       return;
     }
     console.error(

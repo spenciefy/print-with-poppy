@@ -2,7 +2,7 @@
 
 For no-card API integration tests, use the separate [Agent Sandbox](SANDBOX.md). The production `/demo` page is a visual walkthrough only.
 
-Print with Poppy supports optional accounts through Poppy draft 0.1. Guest ordering stays available. Accounts are created after an email is verified with a six-digit, ten-minute code; no password is stored.
+Print with Poppy supports optional accounts through Poppy draft 0.2. Guest ordering stays available. Accounts are created after an email is verified with a six-digit, ten-minute code; no password is stored.
 
 ## Sign-in paths
 
@@ -44,4 +44,6 @@ Run `npm run check`. The commerce tests exercise signed-out and signed-in purcha
 
 In `APP_MODE=demo`, code emails are stored privately as `demo-signin-email` records for local verification, never sent. Plain local demo mode has no public code-retrieval endpoint. Hosted Agent Sandbox exposes a session-owned captured-code endpoint for synthetic accounts only; see [SANDBOX.md](SANDBOX.md). Production always uses Resend.
 
-Spec: https://personalagentprotocol.org/docs/spec (sections 4.4–4.9).
+Spec: https://personalagentprotocol.org/docs/0.2/spec (sections 4.4–4.9).
+
+Client and Session assertions use the exact company `auth.issuer` as `aud` (Poppy 0.2). DPoP proofs use the endpoint URL as `htu`. Revocation needs a fresh client assertion but no DPoP proof. Signed-in proposals are recoverable by a new session of the same client and opaque User ID signed into the same account; guest proposals stay session-owned. A different agent or User ID cannot access a proposal merely by signing into the same account.
