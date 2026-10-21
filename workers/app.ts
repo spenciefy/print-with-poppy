@@ -167,7 +167,19 @@ export default {
           ["/openapi.json", "/agent.txt", "/sandbox"].includes(path)
         )
           response = await commerce(env).fetch(request);
-        else response = await env.ASSETS.fetch(request);
+        else {
+          response = await env.ASSETS.fetch(request);
+          // Social crawlers must fetch preview assets from this isolated deployment.
+          if (response.headers.get("content-type")?.includes("text/html")) {
+            response = new HTMLRewriter().on('meta[content]', {
+              element(element) {
+                const value = element.getAttribute("content");
+                if (value?.startsWith("https://printwithpoppy.com/poppy-social-"))
+                  element.setAttribute("content", value.replace("https://printwithpoppy.com", config.origin));
+              },
+            }).transform(response);
+          }
+        }
       } catch (e) {
         response =
           e instanceof HttpError
