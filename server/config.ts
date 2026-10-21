@@ -104,3 +104,7 @@ if (
 
 if (config.sandboxEmailDelivery && (!config.agentSandbox || !process.env.RESEND_API_KEY || !process.env.EMAIL_FROM)) throw new Error("Sandbox email delivery requires Agent Sandbox, Resend credentials, EMAIL_FROM.");
 export const sandboxEmailEnabled = () => config.agentSandbox && config.sandboxEmailDelivery;
+
+// Explicit loopback development is the only non-HTTPS protocol deployment.
+if (publicUrl.protocol !== "https:" && !(config.demo && ["localhost", "127.0.0.1", "[::1]"].includes(publicUrl.hostname)))
+  throw new Error("PUBLIC_URL must use HTTPS, except for a local loopback demo.");

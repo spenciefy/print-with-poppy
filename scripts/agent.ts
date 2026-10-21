@@ -7,6 +7,7 @@ const origin = process.env.PUBLIC_URL || "http://localhost:5173";
 const discovery = await (
   await fetch(`${origin}/.well-known/poppy.json`)
 ).json();
+if (discovery.protocol_version !== "0.2") throw new Error("This reference client requires Poppy 0.2.");
 const oauth = await (
   await fetch(`${discovery.auth.issuer}/.well-known/oauth-authorization-server`)
 ).json();
@@ -61,7 +62,7 @@ async function assertion(sub: string) {
     .setProtectedHeader({ alg: "ES256", kid: privateJwk.kid || "demo" })
     .setIssuer(clientId)
     .setSubject(sub)
-    .setAudience(oauth.token_endpoint)
+    .setAudience(oauth.issuer)
     .setIssuedAt()
     .setExpirationTime("60s")
     .setJti(randomUUID())

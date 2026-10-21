@@ -114,6 +114,7 @@ export interface Quote extends Proposal {
 }
 export interface Operation {
   owner: string;
+  principal?: { clientId: string; userId: string };
   operation_id: string;
   revision: number;
   state:

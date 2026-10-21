@@ -680,8 +680,8 @@ function Guide({ config }: { config: Config }) {
       </p>
       <hr />
       <p className="agent-document-end">
-        <a href="https://personalagentprotocol.org/docs/spec">
-          Poppy draft 0.1
+        <a href="https://personalagentprotocol.org/docs/0.2/spec">
+          Poppy draft 0.2
         </a>{" "}
         ·{" "}
         <a href="https://personalagentprotocol.org/docs/extensions/operations">

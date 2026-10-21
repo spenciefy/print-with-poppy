@@ -5,6 +5,7 @@ import {
   jwtVerify,
   calculateJwkThumbprint,
 } from "jose";
+import { protocolJson, protocolUrl } from "./protocol-http.js";
 import type { Request } from "express";
 import { config } from "./config.js";
 import { get, put, once, id, hash, HttpError } from "./store.js";
@@ -18,16 +19,14 @@ import {
 const cache = new Map<string, { expires: number; metadata: any; keys: any }>();
 const bad = (message = "Invalid agent identity.") =>
   new HttpError(401, "invalid_client", message);
-async function json(url: string) {
-  const r = await fetch(url, {
-    redirect: "error",
-    signal: AbortSignal.timeout(5000),
-  });
-  if (!r.ok) throw bad();
-  const text = await r.text();
-  if (text.length > 65536) throw bad();
-  return JSON.parse(text);
-}
+const failures = new Map<string, number>();
+const pending = new Map<string, Promise<any>>();
+const privateKeyFields = ["d", "p", "q", "dp", "dq", "qi", "oth", "k", "priv"];
+export const publicJwk = (key: any) =>
+  key &&
+  typeof key === "object" &&
+  ["EC", "RSA", "OKP"].includes(key.kty) &&
+  !privateKeyFields.some((field) => field in key);
 export async function client(clientId: string) {
   if (config.demo && clientId === `${config.origin}/api/demo/agent.json`) {
     const key = get("demo-key", "identity");
@@ -47,40 +46,59 @@ export async function client(clientId: string) {
     );
   const cached = cache.get(clientId);
   if (cached && cached.expires > Date.now()) return cached;
-  const u = new URL(clientId);
-  if (u.protocol !== "https:" || u.username || u.password || u.port)
-    throw bad();
-  // Exact operator-managed allowlist, no arbitrary metadata fetches or redirects.
-  const metadata = await json(clientId);
-  if (
-    metadata.client_id !== clientId ||
-    metadata.token_endpoint_auth_method !== "private_key_jwt"
-  )
-    throw bad();
-  const keysUrl = new URL(metadata.jwks_uri);
-  if (keysUrl.origin !== u.origin || keysUrl.username || keysUrl.password)
-    throw bad();
-  if (
-    (metadata.redirect_uris || []).some(
-      (s: string) => new URL(s).origin !== u.origin,
-    )
-  )
-    throw bad();
-  const jwks = await json(keysUrl.href);
-  if (
-    !Array.isArray(jwks.keys) ||
-    !jwks.keys.length ||
-    jwks.keys.some((k: any) => k.d || k.k)
-  )
-    throw bad();
-  const value = {
-    metadata,
-    keys: createLocalJWKSet(jwks),
-    expires: Date.now() + 300000,
-  };
-  cache.set(clientId, value);
-  return value;
+  if ((failures.get(clientId) || 0) > Date.now()) throw bad();
+  if (pending.has(clientId)) return pending.get(clientId);
+  const loading = (async () => {
+    try {
+      const u = protocolUrl(clientId);
+      const metadata = await protocolJson(clientId);
+      if (
+        metadata.client_id !== clientId ||
+        metadata.token_endpoint_auth_method !== "private_key_jwt"
+      )
+        throw bad();
+      const keysUrl = protocolUrl(metadata.jwks_uri);
+      if (keysUrl.origin !== u.origin) throw bad();
+      if (
+        metadata.redirect_uris !== undefined &&
+        !Array.isArray(metadata.redirect_uris)
+      )
+        throw bad();
+      for (const redirect of metadata.redirect_uris || []) {
+        if (protocolUrl(redirect).origin !== u.origin) throw bad();
+      }
+      for (const field of ["client_uri", "logo_uri", "tos_uri", "policy_uri"])
+        if (metadata[field] !== undefined) protocolUrl(metadata[field]);
+      const jwks = await protocolJson(keysUrl.href);
+      if (
+        !Array.isArray(jwks.keys) ||
+        !jwks.keys.length ||
+        !jwks.keys.every(publicJwk)
+      )
+        throw bad();
+      const value = {
+        metadata,
+        keys: createLocalJWKSet(jwks),
+        expires: Date.now() + 300000,
+      };
+      cache.set(clientId, value);
+      failures.delete(clientId);
+      return value;
+    } catch {
+      // Only allowlisted identities reach here. Bound retries for broken metadata;
+      // invalid signatures never invalidate cached keys or trigger refetch loops.
+      failures.set(clientId, Date.now() + 30000);
+      throw bad();
+    }
+  })();
+  pending.set(clientId, loading);
+  try {
+    return await loading;
+  } finally {
+    pending.delete(clientId);
+  }
 }
+
 export async function verifyAssertion(
   raw: string,
   keys: any,
@@ -93,7 +111,7 @@ export async function verifyAssertion(
     audience,
     algorithms: ["ES256", "RS256", "EdDSA"],
     requiredClaims: ["iss", "sub", "aud", "iat", "exp", "jti"],
-    maxTokenAge: "120s",
+    maxTokenAge: "300s",
     clockTolerance: 5,
   });
   if (
@@ -101,7 +119,10 @@ export async function verifyAssertion(
     payload.aud !== audience ||
     !payload.iat ||
     !payload.exp ||
-    payload.exp - payload.iat > 120 ||
+    payload.exp - payload.iat > 300 ||
+    payload.exp <= payload.iat ||
+    typeof payload.sub !== "string" ||
+    !payload.sub ||
     typeof payload.jti !== "string" ||
     payload.jti.length < 16 ||
     (!session && payload.sub !== issuer)
@@ -109,11 +130,40 @@ export async function verifyAssertion(
     throw bad();
   return payload;
 }
+export function proofHeader(req: Request, tokenEndpoint = false) {
+  const count = req.rawHeaders.filter(
+    (_, index) =>
+      index % 2 === 0 && req.rawHeaders[index].toLowerCase() === "dpop",
+  ).length;
+  if (count !== 1)
+    throw new HttpError(
+      tokenEndpoint ? 400 : 401,
+      "invalid_dpop_proof",
+      "Exactly one DPoP header is required.",
+    );
+  return req.get("DPoP");
+}
+function proofUrl(value: unknown) {
+  if (typeof value !== "string") throw Error();
+  const u = new URL(value);
+  if (u.search || u.hash || u.username || u.password) throw Error();
+  // RFC 3986 syntax/scheme normalization; query and fragment are excluded by RFC 9449.
+  return `${u.protocol}//${u.host}${u.pathname.replace(
+    /%[0-9a-f]{2}/gi,
+    (encoded) => {
+      const character = String.fromCharCode(parseInt(encoded.slice(1), 16));
+      return /^[A-Za-z0-9._~-]$/.test(character)
+        ? character
+        : encoded.toUpperCase();
+    },
+  )}`;
+}
 export async function dpop(
   raw: string | undefined,
   method: string,
   url: string,
   token?: string,
+  tokenEndpoint = false,
 ) {
   try {
     if (!raw) throw Error();
@@ -121,7 +171,7 @@ export async function dpop(
     if (
       header.typ !== "dpop+jwt" ||
       !header.jwk ||
-      (header.jwk as any).d ||
+      !publicJwk(header.jwk) ||
       !["ES256", "RS256", "EdDSA"].includes(header.alg || "")
     )
       throw Error();
@@ -132,7 +182,7 @@ export async function dpop(
     });
     if (
       payload.htm !== method ||
-      payload.htu !== url ||
+      proofUrl(payload.htu) !== proofUrl(url) ||
       typeof payload.iat !== "number" ||
       Math.abs(Date.now() / 1000 - payload.iat) > 60 ||
       typeof payload.jti !== "string" ||
@@ -145,7 +195,7 @@ export async function dpop(
     return thumb;
   } catch {
     throw new HttpError(
-      401,
+      tokenEndpoint ? 400 : 401,
       "invalid_dpop_proof",
       "Missing, expired, reused, or invalid DPoP proof.",
     );
@@ -171,7 +221,7 @@ export async function issueToken(req: Request) {
   )
     throw bad();
   const c = await client(b.client_id);
-  const audience = `${config.origin}/oauth/token`;
+  const audience = config.origin;
   let ca, sa;
   try {
     ca = await verifyAssertion(
@@ -180,7 +230,12 @@ export async function issueToken(req: Request) {
       b.client_id,
       audience,
     );
-    if (b.grant_type === "urn:ietf:params:oauth:grant-type:jwt-bearer") {
+    once(`assertion:${b.client_id}:${ca.jti}`, ca.exp! * 1000 + 5000);
+  } catch {
+    throw bad();
+  }
+  if (b.grant_type === "urn:ietf:params:oauth:grant-type:jwt-bearer") {
+    try {
       sa = await verifyAssertion(
         b.assertion,
         c.keys,
@@ -188,12 +243,22 @@ export async function issueToken(req: Request) {
         audience,
         true,
       );
+      once(`assertion:${b.client_id}:${sa.jti}`, sa.exp! * 1000 + 5000);
+    } catch {
+      throw new HttpError(
+        400,
+        "invalid_grant",
+        "Invalid or reused Session assertion.",
+      );
     }
-  } catch {
-    throw bad();
   }
-  const thumb = await dpop(req.get("DPoP"), "POST", audience);
-  once(`assertion:${b.client_id}:${ca.jti}`, ca.exp! * 1000);
+  const thumb = await dpop(
+    proofHeader(req, true),
+    "POST",
+    `${config.origin}/oauth/token`,
+    undefined,
+    true,
+  );
   if (b.resource)
     throw new HttpError(
       400,
@@ -209,8 +274,8 @@ export async function issueToken(req: Request) {
       "invalid_scope",
       "Account scopes require sign-in.",
     );
-  if (!sa?.sub || sa.sub.length > 256) throw bad();
-  once(`assertion:${b.client_id}:${sa.jti}`, sa.exp! * 1000);
+  if (!sa?.sub || sa.sub.length > 256)
+    throw new HttpError(400, "invalid_grant", "Invalid Session user ID.");
   let session: Session | undefined = b.session_id
     ? get("session", b.session_id)
     : undefined;
@@ -299,7 +364,7 @@ export async function authenticate(req: Request): Promise<Session> {
       "Session token expired or unknown.",
     );
   const thumb = await dpop(
-    req.get("DPoP"),
+    proofHeader(req),
     req.method,
     `${config.origin}${new URL(req.originalUrl, config.origin).pathname}`,
     token,

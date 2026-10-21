@@ -12,7 +12,7 @@
   <a href="https://printwithpoppy.com">Visit the store</a> ·
   <a href="https://printwithpoppy.com/demo">Play the demo</a> ·
   <a href="https://printwithpoppy.com/docs">API reference</a> ·
-  <a href="https://personalagentprotocol.org/docs/spec">Poppy protocol</a>
+  <a href="https://personalagentprotocol.org/docs/0.2/spec">Poppy protocol</a>
 </p>
 
 [![Print with Poppy homepage showing small prints, large prints, a poster, and personal-agent instructions](docs/images/homepage.png)](https://printwithpoppy.com)
@@ -31,6 +31,12 @@ The [interactive demo](https://printwithpoppy.com/demo) walks through the journe
 No photos ready? Ask your agent for the yellow, orange or red poppy artwork. Both native Poppy and HTTP compatibility clients can call `addSamplePhoto` (`POST /api/photos/samples`, JSON `{"color":"orange"}`) in their existing authenticated session. The catalog lists all three samples. Use the returned photo ID with `proposeOrder`, show previews, and obtain the usual approval. These are real printable images at normal prices in production; only the sandbox simulates payment and fulfillment.
 
 **Built with:** React + Vite · TypeScript · Express · SQLite · Sharp · JOSE · Stripe · Prodigi · Resend
+
+### Protocol version
+
+This implementation targets **Poppy draft 0.2** and Operations v1. Client and Session assertions must name the exact `auth.issuer` in `aud`; 0.1 assertions addressed to `/oauth/token` or `/oauth/revoke` are rejected. DPoP proofs still name the actual request URL. Agents must explicitly support 0.2; do not silently fall back to the HTTP guest API after a native failure.
+
+See [the 0.2 upgrade guide](docs/POPPY-0.2.md) for the changes, validation and staged rollout plan. Deploy to the isolated sandbox and verify your agent there before upgrading a live store. This code change alone does not establish that a deployed agent supports 0.2.
 
 ### Ordering method and native Poppy verification
 
@@ -163,7 +169,7 @@ Frontend + Poppy API → SQLite order/approval + durable jobs
 
 Brand and sample artwork use abstract orange, red and yellow poppies. The homepage screenshot above shows the public storefront; sample artwork is illustrative, never a customer upload. Fonts: [Young Serif](https://fonts.google.com/specimen/Young+Serif) and [Hanken Grotesk](https://fonts.google.com/specimen/Hanken+Grotesk), self-hosted with OFL licenses.
 
-[Poppy spec](https://personalagentprotocol.org/docs/spec) · [operations](https://personalagentprotocol.org/docs/extensions/operations) · [Prodigi API](https://www.prodigi.com/print-api/docs/reference/) · [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment)
+[Poppy spec](https://personalagentprotocol.org/docs/0.2/spec) · [operations](https://personalagentprotocol.org/docs/extensions/operations) · [Prodigi API](https://www.prodigi.com/print-api/docs/reference/) · [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment)
 
 ## Native Poppy and compatibility access
 

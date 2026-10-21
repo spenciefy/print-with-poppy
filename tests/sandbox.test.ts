@@ -57,7 +57,7 @@ async function makeAgent(user = randomUUID()) {
   }
   async function assertion(
     subject: string,
-    audience = origin + "/oauth/token",
+    audience = origin,
   ) {
     return new SignJWT({})
       .setProtectedHeader({ alg: "ES256", kid: "demo" })

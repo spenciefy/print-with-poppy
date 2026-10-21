@@ -106,6 +106,7 @@ export async function propose(body: unknown, session: Session, key: string) {
   };
   const op: Operation = {
     owner: session.id,
+    principal: { clientId: session.clientId, userId: session.userId },
     operation_id: id("op"),
     revision: 1,
     state: "proposed",
@@ -140,6 +141,41 @@ export async function propose(body: unknown, session: Session, key: string) {
     return op;
   })();
 }
+// The HTTP layer always passes the authenticated token's effective account/scopes.
+// Keep the original owner for photos, persistence and downstream idempotency.
+export function authorizedOperation(
+  opId: string,
+  session: Session,
+  scope = "poppy:read",
+) {
+  const op = get<Operation>("operation", opId);
+  const notFound = () =>
+    new HttpError(404, "operation_not_found", "Operation not found.");
+  if (!op) throw notFound();
+  if (!op.terms.accountId) {
+    if (op.owner !== session.id) throw notFound();
+  } else {
+    // Legacy records can recover their principal from the original persisted session.
+    const principal = op.principal || get<Session>("session", op.owner);
+    if (
+      !principal ||
+      principal.clientId !== session.clientId ||
+      principal.userId !== session.userId
+    )
+      throw notFound();
+    if (session.accountId && session.accountId !== op.terms.accountId)
+      throw notFound();
+    requireAccount(session, scope);
+  }
+  if (!session.extensions)
+    throw new HttpError(
+      403,
+      "extension_required",
+      "This store requires the operations extension.",
+      { extension: "operations" },
+    );
+  return readOperation(opId, op.owner);
+}
 export function readOperation(opId: string, owner: string) {
   const op = requireRecord<Operation>("operation", opId, owner);
   if (op.state === "proposed" && op.terms.expires < Date.now()) {
@@ -159,7 +195,7 @@ function displayPhotoLabels(quote: Quote) {
   return { ...quote, summary, previews };
 }
 export function operationView(op: Operation) {
-  const { owner, ...view } = op;
+  const { owner, principal, ...view } = op;
   return {
     ...view,
     summary: displayPhotoLabels(view.terms).summary,
