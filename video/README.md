@@ -1,6 +1,6 @@
 # Social preview animation
 
-Eight-second, silent 1200 × 630 H.264 loop using hand-shaped vector flowers inspired by the poppy print artwork. The complete floral pattern is visible from the first frame, inside a white photo-print border with a subtle paper shadow. Flowers gently sway in a seamless periodic loop; nothing falls, enters or exits. No text or logos. All animation is frame-driven.
+Eight-second, silent 1200 × 630 H.264 loop using hand-shaped vector flowers inspired by the poppy print artwork. An established floral pattern is visible from the first frame, inside a white photo-print border with a subtle paper shadow. More irregular, angular poppies bloom in place in staggered layers, making the composition crowded and overlapping. New blooms gently recede at the end to loop back to the populated opening; nothing falls. No text or logos. All animation is frame-driven.
 
 From this directory:
 
