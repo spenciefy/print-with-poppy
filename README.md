@@ -32,6 +32,10 @@ No photos ready? Ask your agent for the yellow, orange or red poppy artwork. Bot
 
 **Built with:** React + Vite · TypeScript · Express · SQLite · Sharp · JOSE · Stripe · Prodigi · Resend
 
+### Parallel Cloudflare sandbox
+
+An isolated [Cloudflare sandbox](https://pwp-cf-sandbox.spencersyen.workers.dev) runs native Poppy 0.2 on Workers, Durable Objects, R2 and private containers. It simulates payment/printing and sends labeled sandbox emails. Production remains on its existing infrastructure. See [setup, validation and remaining migration gates](docs/CLOUDFLARE.md).
+
 ### Protocol version
 
 This implementation targets **Poppy draft 0.2** and Operations v1. Client and Session assertions must name the exact `auth.issuer` in `aud`; 0.1 assertions addressed to `/oauth/token` or `/oauth/revoke` are rejected. DPoP proofs still name the actual request URL. Agents must explicitly support 0.2; do not silently fall back to the HTTP guest API after a native failure.

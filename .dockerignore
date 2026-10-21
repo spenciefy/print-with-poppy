@@ -13,3 +13,9 @@ docs/account-setup/
 .secrets/
 *.pem
 *.key
+.wrangler
+.dev.vars*
+.cloudflare/*
+!.cloudflare/containers/
+.cloudflare/containers/*
+!.cloudflare/containers/*.cjs

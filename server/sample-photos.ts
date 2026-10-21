@@ -1,5 +1,4 @@
-import fs from "node:fs/promises";
-import path from "node:path";
+import { media } from "./media-runtime.js";
 import { z } from "zod";
 import { upload } from "./photos.js";
 
@@ -15,6 +14,6 @@ export async function addSamplePhoto(body: unknown, owner: string) {
   const { color } = selection.parse(body);
   const sample = samplePhotos.find(photo => photo.color === color)!;
   // Only bundled artwork; never fetch agent-supplied URLs or filesystem paths.
-  const buffer = await fs.readFile(path.join(process.cwd(), "public", sample.url));
+  const buffer = await media.sample(sample.url);
   return { ...await upload(buffer, sample.name, owner), sampleColor: color };
 }

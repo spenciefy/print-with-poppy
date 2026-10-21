@@ -245,7 +245,7 @@ export function confirm(
     if (op.state !== "proposed") return op;
     const expected = requiredShirtPreviews(op);
     if (expected.length && (op.shirtPreviewApproval?.revision !== revision || expected.some(id => !op.shirtPreviewApproval?.previewIds.includes(id))))
-      throw new HttpError(409, "shirt_preview_approval_required", "Show every shirt mockup with its color, size and quantity. Obtain explicit user approval, call approveShirtPreviews with revision and all shirt previewIds, then confirm this operation.", { previewIds: expected, approvalUrl: `/api/operations/${opId}/shirt-previews` });
+      throw new HttpError(409, "shirt_preview_approval_required", "Show every shirt mockup with its color, size and quantity. Obtain explicit user approval, call approveShirtPreviews with revision and all shirt previewIds, then confirm this operation.", { previewIds: expected, approvalUrl: `/api/shirt-preview-approvals/${opId}` });
     op.terms.items.forEach((i) => ownedPhoto(i.photoId, owner));
     const order: Order = {
       id: id("ord"),

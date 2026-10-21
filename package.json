@@ -14,9 +14,14 @@
     "format": "prettier --write server src scripts tests *.json *.ts *.md",
     "ops:status": "tsx scripts/status.ts",
     "predev": "node scripts/docs-assets.mjs",
-    "prebuild": "node scripts/docs-assets.mjs"
+    "prebuild": "node scripts/docs-assets.mjs",
+    "build:cloudflare": "npm run build && tsc -p tsconfig.workers.json && node scripts/cloudflare/build.mjs",
+    "dev:cloudflare": "wrangler dev",
+    "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy --env sandbox",
+    "test:cloudflare": "npm run build:cloudflare && node scripts/cloudflare/test.mjs"
   },
   "dependencies": {
+    "@cloudflare/containers": "^0.3.7",
     "@vitejs/plugin-react": "6.1.2",
     "better-sqlite3": "13.0.3",
     "concurrently": "10.0.6",
@@ -24,6 +29,7 @@
     "express": "5.3.0",
     "express-rate-limit": "8.7.1",
     "helmet": "8.3.0",
+    "hono": "^4.13.13",
     "jose": "6.2.12",
     "multer": "2.4.0",
     "react": "19.3.0",
@@ -35,6 +41,7 @@
     "zod": "4.6.6"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261021.1",
     "@scalar/api-reference": "1.73.1",
     "@types/better-sqlite3": "9.6.0",
     "@types/express": "5.0.6",
@@ -42,8 +49,10 @@
     "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "esbuild": "^0.28.2",
     "prettier": "3.9.10",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "wrangler": "^4.151.3"
   },
   "engines": {
     "node": "22.x"

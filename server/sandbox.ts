@@ -1,3 +1,4 @@
+import { environment } from "./environment.js";
 import { orderingGuidance } from "./agent-guidance.js";
 import type { Express, Request } from "express";
 import { config } from "./config.js";
@@ -176,7 +177,7 @@ export function sandboxRoutes(app: Express) {
     const email = get("demo-signin-email", challenge.id);
     res.json({ simulated: true, delivered: false, email });
   });
-  const publicKey = process.env.SANDBOX_REFERENCE_PUBLIC_JWK;
+  const publicKey = environment().SANDBOX_REFERENCE_PUBLIC_JWK;
   if (publicKey) {
     const key = JSON.parse(publicKey);
     if (key.d || key.k)

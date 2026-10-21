@@ -6,7 +6,7 @@ import "./style.css";
 import Demo from "./Demo";
 import { orderSubtitle, visibleShipment } from "./order-copy";
 import { shirtColors, shirtSizes, shirtSubtotal, shirtPath, productOf, shippingSummary, orderProducts, orderLabel, merchandiseLabel } from "./offer";
-type Config = { httpOrderingEnabled?: boolean; environment?: string; mode: string; origin: string; support: string };
+type Config = { hosting?: string; httpOrderingEnabled?: boolean; environment?: string; mode: string; origin: string; support: string };
 const money = (c: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
     c / 100,
@@ -1078,7 +1078,7 @@ function App() {
   const variant = variants.find((v) => route === `/variants/${v.id}`)?.id;
   return (
     <>
-      {config.environment === "agent-sandbox" && <aside className="sandbox-banner" aria-label="Sandbox environment"><strong>Sandbox environment</strong><span>Sample orders only. No real payments or prints. Test emails are sent to your order email address when enabled.</span><a href="/sandbox">Testing guide ↗</a></aside>}
+      {config.environment === "agent-sandbox" && <aside className="sandbox-banner" aria-label="Sandbox environment"><strong>{config.hosting === "cloudflare" ? "Cloudflare sandbox" : "Sandbox environment"}</strong><span>Sample orders only. No real payments or prints. Test emails are sent to your order email address when enabled.</span><a href="/sandbox">Testing guide ↗</a></aside>}
       <Header route={route} navigate={navigate} />
       {route === "/shirt" ? (
         <ShirtExtra config={config} />
