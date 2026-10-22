@@ -1,6 +1,6 @@
 # Cloudflare migration and cutover
 
-This PR moves application hosting onto Cloudflare while retaining the Node deployment during validation. Merging to main automatically deploys the isolated Cloudflare production Worker after checks pass, provided its GitHub deployment credential is configured. It does not change production DNS or start two dispatchers for the same orders. The isolated Workers deployment has separate data; it is not a mirror of existing production.
+Production hosting has moved to Cloudflare. Merging to main deploys the production Worker after checks pass using its GitHub deployment credential. Cloudflare production has independent data; it is not a mirror of legacy Railway production. DNS cutover was performed separately and is recorded below.
 
 ## Scope
 
