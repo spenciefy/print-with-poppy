@@ -1,4 +1,4 @@
-# Parallel Cloudflare sandbox
+# Cloudflare application migration
 
 This is an isolated deployment, not a production cutover. The existing Vercel/Railway deployments continue serving their existing domains and data.
 
@@ -7,6 +7,8 @@ This is an isolated deployment, not a production cutover. The existing Vercel/Ra
 Discover `/.well-known/poppy.json` on that origin. Use native Poppy 0.2 with an allowlisted client. HTTP compatibility is disabled. Payment and fulfillment are simulated; confirmation and simulated-shipment emails are really submitted to Resend and clearly marked SANDBOX. Use an inbox you control. Do not use real payment credentials.
 
 The intended `cf-sandbox.printwithpoppy.com` hostname is not configured: the domain's DNS zone is not in this Cloudflare account. Do not change nameservers as part of this parallel test. A hostname change also changes the issuer, client audiences and signed media URLs; validate it as a separate deployment step.
+
+See [migration scope and cutover checklist](CLOUDFLARE-CUTOVER.md) for the remaining production migration work.
 
 ## Architecture
 

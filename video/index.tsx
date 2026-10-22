@@ -5,7 +5,6 @@ import masks from './masks.json';
 function Poppy() {
   const frame=useCurrentFrame();
   const {durationInFrames}=useVideoConfig();
-  const reveal=interpolate(frame,[0,155],[32,100],{extrapolateRight:'clamp'});
   const finish=interpolate(frame,[155,205],[0,1],{extrapolateLeft:'clamp',extrapolateRight:'clamp',easing:Easing.inOut(Easing.cubic)});
   const phase=frame/durationInFrames*Math.PI*2;
   // Animate the original print, preserving its actual petal silhouettes and texture.
@@ -29,7 +28,7 @@ function Poppy() {
     </svg>
     <div style={{width:'100%',height:'100%',padding:22,background:'#fff',boxSizing:'border-box',boxShadow:`0 ${5+finish*9}px ${14+finish*14}px rgba(62,42,20,.18)`,transform:`translateY(${finish*7}px) rotate(${-finish*.65}deg) scale(${.98+finish*.01})`}}>
       <div style={{position:'relative',width:'100%',height:'100%',overflow:'hidden',background:'#fff'}}>
-        <div style={{position:'relative',width:'100%',height:'100%',clipPath:`inset(0 0 ${100-reveal}% 0)`,filter:'url(#bloom)',transform:`scale(${1.025+.003*Math.sin(phase)}) translate(${Math.sin(phase)*1.5}px,${Math.cos(phase)*1.5}px)`}}>
+        <div style={{position:'relative',width:'100%',height:'100%',filter:'url(#bloom)',transform:`scale(${1.025+.003*Math.sin(phase)}) translate(${Math.sin(phase)*1.5}px,${Math.cos(phase)*1.5}px)`}}>
           <Img src={staticFile('photos/poppy-abstract-cluster.webp')} style={{position:'absolute',width:'100%',height:'100%',objectFit:'cover'}}/>
           {masks.map((mask,i)=>{
             // Each flower has a different phase on the orange → yellow → red cycle.
@@ -37,7 +36,6 @@ function Poppy() {
             return <Img key={i} src={staticFile('photos/poppy-abstract-cluster.webp')} style={{position:'absolute',width:'100%',height:'100%',objectFit:'cover',maskImage:`url("${mask}")`,maskMode:'luminance',maskSize:'cover',maskPosition:'center',filter:`url(#color-${i})`}}/>;
           })}
         </div>
-        {frame<155 && <div style={{position:'absolute',top:`${reveal}%`,left:0,right:0,height:3,background:'rgba(64,48,31,.18)',boxShadow:'0 -4px 10px rgba(255,177,48,.22)',transform:'translateY(-1px)'}}/>}
       </div>
     </div>
   </AbsoluteFill>;
