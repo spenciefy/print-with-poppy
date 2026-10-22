@@ -34,7 +34,7 @@ No photos ready? Ask your agent for the yellow, orange or red poppy artwork. Bot
 
 ### Parallel Cloudflare environments
 
-An isolated [Cloudflare sandbox](https://pwp-cf-sandbox.spencersyen.workers.dev) runs native Poppy 0.2 on Workers, Durable Objects, R2 and private containers. It simulates payment/printing and sends labeled sandbox emails. A separate [Cloudflare production preview](https://pwp-cf-production.spencersyen.workers.dev) uses real payments and printing, restricted to approved test orders. It has independent storage and provider webhooks. The main production domain remains on its existing infrastructure; a paid end-to-end test and migration checks are still required. See [setup and validation](docs/CLOUDFLARE.md) and the [full migration and cutover checklist](docs/CLOUDFLARE-CUTOVER.md).
+[Production](https://printwithpoppy.com) runs Poppy 0.2 on Cloudflare Workers, Durable Objects, R2 and private containers, with real Stripe payments, Prodigi printing and Resend emails. The independent [Cloudflare sandbox](https://pwp-cf-sandbox.spencersyen.workers.dev) simulates payment/printing and sends labeled sandbox emails. Production supports both native Poppy and HTTP guest ordering; the Cloudflare sandbox requires native Poppy. See [setup and validation](docs/CLOUDFLARE.md) and the [cutover record](docs/CLOUDFLARE-CUTOVER.md).
 
 ### Protocol version
 
@@ -131,7 +131,7 @@ See [pricing, payment and delivery details](docs/PRICING.md) for API product IDs
 
 ## Hosted example
 
-The public example uses Vercel for the React website and same-origin rewrites to a single Railway service. Railway owns the API, background worker, SQLite database and private images on a persistent `/app/.data` volume. `PUBLIC_URL` is the Vercel custom domain, so discovery, DPoP proofs, checkout returns and signed media URLs all use the same origin.
+The legacy Node deployment option uses Vercel for the React website and same-origin rewrites to a single Railway service. The public production site now uses Cloudflare; the following describes the legacy option. Railway owns the API, background worker, SQLite database and private images on a persistent `/app/.data` volume. `PUBLIC_URL` is the Vercel custom domain, so discovery, DPoP proofs, checkout returns and signed media URLs all use the same origin.
 
 `vercel.json` contains the example backend's **public URL only**. Forks must replace that URL with their own Railway service. Set provider credentials only on Railway; Vercel needs no provider secrets. Keep one backend replica and mount the persistent volume before deploying. In Railway service settings, connect the `main` branch, use the detected Dockerfile, set the health check to `/api/health`, and keep serverless sleeping disabled. New services no longer support Railway config-as-code. Railway mounts volumes as root: this deployment sets `RAILWAY_RUN_UID=0` so the service can write its private volume.
 

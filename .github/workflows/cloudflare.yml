@@ -71,11 +71,15 @@ jobs:
           import assert from 'node:assert/strict';
           const production = process.env.CF_TARGET === 'production';
           const origin = production
-            ? 'https://pwp-cf-production.spencersyen.workers.dev'
+            ? 'https://printwithpoppy.com'
             : 'https://pwp-cf-sandbox.spencersyen.workers.dev';
           for (const path of ['/api/health', '/.well-known/poppy.json']) {
             const response = await fetch(origin + path);
             assert(response.ok, `${path}: HTTP ${response.status}`);
+            if (path.endsWith('poppy.json')) {
+              const manifest = await response.json();
+              assert.equal(manifest.protocol_version, '0.2');
+            }
           }
           const response = await fetch(origin + '/api/config');
           assert(response.ok, `config: HTTP ${response.status}`);
