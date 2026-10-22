@@ -65,7 +65,7 @@ Install secrets through Wrangler secret input/bulk input from a local ignored fi
 npm run deploy:cloudflare
 ```
 
-The GitHub workflow tests pull requests without deployment secrets. Deployment is manual, main-branch-only, through the `cloudflare-sandbox` environment. Its scoped `CLOUDFLARE_API_TOKEN` still needs to be configured; local Wrangler deployment works independently. Do not give forked PR workflows that token.
+The GitHub workflow tests pull requests without deployment secrets. Pushes to `main` (including PR merges) run validation and automatically deploy production through `cloudflare-production`. Manual main-branch deployment remains available for either environment. Its scoped `CLOUDFLARE_API_TOKEN` still needs to be configured; local Wrangler deployment works independently. Do not give forked PR workflows that token.
 
 ## Validation recorded on 21 October 2026
 
@@ -93,11 +93,11 @@ https://pwp-cf-production.spencersyen.workers.dev. This is a real-payment enviro
 
 Production requires `CF_DEPLOYMENT=production`, `APP_MODE=live`, `AGENT_SANDBOX=false`, a unique `APP_SECRET`, live Stripe/Prodigi credentials, a separate Stripe webhook signing secret, and Resend sender credentials. Sandbox credentials/identities cannot enable live mode implicitly. The Stripe adapter uses the Workers Fetch client; raw webhooks use asynchronous Web Crypto signature verification.
 
-Initially:
+Production configuration:
 
 - Native Poppy only, with `https://poppydemoagent.dev/poppy/client.json` allowlisted.
 - `LIVE_ORDERS_ENABLED=true` permits order proposals. Set it to `false` and redeploy to pause new proposals while existing paid orders and webhooks continue processing.
-- `ORDER_EMAIL_ALLOWLIST=spencersyen@gmail.com` restricts the parallel launch to the approved test recipient. This is a launch restriction, not proof of email ownership. Normal native authentication and approval remain required. Clear it only when opening the store more broadly.
+- `ORDER_EMAIL_ALLOWLIST` is empty: any recipient email is accepted. Native authentication, ownership checks and explicit order approval remain required. An email allowlist can still be configured for a restricted deployment.
 - No sandbox payment/shipment/OTP capture routes exist. Email sign-in sends real email.
 - Stripe Checkout, tax, fulfillment, callbacks and email use real providers. Approving and paying an order will spend real money and send it to print.
 
@@ -112,7 +112,7 @@ npm run test:cloudflare:production
 npm run deploy:cloudflare:production
 ```
 
-The production transport test runs locally using inert fixture credentials: it cannot pay, print or send email. It tests signed raw webhook handling, rejection of wrong-environment events, foreign/duplicate event acknowledgment, simulation disabled, restricted recipients and authentication. Local signing tests do not prove Stripe has delivered an event over the public network.
+The production transport test runs locally using inert fixture credentials: it cannot pay, print or send email. It tests signed raw webhook handling, rejection of wrong-environment events, foreign/duplicate event acknowledgment, simulation disabled, unrestricted recipients and required authentication. Local signing tests do not prove Stripe has delivered an event over the public network.
 
 The GitHub deployment workflow selects `sandbox` or `production` and uses the matching `cloudflare-sandbox` / `cloudflare-production` protected environment. Configure a scoped deployment token in each environment; do not store provider credentials in PR workflows. Wrangler secrets must be installed on the matching Worker first.
 

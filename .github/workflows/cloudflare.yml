@@ -1,6 +1,8 @@
 name: Cloudflare
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       deploy:
@@ -34,9 +36,9 @@ jobs:
       - run: npm run test:cloudflare
       - run: npm run test:cloudflare:production
   deploy:
-    if: github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy))
     needs: runtime
-    environment: cloudflare-${{ inputs.target }}
+    environment: cloudflare-${{ github.event_name == 'push' && 'production' || inputs.target }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -47,9 +49,38 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Check deployment credential
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Set CLOUDFLARE_API_TOKEN in the selected GitHub Cloudflare environment."
+            exit 1
+          fi
       - run: npm ci
       - run: npm run build:cloudflare
       - run: npx wrangler deploy --env "$CF_TARGET"
         env:
-          CF_TARGET: ${{ inputs.target }}
+          CF_TARGET: ${{ github.event_name == 'push' && 'production' || inputs.target }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Verify deployed service
+        env:
+          CF_TARGET: ${{ github.event_name == 'push' && 'production' || inputs.target }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const production = process.env.CF_TARGET === 'production';
+          const origin = production
+            ? 'https://pwp-cf-production.spencersyen.workers.dev'
+            : 'https://pwp-cf-sandbox.spencersyen.workers.dev';
+          for (const path of ['/api/health', '/.well-known/poppy.json']) {
+            const response = await fetch(origin + path);
+            assert(response.ok, `${path}: HTTP ${response.status}`);
+          }
+          const response = await fetch(origin + '/api/config');
+          assert(response.ok, `config: HTTP ${response.status}`);
+          const config = await response.json();
+          assert.equal(config.mode, production ? 'live' : 'demo');
+          if (production) assert.equal(config.restrictedLaunch, false);
+          console.log(`Verified ${origin}: health, discovery, mode and launch configuration. This is not a paid-order end-to-end test.`);
+          JS

@@ -46,7 +46,7 @@ try {
   assert(ready, `Worker startup failed: ${root}/wrangler.log`);
   const cfg = await (await fetch(origin + "/api/config")).json();
   assert.equal(cfg.mode, "live");
-  assert.equal(cfg.restrictedLaunch, true);
+  assert.equal(cfg.restrictedLaunch, false);
   assert.equal(cfg.httpOrderingEnabled, false);
   for (const url of [
     "/api/demo/agent.json",
@@ -126,7 +126,8 @@ try {
         body: JSON.stringify({ email: "unapproved@example.com" }),
       })
     ).status,
-    403,
+    401,
+    "Any recipient is allowed, but native authentication remains required.",
   );
   assert.equal(
     (
@@ -137,10 +138,10 @@ try {
       })
     ).status,
     401,
-    "Approved recipient does not bypass native authentication.",
+    "Recipient does not bypass native authentication.",
   );
   console.log(
-    "Production Workers transport passed: raw signed webhooks, environment isolation, simulation disabled, launch restriction and native authentication. No provider requests were made.",
+    "Production Workers transport passed: raw signed webhooks, environment isolation, simulation disabled, unrestricted recipients and native authentication. No provider requests were made.",
   );
 } finally {
   child.kill("SIGTERM");

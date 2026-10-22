@@ -171,7 +171,7 @@
         "PUBLIC_URL": "https://pwp-cf-production.spencersyen.workers.dev",
         "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json",
         "LIVE_ORDERS_ENABLED": "true",
-        "ORDER_EMAIL_ALLOWLIST": "spencersyen@gmail.com",
+        "ORDER_EMAIL_ALLOWLIST": "",
       },
       "durable_objects": {
         "bindings": [
