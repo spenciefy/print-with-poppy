@@ -17,17 +17,14 @@ import {
 import { config, sandboxEmailEnabled } from "./config.js";
 import { HttpError, mediaUrl } from "./store.js";
 import type { Proposal, Quote, Order } from "./types.js";
-export const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
-      maxNetworkRetries: 2,
-      timeout: 15000,
-    })
-  : null;
+export { stripe } from "./stripe-client.js";
+import { stripe } from "./stripe-client.js";
+import { environment } from "./environment.js";
 export async function prodigi(path: string, body?: unknown) {
   const res = await fetch(`${config.prodigiBase}${path}`, {
     method: body ? "POST" : "GET",
     headers: {
-      "X-API-Key": process.env.PRODIGI_API_KEY || "",
+      "X-API-Key": environment().PRODIGI_API_KEY || "",
       "Content-Type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -44,7 +41,7 @@ export async function prodigi(path: string, body?: unknown) {
       "fulfillment_unavailable",
       `Print provider returned ${res.status}. Please retry this same request.`,
     );
-  const result = await res.json();
+  const result: any = await res.json();
   if (
     !["ok", "created", "alreadyexists", "onhold", "createdwithissues"].includes(
       String(result.outcome).toLowerCase(),
@@ -320,15 +317,15 @@ export async function sendMail(
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      Authorization: `Bearer ${environment().RESEND_API_KEY}`,
       "Content-Type": "application/json",
       "Idempotency-Key": key,
     },
-    body: JSON.stringify({ from: process.env.EMAIL_FROM, ...message }),
+    body: JSON.stringify({ from: environment().EMAIL_FROM, ...message }),
     signal: AbortSignal.timeout(15000),
   });
   if (!r.ok) throw new Error(`Email provider returned ${r.status}.`);
-  return r.json();
+  return r.json() as Promise<any>;
 }
 
 export function stripeCheckoutComplete(session: Pick<Stripe.Checkout.Session, "payment_status" | "status" | "amount_total">) {

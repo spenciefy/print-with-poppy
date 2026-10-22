@@ -290,6 +290,7 @@ export function openapi(compatibility = false) {
           responses: {
             202: response("Approval required", {
               type: "object",
+              required: ["operation"],
               properties: { operation: ref("Operation") },
             }),
             403: response("operations extension required", ref("Error")),
@@ -305,7 +306,7 @@ export function openapi(compatibility = false) {
           responses: { 200: response("Operation", ref("Operation")) },
         },
       },
-      "/api/operations/{id}/shirt-previews": {
+      "/api/shirt-preview-approvals/{id}": {
         post: {
           ...secured, parameters: [...secured.parameters, pathId], operationId: "approveShirtPreviews",
           summary: "Record explicit user approval of every custom shirt preview before confirming the order",

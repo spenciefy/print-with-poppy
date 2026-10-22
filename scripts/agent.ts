@@ -169,7 +169,7 @@ if (!process.argv.includes("--approve-demo")) {
   process.exit(0);
 }
 if (process.argv.includes("--tshirt")) {
-  await call(`/api/operations/${operation.operation_id}/shirt-previews`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: operation.revision, approved_by: "user", previewIds: operation.terms.previews.filter((p: any) => p.product === "tshirt").map((p: any) => p.previewId) }) });
+  await call(`/api/shirt-preview-approvals/${operation.operation_id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: operation.revision, approved_by: "user", previewIds: operation.terms.previews.filter((p: any) => p.product === "tshirt").map((p: any) => p.previewId) }) });
 }
 let confirmed = await call(
   `/api/operations/${operation.operation_id}/confirm`,
@@ -237,5 +237,25 @@ if (accountTest) {
   if (!history.orders.some((o: any) => o.id === orderId))
     throw new Error("Signed-in order missing from account history.");
   console.log("Signed-in account order history verified.");
+  if (process.argv.includes("--revoke-demo")) {
+    const renewed = await fetch(oauth.token_endpoint, {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", DPoP: await proof("POST", oauth.token_endpoint) },
+      body: new URLSearchParams({ grant_type: "refresh_token", client_id: clientId, client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", client_assertion: await assertion(clientId), refresh_token: session.refresh_token }),
+    });
+    if (!renewed.ok) throw new Error("Account token renewal failed.");
+    Object.assign(session, await renewed.json());
+    const resumed = await call(`/api/operations/${operation.operation_id}`);
+    if (resumed.operation_id !== operation.operation_id) throw new Error("Account proposal recovery failed.");
+    const revoked = await fetch(oauth.revocation_endpoint, {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: clientId, client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", client_assertion: await assertion(clientId), token: session.refresh_token }),
+    });
+    if (!revoked.ok) throw new Error("Revocation failed.");
+    const denied = await fetch(origin + "/api/account", { headers: { Authorization: `DPoP ${session.access_token}`, DPoP: await proof("GET", origin + "/api/account", session.access_token) } });
+    const denial = await denied.json();
+    if (denied.status !== 403 || denial.error !== "sign_in_required") throw new Error(`Revoked account token still authorized: ${denied.status}`);
+    console.log("Account renewal, cross-session proposal recovery, and immediate revocation verified.");
+  }
+
 }
 console.log(`View order: ${origin}/order/${orderId}${url.hash}`);

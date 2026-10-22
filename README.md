@@ -6,7 +6,7 @@
 
 <h1 align="center">Print with Poppy</h1>
 
-<p align="center">You should print your photos.<br />Get your personal agent to deliver photo prints to your door.</p>
+<p align="center">Your photos, printed<br />Get your personal agent to deliver photo prints to your door.</p>
 
 <p align="center">
   <a href="https://printwithpoppy.com">Visit the store</a> ·
@@ -31,6 +31,10 @@ The [interactive demo](https://printwithpoppy.com/demo) walks through the journe
 No photos ready? Ask your agent for the yellow, orange or red poppy artwork. Both native Poppy and HTTP compatibility clients can call `addSamplePhoto` (`POST /api/photos/samples`, JSON `{"color":"orange"}`) in their existing authenticated session. The catalog lists all three samples. Use the returned photo ID with `proposeOrder`, show previews, and obtain the usual approval. These are real printable images at normal prices in production; only the sandbox simulates payment and fulfillment.
 
 **Built with:** React + Vite · TypeScript · Express · SQLite · Sharp · JOSE · Stripe · Prodigi · Resend
+
+### Parallel Cloudflare environments
+
+An isolated [Cloudflare sandbox](https://pwp-cf-sandbox.spencersyen.workers.dev) runs native Poppy 0.2 on Workers, Durable Objects, R2 and private containers. It simulates payment/printing and sends labeled sandbox emails. A separate [Cloudflare production preview](https://pwp-cf-production.spencersyen.workers.dev) uses real payments and printing, restricted to approved test orders. It has independent storage and provider webhooks. The main production domain remains on its existing infrastructure; a paid end-to-end test and migration checks are still required. See [setup and validation](docs/CLOUDFLARE.md) and the [full migration and cutover checklist](docs/CLOUDFLARE-CUTOVER.md).
 
 ### Protocol version
 

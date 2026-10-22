@@ -16,3 +16,7 @@ docs/account-setup/
 *.key
 
 public/docs/vendor/
+
+.cloudflare/
+.wrangler/
+.dev.vars*

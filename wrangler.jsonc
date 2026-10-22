@@ -1,0 +1,235 @@
+{
+  "name": "pwp-cf-local",
+  "main": ".cloudflare/worker.mjs",
+  "compatibility_date": "2026-10-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "0679b9fc114c2ae6b7635c616c885500",
+  "build": {
+    "command": "node scripts/cloudflare/build.mjs",
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true,
+  },
+  "containers": [
+    {
+      "class_name": "MediaContainer",
+      "image": "./containers/media/Dockerfile",
+      "image_build_context": ".",
+      "instance_type": "standard-1",
+      "max_instances": 1,
+    },
+    {
+      "class_name": "ProtocolContainer",
+      "image": "./containers/protocol-fetch/Dockerfile",
+      "image_build_context": ".",
+      "instance_type": "lite",
+      "max_instances": 1,
+    },
+  ],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "CommerceState",
+        "MediaContainer",
+        "ProtocolContainer",
+      ],
+    },
+  ],
+  "observability": {
+    "enabled": true,
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *"],
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COMMERCE",
+        "class_name": "CommerceState",
+      },
+      {
+        "name": "MEDIA",
+        "class_name": "MediaContainer",
+      },
+      {
+        "name": "PROTOCOL",
+        "class_name": "ProtocolContainer",
+      },
+    ],
+  },
+  "r2_buckets": [
+    {
+      "binding": "PHOTOS",
+      "bucket_name": "pwp-cf-sandbox-photos",
+    },
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "JOBS",
+        "queue": "pwp-cf-sandbox-jobs",
+      },
+    ],
+    "consumers": [
+      {
+        "queue": "pwp-cf-sandbox-jobs",
+        "max_batch_size": 5,
+        "max_batch_timeout": 1,
+        "max_retries": 5,
+        "dead_letter_queue": "pwp-cf-sandbox-jobs-dlq",
+      },
+    ],
+  },
+  "vars": {
+    "APP_MODE": "demo",
+    "AGENT_SANDBOX": "true",
+    "ALLOW_COMPAT_AGENT_SESSIONS": "false",
+    "PUBLIC_URL": "http://localhost:8787",
+    "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json",
+    "SANDBOX_EMAIL_DELIVERY": "false",
+  },
+  "env": {
+    "sandbox": {
+      "name": "pwp-cf-sandbox",
+      "vars": {
+        "APP_MODE": "demo",
+        "AGENT_SANDBOX": "true",
+        "ALLOW_COMPAT_AGENT_SESSIONS": "false",
+        "PUBLIC_URL": "https://pwp-cf-sandbox.spencersyen.workers.dev",
+        "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json,https://pwp-cf-sandbox.spencersyen.workers.dev/api/sandbox/reference-agent.json",
+        "SANDBOX_EMAIL_DELIVERY": "true",
+        "SANDBOX_REFERENCE_PUBLIC_JWK": "{\"kty\":\"EC\",\"x\":\"anCC0-GDj6BDOycf2ODOwxOYAPxaU40wGgufjJuwrT4\",\"y\":\"LnREDPaPM1jley-PrEX_YWSVXkfObkBbUCIlWfdt_4M\",\"crv\":\"P-256\",\"kid\":\"cloudflare-reference\"}",
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COMMERCE",
+            "class_name": "CommerceState",
+          },
+          {
+            "name": "MEDIA",
+            "class_name": "MediaContainer",
+          },
+          {
+            "name": "PROTOCOL",
+            "class_name": "ProtocolContainer",
+          },
+        ],
+      },
+      "r2_buckets": [
+        {
+          "binding": "PHOTOS",
+          "bucket_name": "pwp-cf-sandbox-photos",
+        },
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "JOBS",
+            "queue": "pwp-cf-sandbox-jobs",
+          },
+        ],
+        "consumers": [
+          {
+            "queue": "pwp-cf-sandbox-jobs",
+            "max_batch_size": 5,
+            "max_batch_timeout": 1,
+            "max_retries": 5,
+            "dead_letter_queue": "pwp-cf-sandbox-jobs-dlq",
+          },
+        ],
+      },
+      "containers": [
+        {
+          "class_name": "MediaContainer",
+          "image": "./containers/media/Dockerfile",
+          "image_build_context": ".",
+          "instance_type": "standard-1",
+          "max_instances": 1,
+        },
+        {
+          "class_name": "ProtocolContainer",
+          "image": "./containers/protocol-fetch/Dockerfile",
+          "image_build_context": ".",
+          "instance_type": "lite",
+          "max_instances": 1,
+        },
+      ],
+    },
+    "production": {
+      "name": "pwp-cf-production",
+      "vars": {
+        "CF_DEPLOYMENT": "production",
+        "APP_MODE": "live",
+        "AGENT_SANDBOX": "false",
+        "SANDBOX_EMAIL_DELIVERY": "false",
+        "ALLOW_COMPAT_AGENT_SESSIONS": "false",
+        "PUBLIC_URL": "https://pwp-cf-production.spencersyen.workers.dev",
+        "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json",
+        "LIVE_ORDERS_ENABLED": "true",
+        "ORDER_EMAIL_ALLOWLIST": "",
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COMMERCE",
+            "class_name": "CommerceState",
+          },
+          {
+            "name": "MEDIA",
+            "class_name": "MediaContainer",
+          },
+          {
+            "name": "PROTOCOL",
+            "class_name": "ProtocolContainer",
+          },
+        ],
+      },
+      "r2_buckets": [
+        {
+          "binding": "PHOTOS",
+          "bucket_name": "pwp-cf-production-photos",
+        },
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "JOBS",
+            "queue": "pwp-cf-production-jobs",
+          },
+        ],
+        "consumers": [
+          {
+            "queue": "pwp-cf-production-jobs",
+            "max_batch_size": 5,
+            "max_batch_timeout": 1,
+            "max_retries": 5,
+            "dead_letter_queue": "pwp-cf-production-jobs-dlq",
+          },
+        ],
+      },
+      "containers": [
+        {
+          "class_name": "MediaContainer",
+          "image": "./containers/media/Dockerfile",
+          "image_build_context": ".",
+          "instance_type": "standard-1",
+          "max_instances": 1,
+        },
+        {
+          "class_name": "ProtocolContainer",
+          "image": "./containers/protocol-fetch/Dockerfile",
+          "image_build_context": ".",
+          "instance_type": "lite",
+          "max_instances": 1,
+        },
+      ],
+    },
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+}
