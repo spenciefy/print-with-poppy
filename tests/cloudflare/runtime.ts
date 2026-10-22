@@ -44,7 +44,9 @@ for (const [requestOrigin, cookie, csrf, status] of [
   [origin, browserCookie, browserFields.csrf, 400],
   ["null", browserCookie, browserFields.csrf, 403],
   ["https://evil.example", browserCookie, browserFields.csrf, 403],
+  ["", browserCookie, browserFields.csrf, 403],
   [origin, "", browserFields.csrf, 403],
+  [origin, "poppy_signin=wrong-browser", browserFields.csrf, 403],
   [origin, browserCookie, "wrong-csrf", 403],
 ] as const) {
   const result = await fetch(origin + "/oauth/authorize/email", {
@@ -62,6 +64,25 @@ assert.equal(
   (await fetch(origin + "/api/config")).headers.get("referrer-policy"),
   "no-referrer",
 );
+// The authorized browser must reach the code-entry page after the refused
+// submissions. Demo mode captures the email; the delivery-off check above
+// ensures this test cannot call an email provider.
+const browserEmail = await fetch(origin + "/oauth/authorize/email", {
+  method: "POST",
+  headers: {
+    Origin: origin,
+    Cookie: browserCookie,
+    "Content-Type": "application/x-www-form-urlencoded",
+  },
+  body: new URLSearchParams({
+    ...browserFields,
+    email: `browser-${randomUUID()}@example.com`,
+  }),
+});
+assert.equal(browserEmail.status, 200);
+assert.equal(browserEmail.headers.get("referrer-policy"), "same-origin");
+assert.equal(browserEmail.headers.get("cache-control"), "no-store");
+assert.match(await browserEmail.text(), /Check your email/);
 
 async function client() {
   const pair = await generateKeyPair("ES256", { extractable: true }),
