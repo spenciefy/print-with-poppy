@@ -1,6 +1,6 @@
 # Cloudflare migration and cutover
 
-This PR moves application hosting onto Cloudflare while retaining the Node deployment during validation. Merging to main automatically deploys the isolated Cloudflare production Worker after checks pass, provided its GitHub deployment credential is configured. It does not change production DNS or start two dispatchers for the same orders. The isolated Workers deployment has separate data; it is not a mirror of existing production.
+Production hosting has moved to Cloudflare. Merging to main deploys the production Worker after checks pass using its GitHub deployment credential. Cloudflare production has independent data; it is not a mirror of legacy Railway production. DNS cutover was performed separately and is recorded below.
 
 ## Scope
 
@@ -17,29 +17,25 @@ This PR moves application hosting onto Cloudflare while retaining the Node deplo
 
 Stripe, Prodigi and Resend remain the payment, fulfillment and email providers. Cloudflare replaces application infrastructure, not these services. Both sandbox and isolated live environments are configured. The legacy server remains runnable for regression validation and the transition.
 
-## Required before cutover
+## Production cutover — 22 October 2026
 
-- [ ] Complete one explicitly approved real paid PDA order, verify one Stripe payment and one Prodigi order, then confirmation and actual shipment email.
-- [ ] Deploy the foreign-order Stripe webhook handling patch to the current Node server before the parallel paid test.
-- [ ] Configure scoped GitHub deployment tokens and environment protections for sandbox and production.
-- [ ] Complete private operator export/import transport and immutable photo copying with byte counts and SHA-256 verification. The snapshot primitives in `server/migration.ts` alone do not transfer a production store.
-- [ ] Rehearse backup/restore with all record kinds, pending jobs, photos, derivatives, coupons and account/session state; verify old private order links and media signatures.
-- [ ] Verify worst-case media processing, image output parity, queue retry/lease expiry and crash recovery, retention scans and expected production load.
-- [ ] Validate browser sign-in and any intended HTTP compatibility configuration as well as native Poppy 0.2.
-- [ ] Prepare the actual production hostname/issuer configuration and DNS/TLS changes. Do not change the main domain to the Workers preview issuer.
+The owner approved a fresh-store cutover without importing legacy Railway orders, accounts, sessions or photos. The existing Cloudflare production store is retained, including the paid native-Poppy acceptance-test order. Main and www now bind to `pwp-cf-production`; `PUBLIC_URL` and the Poppy issuer are `https://printwithpoppy.com`. New sessions must discover this origin.
 
-## Cutover sequence
+Cloudflare is authoritative DNS. Namecheap remains the registrar, using `kayleigh.ns.cloudflare.com` and `titan.ns.cloudflare.com`. Resend sending records and the Railway sandbox DNS records were preserved. Cloudflare Email Routing replaces Namecheap forwarding for `hello@printwithpoppy.com`; its verified destination is configured privately. Routing reports ready; inbox delivery has not been tested.
 
-1. Record old deployment versions, provider webhook configuration, DNS and a tested recovery procedure. Inventory in-flight payments and fulfillment requests.
-2. Stop new order writes and background dispatch on the old service. `LIVE_ORDERS_ENABLED=false` on the preview only pauses proposals: it is **not** a full migration write freeze.
-3. Capture a consistent application snapshot and media manifest; preserve the production issuer and signing identity under a controlled migration so existing links and sessions remain valid.
-4. Import into a separate, empty cutover destination. Do not overwrite the isolated preview's test records or mix unrelated namespaces. Copy media and verify all checksums, record counts, ownership and job state.
-5. Keep the destination dispatcher paused while verifying imported data. Reconcile in-flight provider actions using existing IDs and idempotency keys; never replay every job blindly.
-6. Switch the main domain and provider callbacks, then enable exactly one dispatcher. Verify native discovery/authentication, existing private links, checkout, webhook handling and order history through the main domain.
-7. Monitor failures, queue age, payments, fulfillment and email delivery before retiring the legacy service. Keep recoverable backups according to the retention policy.
+The live Stripe webhook now targets `https://printwithpoppy.com/api/webhooks/stripe`. New Prodigi orders receive the main-domain callback. The workers.dev hostname remains available for existing Cloudflare order links and callbacks. Legacy deployments and their data have not been deleted or replayed. `sandbox.printwithpoppy.com` still points to Railway; the independent Cloudflare sandbox uses its workers.dev hostname.
 
-Before new writes, rollback can restore the old deployment and routing. After Cloudflare accepts new orders or provider events, first reconcile or migrate those writes back; DNS rollback alone can lose orders or duplicate fulfillment.
+### Verified
 
-## Current status
+- Main-domain HTTPS, live Cloudflare configuration and native Poppy 0.2 discovery.
+- A real PDA order completed native authentication, approval and user-paid Stripe checkout before cutover, with HTTP compatibility disabled during that test. Prodigi accepted the order for printing.
+- After cutover, that same private order loads on the main domain and reports `printing` and `native-poppy`.
+- Production now also permits HTTP guest ordering for agents that do not implement Poppy. Ordering method remains recorded separately.
 
-The sandbox has passed a hosted native PDA simulation. The isolated live Worker has passed configuration, provider credential and signed-webhook transport checks. Neither is proof of a completed production data migration or a real paid order. See [deployment instructions and recorded validation](CLOUDFLARE.md).
+Actual shipment and inbox receipt are not verified by these checks. Legacy private links and accounts are not migrated. Load benchmarks and a production-sized backup/restore rehearsal remain operational follow-ups, not completed validations.
+
+### Release and rollback
+
+Merges to main deploy through `.github/workflows/cloudflare.yml`. Keep custom-domain routes and the canonical `PUBLIC_URL` in source control; smoke checks use the main domain and require protocol version 0.2.
+
+Prefer rolling back Worker code while retaining its existing Durable Object and R2 resources. DNS rollback to Railway alone would hide new Cloudflare orders and route callbacks incorrectly. Before reverting hosting, reconcile all new payments, fulfillment and jobs; never copy or replay provider requests blindly. Preserve the legacy service for its own in-flight orders until reconciled.

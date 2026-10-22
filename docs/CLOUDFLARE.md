@@ -1,14 +1,10 @@
 # Cloudflare application migration
 
-This is an isolated deployment, not a production cutover. The existing Vercel/Railway deployments continue serving their existing domains and data.
+Production now runs at https://printwithpoppy.com on Cloudflare. The independent sandbox below remains isolated from live orders. See the [cutover record](CLOUDFLARE-CUTOVER.md) for the fresh-store decision and verification limits.
 
 **Test URL:** https://pwp-cf-sandbox.spencersyen.workers.dev
 
 Discover `/.well-known/poppy.json` on that origin. Use native Poppy 0.2 with an allowlisted client. HTTP compatibility is disabled. Payment and fulfillment are simulated; confirmation and simulated-shipment emails are really submitted to Resend and clearly marked SANDBOX. Use an inbox you control. Do not use real payment credentials.
-
-The intended `cf-sandbox.printwithpoppy.com` hostname is not configured: the domain's DNS zone is not in this Cloudflare account. Do not change nameservers as part of this parallel test. A hostname change also changes the issuer, client audiences and signed media URLs; validate it as a separate deployment step.
-
-See [migration scope and cutover checklist](CLOUDFLARE-CUTOVER.md) for the remaining production migration work.
 
 ## Architecture
 
@@ -65,7 +61,7 @@ Install secrets through Wrangler secret input/bulk input from a local ignored fi
 npm run deploy:cloudflare
 ```
 
-The GitHub workflow tests pull requests without deployment secrets. Pushes to `main` (including PR merges) run validation and automatically deploy production through `cloudflare-production`. Manual main-branch deployment remains available for either environment. Its scoped `CLOUDFLARE_API_TOKEN` still needs to be configured; local Wrangler deployment works independently. Do not give forked PR workflows that token.
+The GitHub workflow tests pull requests without deployment secrets. Pushes to `main` (including PR merges) run validation and automatically deploy production through `cloudflare-production`. Manual main-branch deployment remains available for either environment. Configure its scoped `CLOUDFLARE_API_TOKEN` in GitHub; local Wrangler deployment works independently. Do not give forked PR workflows that token.
 
 ## Validation recorded on 21 October 2026
 
@@ -76,26 +72,15 @@ The GitHub workflow tests pull requests without deployment secrets. Pushes to `m
 - Hosted PDA browser test passed end to end with a mixed five-print/one-shirt order: explicit preview approval, confirmation, simulated payment, printing, simulated shipment and both emails submitted. The order response and page report `native-poppy`. PDA required renewed task authorization after an approval-card continuation; no compatibility fallback was used.
 - PDA browser testing found that a store-specific shirt-preview approval under `/api/operations` is blocked by its protocol transport. The description now advertises `/api/shirt-preview-approvals/{id}`; the old route remains for existing clients. All authentication, ownership, revision and explicit-preview approval checks are preserved.
 
-## Before production migration
+## Live production environment
 
-The sandbox deliberately refuses live payment/printing configuration. The separate production environment below supports live providers; do not repoint production DNS based only on sandbox success.
-
-Remaining production gates include worst-case image/load benchmarks, golden image comparisons, crash/fault injection around external side effects and lease expiry, bounded retention scans at production scale, direct browser sign-in parity, compatibility-enabled validation if desired, and a full backup/restore rehearsal. Terminal job failure presentation is shared with the Node worker.
-
-`server/migration.ts` provides a versioned logical snapshot primitive, identity validation, dry-run counts and exact-import resumption on an empty target. Its tests use synthetic data. It is **not a complete operator migration command**: asset copying and digest verification, private operator transport, write freeze, provider-webhook coordination and a production-sized rehearsal remain to implement. No production records or photos have been imported.
-
-A later cutover must freeze writes and background dispatch on the old service, export a consistent snapshot plus assets, verify imported counts/checksums, retain the same public issuer and signing secret only for that controlled migration, and switch traffic once. Never run two production dispatchers against the same provider workload. Rollback after accepting new writes needs a reverse-data plan; DNS rollback alone is insufficient.
-
-## Isolated live production environment
-
-`wrangler --env production` deploys **pwp-cf-production** at
-https://pwp-cf-production.spencersyen.workers.dev. This is a real-payment environment, not the agent sandbox. It has its own Durable Object namespace, `pwp-cf-production-photos` R2 bucket, `pwp-cf-production-jobs` queue/DLQ and private containers. Production data has not been imported. Existing domains still use their existing deployments.
+`wrangler --env production` deploys **pwp-cf-production** on https://printwithpoppy.com and https://www.printwithpoppy.com. The workers.dev hostname remains available for existing callbacks. Production retains its own Durable Object namespace, R2 bucket, jobs queue/DLQ and private containers. Legacy Railway data was not imported, as explicitly approved by the owner.
 
 Production requires `CF_DEPLOYMENT=production`, `APP_MODE=live`, `AGENT_SANDBOX=false`, a unique `APP_SECRET`, live Stripe/Prodigi credentials, a separate Stripe webhook signing secret, and Resend sender credentials. Sandbox credentials/identities cannot enable live mode implicitly. The Stripe adapter uses the Workers Fetch client; raw webhooks use asynchronous Web Crypto signature verification.
 
 Production configuration:
 
-- Native Poppy only, with `https://poppydemoagent.dev/poppy/client.json` allowlisted.
+- Native Poppy and HTTP guest ordering, with `https://poppydemoagent.dev/poppy/client.json` allowlisted.
 - `LIVE_ORDERS_ENABLED=true` permits order proposals. Set it to `false` and redeploy to pause new proposals while existing paid orders and webhooks continue processing.
 - `ORDER_EMAIL_ALLOWLIST` is empty: any recipient email is accepted. Native authentication, ownership checks and explicit order approval remain required. An email allowlist can still be configured for a restricted deployment.
 - No sandbox payment/shipment/OTP capture routes exist. Email sign-in sends real email.
@@ -118,16 +103,16 @@ The GitHub deployment workflow selects `sandbox` or `production` and uses the ma
 
 ### Real-order acceptance test
 
-1. Use PDA against the production Workers hostname and verify discovery says 0.2, config says live, and HTTP compatibility is disabled.
+1. Use PDA against the main production hostname and verify discovery says 0.2 and config says live. Require native Poppy in the test and verify the resulting ordering method; HTTP compatibility is also enabled for other agents.
 2. Upload chosen photos or select sample poppies. Use the actual recipient/address and approved email; do not pay a quote with a fictional address.
 3. Review the exact print previews, products, quantities, shipping address and total. Approve the proposal, then pay the Stripe Checkout link only with explicit authorization for that purchase.
 4. Verify signed Stripe delivery or payment reconciliation records the matching paid checkout exactly once. Check Prodigi accepts exactly one matching order, confirmation email is submitted, and the private order page says native Poppy.
 5. Verify the actual dispatch callback/poll, tracking and shipment email when the printer dispatches. Simulating a shipment is impossible here.
 
-A prepared live environment is not a completed real-order test. Do not migrate the existing domains/data until this test and the backup/load/recovery gates above pass.
+A paid native-PDA acceptance test has completed through printing; actual dispatch and inbox delivery remain unverified. See the [22 October cutover record](CLOUDFLARE-CUTOVER.md).
 
 ### Production deployment validation — 21 October 2026
 
 The isolated production Worker was deployed as version `3f844766-cf48-4542-8684-8d48463ce8ac`. Public health, live configuration and Poppy 0.2 discovery passed. Compatibility and simulation endpoints returned 404. A signed fixture event for an unknown order was acknowledged; an invalid signature was rejected. The separate live Stripe webhook is enabled, and a read-only live Prodigi product lookup succeeded. These checks did not create an order, charge a card, send production email or request printing.
 
-The updated Node suite passes all 67 tests. Both the local sandbox lifecycle suite and local production transport suite pass. Real Stripe event delivery, fulfillment and email still require the real-order acceptance test above.
+The updated Node suite passes all 67 tests. Both the local sandbox lifecycle suite and local production transport suite pass. These were pre-cutover checks; the later paid-order and main-domain results are recorded in the cutover document.

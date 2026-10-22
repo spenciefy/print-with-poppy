@@ -162,13 +162,17 @@
     },
     "production": {
       "name": "pwp-cf-production",
+      "routes": [
+        { "pattern": "printwithpoppy.com", "custom_domain": true },
+        { "pattern": "www.printwithpoppy.com", "custom_domain": true },
+      ],
       "vars": {
         "CF_DEPLOYMENT": "production",
         "APP_MODE": "live",
         "AGENT_SANDBOX": "false",
         "SANDBOX_EMAIL_DELIVERY": "false",
-        "ALLOW_COMPAT_AGENT_SESSIONS": "false",
-        "PUBLIC_URL": "https://pwp-cf-production.spencersyen.workers.dev",
+        "ALLOW_COMPAT_AGENT_SESSIONS": "true",
+        "PUBLIC_URL": "https://printwithpoppy.com",
         "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json",
         "LIVE_ORDERS_ENABLED": "true",
         "ORDER_EMAIL_ALLOWLIST": "",

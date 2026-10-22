@@ -47,11 +47,11 @@ try {
   const cfg = await (await fetch(origin + "/api/config")).json();
   assert.equal(cfg.mode, "live");
   assert.equal(cfg.restrictedLaunch, false);
-  assert.equal(cfg.httpOrderingEnabled, false);
+  assert.equal(cfg.httpOrderingEnabled, true);
+  assert.equal((await fetch(origin + "/api/compat/openapi.json")).status, 200);
   for (const url of [
     "/api/demo/agent.json",
     "/api/sandbox/reference-agent.json",
-    "/api/compat/openapi.json",
   ])
     assert.equal((await fetch(origin + url)).status, 404, url);
   assert.equal(
@@ -127,7 +127,7 @@ try {
       })
     ).status,
     401,
-    "Any recipient is allowed, but native authentication remains required.",
+    "Any recipient is allowed, but session authentication remains required.",
   );
   assert.equal(
     (
@@ -138,10 +138,10 @@ try {
       })
     ).status,
     401,
-    "Recipient does not bypass native authentication.",
+    "Recipient does not bypass session authentication.",
   );
   console.log(
-    "Production Workers transport passed: raw signed webhooks, environment isolation, simulation disabled, unrestricted recipients and native authentication. No provider requests were made.",
+    "Production Workers transport passed: raw signed webhooks, environment isolation, simulation disabled, unrestricted recipients and session authentication. No provider requests were made.",
   );
 } finally {
   child.kill("SIGTERM");

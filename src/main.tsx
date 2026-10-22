@@ -287,9 +287,15 @@ function Footer({ compact = false, httpOrderingEnabled = false }: { compact?: bo
           </Faq>
           <Faq title="Where can I try a personal agent?">
             <p>
-              Try <a href="https://poppydemoagent.dev/">Poppy Demo Agent</a>,
+              Try <a className="agent-demo-link" href="https://poppydemoagent.dev/">Poppy Demo Agent</a>,
               a demo personal agent built for Personal Agent Protocol.
             </p>
+            {httpOrderingEnabled && (
+              <p>
+                You can also use Muse or Instinct via the HTTP path, but they
+                don’t officially support Personal Agent Protocol yet.
+              </p>
+            )}
           </Faq>
           <Faq title="Does this work with Muse or Instinct?">
             <p>
