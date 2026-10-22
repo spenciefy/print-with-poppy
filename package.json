@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261021.1",
-    "@scalar/api-reference": "1.73.1",
+    "@scalar/api-reference": "1.75.0",
     "@types/better-sqlite3": "9.6.0",
     "@types/express": "5.0.6",
     "@types/multer": "2.3.0",
