@@ -16,6 +16,74 @@ const identity = await importJWK(key, "ES256"),
   clientId = origin + "/api/demo/agent.json";
 const digest = (v: string) =>
   createHash("sha256").update(v).digest("base64url");
+
+// Browser form sign-in must preserve Origin while hiding cross-origin referrers.
+const browserStart = await fetch(
+  origin +
+    "/oauth/authorize?" +
+    new URLSearchParams({
+      response_type: "code",
+      client_id: clientId,
+      redirect_uri: origin + "/api/demo/callback",
+      scope: "poppy:read",
+      state: randomUUID(),
+      code_challenge: digest(randomUUID()),
+      code_challenge_method: "S256",
+    }),
+);
+assert.equal(browserStart.status, 200);
+assert.equal(browserStart.headers.get("referrer-policy"), "same-origin");
+const browserCookie = browserStart.headers.get("set-cookie")!.split(";")[0];
+const browserHtml = await browserStart.text();
+const browserFields = {
+  flow: browserHtml.match(/name="flow" value="([^"]+)"/)![1],
+  csrf: browserHtml.match(/name="csrf" value="([^"]+)"/)![1],
+  email: "invalid-email", // Reach validation without sending mail.
+};
+for (const [requestOrigin, cookie, csrf, status] of [
+  [origin, browserCookie, browserFields.csrf, 400],
+  ["null", browserCookie, browserFields.csrf, 403],
+  ["https://evil.example", browserCookie, browserFields.csrf, 403],
+  ["", browserCookie, browserFields.csrf, 403],
+  [origin, "", browserFields.csrf, 403],
+  [origin, "poppy_signin=wrong-browser", browserFields.csrf, 403],
+  [origin, browserCookie, "wrong-csrf", 403],
+] as const) {
+  const result = await fetch(origin + "/oauth/authorize/email", {
+    method: "POST",
+    headers: {
+      Origin: requestOrigin,
+      Cookie: cookie,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ ...browserFields, csrf }),
+  });
+  assert.equal(result.status, status);
+}
+assert.equal(
+  (await fetch(origin + "/api/config")).headers.get("referrer-policy"),
+  "no-referrer",
+);
+// The authorized browser must reach the code-entry page after the refused
+// submissions. Demo mode captures the email; the delivery-off check above
+// ensures this test cannot call an email provider.
+const browserEmail = await fetch(origin + "/oauth/authorize/email", {
+  method: "POST",
+  headers: {
+    Origin: origin,
+    Cookie: browserCookie,
+    "Content-Type": "application/x-www-form-urlencoded",
+  },
+  body: new URLSearchParams({
+    ...browserFields,
+    email: `browser-${randomUUID()}@example.com`,
+  }),
+});
+assert.equal(browserEmail.status, 200);
+assert.equal(browserEmail.headers.get("referrer-policy"), "same-origin");
+assert.equal(browserEmail.headers.get("cache-control"), "no-store");
+assert.match(await browserEmail.text(), /Check your email/);
+
 async function client() {
   const pair = await generateKeyPair("ES256", { extractable: true }),
     jwk = await exportJWK(pair.publicKey);
@@ -111,7 +179,6 @@ assert.equal(
 );
 const a = await client(),
   b = await client();
-await import("./signin.js");
 const sample = await a.call("/api/photos/samples", { color: "yellow" });
 assert.equal(sample.status, 201);
 const photo = await sample.json();

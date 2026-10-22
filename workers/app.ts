@@ -204,7 +204,8 @@ export default {
       }
       const headers = new Headers(response.headers);
       headers.set("X-Content-Type-Options", "nosniff");
-      // Sign-in forms need their same-origin Origin for the CSRF check.
+      // Browser sign-in uses same-origin so form POSTs retain their Origin.
+      // Keep route-specific policy; other responses default to no-referrer.
       if (!headers.has("Referrer-Policy"))
         headers.set("Referrer-Policy", "no-referrer");
       headers.set("X-Frame-Options", "DENY");
