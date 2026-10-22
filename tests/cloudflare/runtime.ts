@@ -111,6 +111,7 @@ assert.equal(
 );
 const a = await client(),
   b = await client();
+await import("./signin.js");
 const sample = await a.call("/api/photos/samples", { color: "yellow" });
 assert.equal(sample.status, 201);
 const photo = await sample.json();
