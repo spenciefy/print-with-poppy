@@ -2092,3 +2092,14 @@ header {
 }
 .header-brand .protocol-credit:hover { text-decoration: underline; }
 .footer-bottom .discovery-link { overflow-wrap: anywhere; }
+
+.agent-demo-link {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+.agent-demo-link:hover,
+.agent-demo-link:focus-visible {
+  text-decoration-style: solid;
+}
