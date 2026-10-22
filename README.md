@@ -34,7 +34,7 @@ No photos ready? Ask your agent for the yellow, orange or red poppy artwork. Bot
 
 ### Parallel Cloudflare environments
 
-[Production](https://printwithpoppy.com) runs Poppy 0.2 on Cloudflare Workers, Durable Objects, R2 and private containers, with real Stripe payments, Prodigi printing and Resend emails. The independent [Cloudflare sandbox](https://pwp-cf-sandbox.spencersyen.workers.dev) simulates payment/printing and sends labeled sandbox emails. Production supports both native Poppy and HTTP guest ordering; the Cloudflare sandbox requires native Poppy. See [setup and validation](docs/CLOUDFLARE.md) and the [cutover record](docs/CLOUDFLARE-CUTOVER.md).
+[Production](https://printwithpoppy.com) runs Poppy 0.2 on Cloudflare Workers, Durable Objects, R2 and private containers, with real Stripe payments, Prodigi printing and Resend emails. The independent [Cloudflare sandbox](https://sandbox.printwithpoppy.com) simulates payment/printing and sends labeled sandbox emails. Production supports both native Poppy and HTTP guest ordering; the Cloudflare sandbox requires native Poppy. See [setup and validation](docs/CLOUDFLARE.md) and the [cutover record](docs/CLOUDFLARE-CUTOVER.md).
 
 ### Protocol version
 

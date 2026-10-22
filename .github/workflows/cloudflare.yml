@@ -72,7 +72,7 @@ jobs:
           const production = process.env.CF_TARGET === 'production';
           const origin = production
             ? 'https://printwithpoppy.com'
-            : 'https://pwp-cf-sandbox.spencersyen.workers.dev';
+            : 'https://sandbox.printwithpoppy.com';
           for (const path of ['/api/health', '/.well-known/poppy.json']) {
             const response = await fetch(origin + path);
             assert(response.ok, `${path}: HTTP ${response.status}`);

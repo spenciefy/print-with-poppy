@@ -23,7 +23,7 @@ The owner approved a fresh-store cutover without importing legacy Railway orders
 
 Cloudflare is authoritative DNS. Namecheap remains the registrar, using `kayleigh.ns.cloudflare.com` and `titan.ns.cloudflare.com`. Resend sending records and the Railway sandbox DNS records were preserved. Cloudflare Email Routing replaces Namecheap forwarding for `hello@printwithpoppy.com`; its verified destination is configured privately. Routing reports ready; inbox delivery has not been tested.
 
-The live Stripe webhook now targets `https://printwithpoppy.com/api/webhooks/stripe`. New Prodigi orders receive the main-domain callback. The workers.dev hostname remains available for existing Cloudflare order links and callbacks. Legacy deployments and their data have not been deleted or replayed. `sandbox.printwithpoppy.com` still points to Railway; the independent Cloudflare sandbox uses its workers.dev hostname.
+The live Stripe webhook now targets `https://printwithpoppy.com/api/webhooks/stripe`. New Prodigi orders receive the main-domain callback. The workers.dev hostname remains available for existing Cloudflare order links and callbacks. Legacy deployments and their data have not been deleted or replayed. `sandbox.printwithpoppy.com` now points to the independent `pwp-cf-sandbox` Worker, with simulated payments/printing and real labeled sandbox emails. Its canonical issuer and reference-agent identity use the sandbox custom domain. Existing Cloudflare sandbox data is retained; Railway sandbox records are not imported. Agents must discover the new issuer and establish fresh sessions.
 
 ### Verified
 
