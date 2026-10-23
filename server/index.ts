@@ -1,3 +1,4 @@
+import { batchBodyLimit } from "./batch-photos.js";
 import { registerRoutes } from "./routes.js";
 import express from "express";
 import helmet from "helmet";
@@ -115,6 +116,7 @@ await registerRoutes(
   }).single("photo"),
   rateLimit({ windowMs: 3600000, limit: 10 }),
   rateLimit({ windowMs: 60000, limit: 30 }),
+  express.raw({ type: "multipart/form-data", limit: batchBodyLimit }),
 );
 app.use(["/api", "/oauth", "/media"], (_req, res) =>
   res.status(404).json({ error: "not_found", message: "Endpoint not found." }),

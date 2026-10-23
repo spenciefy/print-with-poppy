@@ -1,3 +1,4 @@
+import { batchBodyLimit, parsePhotoBatch, processPhotoBatch } from "../server/batch-photos.js";
 import { configuration, withRuntime, type Env } from "./context.js";
 import { media } from "./adapters/media-runtime.js";
 import { samplePhotos } from "../server/sample-photos.js";
@@ -7,6 +8,28 @@ export { CommerceState } from "./commerce-state.js";
 export { MediaContainer, ProtocolContainer } from "./containers.js";
 const commerce = (env: Env) =>
   env.COMMERCE.get(env.COMMERCE.idFromName("commerce-v1")) as any;
+async function batchPhotoRequest(request: Request, env: Env) {
+  const files = await parsePhotoBatch(await boundedBody(request, batchBodyLimit), request.headers.get("Content-Type") || "");
+  const state = commerce(env);
+  const authorization = await state.beginUpload(new Request(request.url, {
+    method: request.method, headers: request.headers,
+  }), files.length);
+  if (!authorization.ok) return authorization;
+  const value = await authorization.json();
+  const tickets = Array.isArray(value) ? value : [value];
+  return Response.json(await processPhotoBatch(files, async (file, index) => {
+    const ticket = tickets[index];
+    try {
+      const { width, height, files: normalized } = await media.normalize(Buffer.from(await file.arrayBuffer()));
+      await media.write(ticket.id, normalized);
+      return await state.finishUpload(ticket, { width, height });
+    } catch (error) {
+      // Do not let reservation cleanup mask the actual per-photo failure.
+      await state.releaseUpload(ticket).catch(() => console.error("Batch upload reservation cleanup failed"));
+      throw error;
+    }
+  }));
+}
 async function photoRequest(request: Request, env: Env) {
   const state = commerce(env);
   const authorization = await state.beginUpload(
@@ -140,7 +163,9 @@ export default {
       const path = new URL(request.url).pathname;
       let response: Response;
       try {
-        if (
+        if (request.method === "POST" && path === "/api/photos/batch")
+          response = await batchPhotoRequest(request, env);
+        else if (
           request.method === "POST" &&
           ["/api/photos", "/api/photos/samples"].includes(path)
         )

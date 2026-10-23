@@ -1,3 +1,4 @@
+import { parsePhotoBatch, processPhotoBatch } from "./batch-photos.js";
 import { shirtMediaVariants } from "../src/offer.js";
 import { samplePhotos, addSamplePhoto } from "./sample-photos.js";
 import type express from "express";
@@ -49,6 +50,7 @@ export async function registerRoutes(
   uploadMiddleware: express.RequestHandler,
   compatLimiter: express.RequestHandler,
   webhookLimiter: express.RequestHandler,
+  batchMiddleware: express.RequestHandler = (_req, _res, next) => next(),
 ) {
   app.post("/api/agent-sessions", compatLimiter, (req, res) => {
     if (!config.compatibility)
@@ -407,6 +409,12 @@ export async function registerRoutes(
   );
   app.post("/api/photos/samples", async (req, res) => {
     res.status(201).json(await addSamplePhoto(req.body, res.locals.session.id));
+  });
+  app.post("/api/photos/batch", batchMiddleware, async (req, res) => {
+    const files = await parsePhotoBatch(req.body, req.get("Content-Type") || "");
+    const result = await processPhotoBatch(files, async file =>
+      upload(Buffer.from(await file.arrayBuffer()), "", res.locals.session.id));
+    res.status(200).json(result);
   });
   app.post("/api/photos", uploadMiddleware, async (req, res) => {
     if (!req.file)
