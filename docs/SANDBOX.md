@@ -24,7 +24,7 @@ The live `poppy.json` links to sandbox discovery in its API description. This is
 Keep one session for the whole order. These are OpenAPI operation IDs (your agent's generic API tool may name its arguments differently):
 
 1. `getCatalog`: choose `prints` or `poster`.
-2. `uploadPhoto`: upload sample JPEG/PNG/WebP files as multipart field `photo`. Obtain user approval to transmit any attachments.
+2. Prefer `uploadPhotos` (`POST /api/photos/batch`) for multiple JPEG/PNG/WebP files: attach 1–10 files as `photo1` through `photo10`, up to 20 MB combined. One request lets compatible agents show one approval for the selected files. Read each result: keep successful photo IDs and retry only failed fields. For a single image, `uploadPhoto` still accepts multipart field `photo`. Obtain user approval to transmit attachments.
 3. `proposeOrder`: send a **JSON object**, not a quoted JSON string. Supply an `Idempotency-Key`, complete synthetic US shipping address, email, and photo items. For example:
 
 ```json

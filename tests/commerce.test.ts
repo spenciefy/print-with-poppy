@@ -2433,3 +2433,25 @@ test("account proposals recover across sessions only for the same agent, user an
   );
   assert.notEqual(store.get("operation", op.operation_id).state, "cancelled");
 });
+
+test("batch upload supports native and HTTP sessions with per-file failures and private labels", async () => {
+  const image = await sharp({ create: { width: 1800, height: 1200, channels: 3, background: "orange" } }).jpeg().toBuffer();
+  const a = await makeAgent();
+  const form = new FormData();
+  form.append("photo1", new Blob([image]), "private-filename.jpg");
+  form.append("photo2", new Blob(["broken"]), "bad.jpg");
+  form.append("photo3", new Blob([image]), "private-again.jpg");
+  const r = await a.request("/api/photos/batch", { method: "POST", body: form });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.uploaded, 2);
+  assert.equal(r.body.failed, 1);
+  assert.deepEqual(r.body.results.map((item: any) => item.status), ["uploaded", "failed", "uploaded"]);
+  assert(!JSON.stringify(r.body).includes("private-filename"));
+  const guest = await (await fetch(origin + "/api/agent-sessions", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  })).json();
+  const result = await fetch(origin + "/api/photos/batch", { method: "POST", body: form,
+    headers: { Authorization: `Bearer ${guest.access_token}` } });
+  assert.equal(result.status, 200);
+  assert.equal((await result.json()).uploaded, 2);
+});

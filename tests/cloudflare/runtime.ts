@@ -183,6 +183,51 @@ const sample = await a.call("/api/photos/samples", { color: "yellow" });
 assert.equal(sample.status, 201);
 const photo = await sample.json();
 assert.equal((await fetch(photo.previews.contain)).status, 200);
+// One native tool call carries several files; a corrupt image does not discard successes.
+assert.equal(api.paths["/api/photos/batch"].post.operationId, "uploadPhotos");
+const artwork = await (
+  await fetch(origin + "/photos/poppy-abstract-cluster.webp")
+).arrayBuffer();
+async function batchCall(
+  agent: Awaited<ReturnType<typeof client>>,
+  form: FormData,
+  signed = true,
+) {
+  const url = origin + "/api/photos/batch";
+  return fetch(url, {
+    method: "POST",
+    body: form,
+    headers: signed
+      ? {
+          Authorization: `DPoP ${agent.token}`,
+          DPoP: await agent.proof("POST", url, agent.token),
+        }
+      : {},
+  });
+}
+const batchForm = new FormData();
+batchForm.append("photo3", new Blob([artwork]), "private-name.png");
+batchForm.append("photo1", new Blob([artwork]), "another-private-name.png");
+batchForm.append("photo2", new Blob(["not an image"]), "bad.png");
+assert.equal((await batchCall(a, batchForm, false)).status, 401);
+const batchResponse = await batchCall(a, batchForm);
+assert.equal(batchResponse.status, 200);
+const batch = await batchResponse.json();
+assert.deepEqual(
+  batch.results.map((r: any) => [r.field, r.status]),
+  [
+    ["photo1", "uploaded"],
+    ["photo2", "failed"],
+    ["photo3", "uploaded"],
+  ],
+);
+assert.equal(batch.uploaded, 2);
+assert.equal(batch.failed, 1);
+assert(!JSON.stringify(batch).includes("private-name"));
+for (const r of batch.results.filter((r: any) => r.photo)) {
+  assert.match(r.photo.name, /^Photo [0-9]+$/);
+  assert.equal((await fetch(r.photo.previews.contain)).status, 200);
+}
 const expired = new URL(photo.previews.contain);
 expired.searchParams.set("exp", "1");
 assert.equal((await fetch(expired)).status, 403);

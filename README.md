@@ -194,3 +194,9 @@ Malformed JSON bodies return `400 invalid_request`; oversized JSON bodies return
 ## License
 
 Project code is available under the [MIT License](LICENSE). Third-party fonts retain their accompanying licenses.
+
+### Batch photo uploads
+
+Agents can send 1–10 photos in one `uploadPhotos` request (`POST /api/photos/batch`), using multipart fields `photo1` through `photo10`, up to 20 MB combined. This works with PDA’s existing named attachment fields and allows one approval card for the selected files. The native Poppy and HTTP guest schemas both advertise it. File-sharing approval remains separate from order approval.
+
+Each result identifies its input field and returns either the stored photo (including its Photo N label and previews) or an error. A `200` response may contain partial failures: retain successful photo IDs and retry only failed photos. Original filenames are not returned. Single-photo `uploadPhoto` remains supported.

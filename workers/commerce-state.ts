@@ -231,7 +231,7 @@ export class CommerceState extends DurableObject<Env> {
       { status: 500 },
     );
   }
-  async beginUpload(request: Request) {
+  async beginUpload(request: Request, count = 1) {
     await this.ready;
     return this.inContext(async () => {
       try {
@@ -243,13 +243,15 @@ export class CommerceState extends DurableObject<Env> {
           method: request.method,
           originalUrl: new URL(request.url).pathname,
         } as any);
+        if (!Number.isInteger(count) || count < 1 || count > 10)
+          throw new HttpError(400, "invalid_request", "Upload 1–10 photos.");
         const now = Date.now();
         const pending = all<any>("upload", session.id).filter(
           (p) => p.expires > now && !p.done,
         );
         if (
           all<Photo>("photo", session.id).filter((p) => !p.deleted).length +
-            pending.length >=
+            pending.length + count >
           100
         )
           throw new HttpError(
@@ -257,17 +259,25 @@ export class CommerceState extends DurableObject<Env> {
             "photo_limit",
             "Maximum 100 stored photos per session.",
           );
-        const ticket = {
+        const tickets = Array.from({ length: count }, () => ({
           id: id("photo"),
           owner: session.id,
           token: id("upload"),
-          expires: now + 120000,
-        };
-        put("upload", ticket.id, ticket, session.id);
-        return Response.json(ticket);
+          expires: now + (count > 1 ? 600000 : 120000),
+        }));
+        for (const ticket of tickets) put("upload", ticket.id, ticket, session.id);
+        return Response.json(count === 1 ? tickets[0] : tickets);
       } catch (e) {
         return this.error(e);
       }
+    });
+  }
+  async releaseUpload(ticket: { id: string; token: string }) {
+    await this.ready;
+    return this.inContext(() => {
+      const pending = get("upload", ticket.id);
+      if (pending && pending.token === ticket.token && !pending.done)
+        put("upload", ticket.id, { ...pending, expires: 0 }, pending.owner);
     });
   }
   async finishUpload(
