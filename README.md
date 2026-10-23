@@ -200,3 +200,9 @@ Project code is available under the [MIT License](LICENSE). Third-party fonts re
 Agents can send 1–10 photos in one `uploadPhotos` request (`POST /api/photos/batch`), using multipart fields `photo1` through `photo10`, up to 20 MB combined. This works with PDA’s existing named attachment fields and allows one approval card for the selected files. The native Poppy and HTTP guest schemas both advertise it. File-sharing approval remains separate from order approval.
 
 Each result identifies its input field and returns either the stored photo (including its Photo N label and previews) or an error. A `200` response may contain partial failures: retain successful photo IDs and retry only failed photos. Original filenames are not returned. Single-photo `uploadPhoto` remains supported.
+
+### Optional account connection
+
+Native agents should offer email-code sign-in once before the first order, reuse an existing authorized connection, and let customers continue as guests. Orders placed while signed in are saved to that account; older guest orders are not automatically attached. Read access uses `poppy:read`; saving new orders also requires `poppy:write`.
+
+Poppy supports browser email OTP and mediated email OTP in an agent’s secure sign-in card. DPoP binds the session token to the agent’s key in either flow; customers do not handle keys or proofs. PDA currently prefers browser sign-in when both methods are advertised. Choosing inline OTP by default requires an agent-side change, not a weaker authentication mode. HTTP compatibility sessions remain guest-only.
