@@ -15,7 +15,7 @@ The live `poppy.json` links to sandbox discovery in its API description. This is
 ## Connect an agent
 
 1. Publish your HTTPS Poppy client metadata and JWKS with your own public signing key, and advertise Operations v1. Keep the private key in your agent.
-2. Send the client metadata URL to `hello@printwithpoppy.com` for registration. DPA's `https://personal-agent.adewale-883.workers.dev/poppy/client.json` is preconfigured. Registration on production and sandbox is separate.
+2. Send the client metadata URL to `hello@printwithpoppy.com` for registration. Poppy Demo Agent's `https://poppydemoagent.dev/poppy/client.json` and its interop harness identity `https://poppydemoagent.dev/poppy/interop/client.json` are preconfigured. The forgiving and strict test variants share the interop identity and use the same authentication and approval requirements. Registration on production and sandbox is separate.
 3. Discover `/.well-known/poppy.json` and its OAuth metadata on the sandbox origin. Open a native signed-out session with client/session assertions and DPoP; use the issued session token and fresh DPoP proof for every API request. No compatibility-session or unsigned-auth bypass is enabled.
 4. Read `/openapi.json` or browse `/docs`. The sandbox-only operations are included in that document. They are ordinary PWP API operations, not additions to the Poppy protocol.
 
@@ -94,7 +94,7 @@ OTP sign-in remains captured-only with synthetic accounts. Enabling order email 
 
 ## DPA acceptance checklist
 
-Use the deployed [DPA](https://personal-agent.adewale-883.workers.dev/) with its existing GitHub login. A fresh chat should explicitly request the sandbox and **native Poppy**, without the compatibility instructions. Attach sample poppy artwork and use fictional US recipient details. Complete upload and operation approval through DPA's cards, then simulate payment and shipment. Verify the returned private order link, two captured emails, and `orderingMethod: native-poppy`. Separately test mediated sign-in with a synthetic account and check account history. Do not count a reference-client or local test as a completed DPA UI journey.
+Use the deployed [DPA](https://poppydemoagent.dev/) with its existing GitHub login. A fresh chat should explicitly request the sandbox and **native Poppy**, without the compatibility instructions. Attach sample poppy artwork and use fictional US recipient details. Complete upload and operation approval through DPA's cards, then simulate payment and shipment. Verify the returned private order link, two captured emails, and `orderingMethod: native-poppy`. Separately test mediated sign-in with a synthetic account and check account history. Do not count a reference-client or local test as a completed DPA UI journey.
 
 For operator reference-client coverage, append `--sandbox-account` to the documented command to exercise captured OTP and order history. Append `--tshirt` to include the custom orange, size M T-shirt in the same order. The script verifies native ordering provenance and two captured emails. It uses sample poppy artwork; it never pays or prints a real order.
 
