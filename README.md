@@ -34,7 +34,7 @@ No photos ready? Ask your agent for the yellow, orange or red poppy artwork. Bot
 
 ### Parallel Cloudflare environments
 
-[Production](https://printwithpoppy.com) runs Poppy 0.2 on Cloudflare Workers, Durable Objects, R2 and private containers, with real Stripe payments, Prodigi printing and Resend emails. The independent [Cloudflare sandbox](https://pwp-cf-sandbox.spencersyen.workers.dev) simulates payment/printing and sends labeled sandbox emails. Production supports both native Poppy and HTTP guest ordering; the Cloudflare sandbox requires native Poppy. See [setup and validation](docs/CLOUDFLARE.md) and the [cutover record](docs/CLOUDFLARE-CUTOVER.md).
+[Production](https://printwithpoppy.com) runs Poppy 0.2 on Cloudflare Workers, Durable Objects, R2 and private containers, with real Stripe payments, Prodigi printing and Resend emails. The independent [Cloudflare sandbox](https://sandbox.printwithpoppy.com) simulates payment/printing and sends labeled sandbox emails. Production supports both native Poppy and HTTP guest ordering; the Cloudflare sandbox requires native Poppy. See [setup and validation](docs/CLOUDFLARE.md) and the [cutover record](docs/CLOUDFLARE-CUTOVER.md).
 
 ### Protocol version
 
@@ -129,28 +129,18 @@ Confirmation emails and the private order page show the actual photos, quantitie
 
 See [pricing, payment and delivery details](docs/PRICING.md) for API product IDs, limits, coupons, Stripe itemization and cost checks.
 
-## Hosted example
+## Hosted deployment
 
-The legacy Node deployment option uses Vercel for the React website and same-origin rewrites to a single Railway service. The public production site now uses Cloudflare; the following describes the legacy option. Railway owns the API, background worker, SQLite database and private images on a persistent `/app/.data` volume. `PUBLIC_URL` is the Vercel custom domain, so discovery, DPoP proofs, checkout returns and signed media URLs all use the same origin.
-
-`vercel.json` contains the example backend's **public URL only**. Forks must replace that URL with their own Railway service. Set provider credentials only on Railway; Vercel needs no provider secrets. Keep one backend replica and mount the persistent volume before deploying. In Railway service settings, connect the `main` branch, use the detected Dockerfile, set the health check to `/api/health`, and keep serverless sleeping disabled. New services no longer support Railway config-as-code. Railway mounts volumes as root: this deployment sets `RAILWAY_RUN_UID=0` so the service can write its private volume.
+Production and sandbox run on Cloudflare Workers with static assets, SQLite Durable Objects, private R2 storage, Queues and private processing containers. See [Cloudflare deployment instructions](docs/CLOUDFLARE.md). Vercel and Railway are no longer deployment targets.
 
 New installations default to `APP_MODE=demo`: payments, prints and emails are simulated. Agent Sandbox can optionally send real, clearly labeled order emails through Resend; see [the sandbox guide](docs/SANDBOX.md#real-sandbox-order-emails). The public store can accept real orders; check `/api/catalog` for its current mode and availability. Deploying a fork does not enable live transactions. Use separate credentials and storage when switching from demo to live.
 
 ## Deployment and operations
 
-Use one long-running Node service with a **persistent disk**, behind HTTPS. `Dockerfile` is provided. Mount `/app/.data` (or set `DATA_DIR`). Do not deploy this implementation onto an ephemeral/serverless filesystem or scale it to multiple replicas: the worker assumes one process. Back up SQLite and private files together; SQLite uses WAL.
+Deploy the sandbox with `npm run deploy:cloudflare` and production with `npm run deploy:cloudflare:production`. Merges to main deploy production through GitHub Actions. Each environment has separate storage, secrets and job queues. Local Node/SQLite development and regression tests remain supported; they are not the hosted deployment.
 
-```
-Frontend + Poppy API → SQLite order/approval + durable jobs
-                           ├── Stripe checkout / signed webhook
-                           ├── Prodigi order / authenticated reconciliation
-                           └── Resend confirmation / shipping emails
-```
+`GET /api/health` checks application storage, not provider connectivity. Cloudflare queues, Durable Object alarms and scheduled reconciliation process durable jobs. Failed fulfillment retains the same Prodigi idempotency key; never manually submit a new order before checking the existing provider order. See [architecture and operations](docs/CLOUDFLARE.md).
 
-`GET /api/health` checks database access and reports the configured mode; it is not evidence of provider connectivity. `npm run ops:status` lists pending job IDs, retry counts and errors without customer payloads. Monitor this output and process health in production. A failed fulfillment remains paid/attention and retries with the **same** Prodigi idempotency key; never manually submit a fresh order before checking the existing provider order.
-
-- The worker runs every two seconds and retries with exponential backoff, capped at one hour.
 - Prodigi callbacks are untrusted hints. They can enqueue retrieval of an already-known order, never mutate fulfillment directly. The server always reads that order from Prodigi using its own API key. Periodic reconciliation recovers missed callbacks.
 - Stripe payment events must match stored checkout ID, amount and currency. Repeated events cannot enqueue duplicate fulfillment. Checkout, print submission and email retries use stable keys.
 - Resend's idempotency retention is limited. Ambiguous email retries stop before 24 hours; inspect Resend before manually resending. Checkout creation that remains unresolved for 24 hours needs operator review.

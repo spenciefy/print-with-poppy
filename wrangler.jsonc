@@ -95,12 +95,15 @@
   "env": {
     "sandbox": {
       "name": "pwp-cf-sandbox",
+      "routes": [
+        { "pattern": "sandbox.printwithpoppy.com", "custom_domain": true },
+      ],
       "vars": {
         "APP_MODE": "demo",
         "AGENT_SANDBOX": "true",
         "ALLOW_COMPAT_AGENT_SESSIONS": "false",
-        "PUBLIC_URL": "https://pwp-cf-sandbox.spencersyen.workers.dev",
-        "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json,https://pwp-cf-sandbox.spencersyen.workers.dev/api/sandbox/reference-agent.json",
+        "PUBLIC_URL": "https://sandbox.printwithpoppy.com",
+        "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json,https://sandbox.printwithpoppy.com/api/sandbox/reference-agent.json",
         "SANDBOX_EMAIL_DELIVERY": "true",
         "SANDBOX_REFERENCE_PUBLIC_JWK": "{\"kty\":\"EC\",\"x\":\"anCC0-GDj6BDOycf2ODOwxOYAPxaU40wGgufjJuwrT4\",\"y\":\"LnREDPaPM1jley-PrEX_YWSVXkfObkBbUCIlWfdt_4M\",\"crv\":\"P-256\",\"kid\":\"cloudflare-reference\"}",
       },

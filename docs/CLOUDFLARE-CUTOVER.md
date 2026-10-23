@@ -15,7 +15,7 @@ Production hosting has moved to Cloudflare. Merging to main deploys the producti
 | Background jobs and retries | Durable SQL outbox, Queues, alarms and cron | `workers/commerce-state.ts` |
 | Deployment | Wrangler and protected GitHub environments | `wrangler.jsonc`, `.github/workflows/cloudflare.yml` |
 
-Stripe, Prodigi and Resend remain the payment, fulfillment and email providers. Cloudflare replaces application infrastructure, not these services. Both sandbox and isolated live environments are configured. The legacy server remains runnable for regression validation and the transition.
+Stripe, Prodigi and Resend remain the payment, fulfillment and email providers. Cloudflare replaces application infrastructure, not these services. Both sandbox and isolated live environments are configured. The Node server remains runnable for local regression validation. The obsolete root Railway Dockerfile and Vercel deployment configuration have been removed.
 
 ## Production cutover — 22 October 2026
 
@@ -23,7 +23,7 @@ The owner approved a fresh-store cutover without importing legacy Railway orders
 
 Cloudflare is authoritative DNS. Namecheap remains the registrar, using `kayleigh.ns.cloudflare.com` and `titan.ns.cloudflare.com`. Resend sending records and the Railway sandbox DNS records were preserved. Cloudflare Email Routing replaces Namecheap forwarding for `hello@printwithpoppy.com`; its verified destination is configured privately. Routing reports ready; inbox delivery has not been tested.
 
-The live Stripe webhook now targets `https://printwithpoppy.com/api/webhooks/stripe`. New Prodigi orders receive the main-domain callback. The workers.dev hostname remains available for existing Cloudflare order links and callbacks. Legacy deployments and their data have not been deleted or replayed. `sandbox.printwithpoppy.com` still points to Railway; the independent Cloudflare sandbox uses its workers.dev hostname.
+The live Stripe webhook now targets `https://printwithpoppy.com/api/webhooks/stripe`. New Prodigi orders receive the main-domain callback. The workers.dev hostname remains available for existing Cloudflare order links and callbacks. Legacy deployments and their data are retained at the owner’s request and have not been replayed. All five paid legacy Railway orders were verified shipped before retirement was considered. The obsolete Stripe webhook is disabled; the Cloudflare webhook remains enabled. `sandbox.printwithpoppy.com` now points to the independent `pwp-cf-sandbox` Worker, with simulated payments/printing and real labeled sandbox emails. Its canonical issuer and reference-agent identity use the sandbox custom domain. Existing Cloudflare sandbox data is retained; Railway sandbox records are not imported. Agents must discover the new issuer and establish fresh sessions.
 
 ### Verified
 

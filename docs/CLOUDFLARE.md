@@ -2,7 +2,7 @@
 
 Production now runs at https://printwithpoppy.com on Cloudflare. The independent sandbox below remains isolated from live orders. See the [cutover record](CLOUDFLARE-CUTOVER.md) for the fresh-store decision and verification limits.
 
-**Test URL:** https://pwp-cf-sandbox.spencersyen.workers.dev
+**Test URL:** https://sandbox.printwithpoppy.com
 
 Discover `/.well-known/poppy.json` on that origin. Use native Poppy 0.2 with an allowlisted client. HTTP compatibility is disabled. Payment and fulfillment are simulated; confirmation and simulated-shipment emails are really submitted to Resend and clearly marked SANDBOX. Use an inbox you control. Do not use real payment credentials.
 
