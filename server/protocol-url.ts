@@ -1,3 +1,4 @@
+import { interopHost } from "./interop-network.js";
 import { BlockList, isIP } from "node:net";
 
 // Check at connection time, not in a preflight lookup: DNS rebinding must not
@@ -47,4 +48,16 @@ export function protocolUrl(value: string) {
   )
     throw new Error("Private protocol destination.");
   return url;
+}
+
+const gridAddresses = new BlockList();
+gridAddresses.addSubnet("10.0.0.0", 8, "ipv4");
+gridAddresses.addSubnet("172.16.0.0", 12, "ipv4");
+gridAddresses.addSubnet("192.168.0.0", 16, "ipv4");
+gridAddresses.addSubnet("fc00::", 7, "ipv6");
+export function protocolAddressAllowed(host: string, address: string, testHosts = false) {
+  if (publicAddress(address)) return true;
+  const family = isIP(address);
+  return testHosts && interopHost(host) && Boolean(family) &&
+    gridAddresses.check(address, family === 4 ? "ipv4" : "ipv6");
 }

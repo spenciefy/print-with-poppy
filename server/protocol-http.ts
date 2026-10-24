@@ -1,9 +1,11 @@
 import { request } from "node:https";
 import { lookup } from "node:dns";
-import { publicAddress, protocolUrl } from "./protocol-url.js";
+import { allowInteropTestHosts } from "./interop-network.js";
+import { protocolAddressAllowed, protocolUrl } from "./protocol-url.js";
 export { publicAddress, protocolUrl } from "./protocol-url.js";
 export function protocolJson(value: string): Promise<any> {
   const url = protocolUrl(value);
+  const testHosts = allowInteropTestHosts(process.env);
   return new Promise((resolve, reject) => {
     const req = request(
       url,
@@ -19,7 +21,7 @@ export function protocolJson(value: string): Promise<any> {
               if (error) return callback(error, [] as any);
               if (
                 !addresses.length ||
-                addresses.some((a) => !publicAddress(a.address))
+                addresses.some((a) => !protocolAddressAllowed(hostname, a.address, testHosts))
               )
                 return callback(
                   new Error("Private protocol destination."),

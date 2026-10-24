@@ -1,5 +1,7 @@
 import { parseConfig } from "../server/config-values.js";
 export function configuration(input: Record<string, unknown>) {
+  if (input.ALLOW_INTEROP_TEST_HOSTS !== undefined && input.ALLOW_INTEROP_TEST_HOSTS !== "false")
+    throw new Error("Private interop networks are supported only by the local Node server, never Cloudflare.");
   const values = Object.fromEntries(
     Object.entries(input).filter(([, v]) => typeof v === "string"),
   ) as Record<string, string>;
