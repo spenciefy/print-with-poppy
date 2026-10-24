@@ -16,7 +16,7 @@
   font-display: swap;
 }
 :root {
-  --paper: oklch(97.5% 0.014 80);
+  --paper: #fff;
   --ink: oklch(25% 0.025 53);
   --orange: oklch(69% 0.19 44);
   --rust: oklch(49% 0.16 40);
@@ -832,7 +832,8 @@ footer a {
   aspect-ratio: 1;
   padding: 32px;
   border: 1px solid var(--line);
-  background: oklch(95% 0.022 65);
+  background: #f7f7f5;
+  border-color: #e4e3de;
   display: flex;
   flex-direction: column;
 }
@@ -1482,7 +1483,9 @@ header {
 .product-preview img {
   background: white;
   padding: 5px;
-  box-shadow: 0 1px 2px oklch(25% 0.025 53 / 0.06);
+  box-shadow: 0 0 0 1px rgb(50 42 30 / 10%),
+    0 3px 6px rgb(50 42 30 / 7%),
+    0 10px 22px rgb(50 42 30 / 6%);
   border: 0;
 }
 .prints-preview img {
