@@ -1,5 +1,7 @@
+import { allowInteropTestHosts } from "./interop-network.js";
 import { z } from "zod";
 export function parseConfig(values: Record<string, string | undefined>) {
+  const interopTestHosts = allowInteropTestHosts(values);
   const env = z
     .object({
       APP_MODE: z.enum(["demo", "sandbox", "live"]).default("demo"),
@@ -21,6 +23,7 @@ export function parseConfig(values: Record<string, string | undefined>) {
     );
   const config = {
     ...env,
+    interopTestHosts,
     origin: env.PUBLIC_URL.replace(/\/$/, ""),
     dataDir: env.DATA_DIR,
     secret: values.APP_SECRET || "",

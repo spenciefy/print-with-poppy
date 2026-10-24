@@ -101,3 +101,22 @@ For operator reference-client coverage, append `--sandbox-account` to the docume
 ## Poppy 0.2 migration
 
 The reference client targets draft 0.2 and refuses other advertised versions. Both assertions use `auth.issuer` as their audience; DPoP still targets the requested endpoint. Keep `ALLOW_COMPAT_AGENT_SESSIONS=false` for native verification. Follow [the upgrade checklist](POPPY-0.2.md) before deploying the change to production; a successful local reference run is not a hosted PDA browser test.
+
+## Isolated Docker interop grid
+
+The local Node server supports `ALLOW_INTEROP_TEST_HOSTS=true` for PDA's offline grid. It is off by default and is **not supported on Cloudflare or the public sandbox**. Run the container on an internal Docker network with no internet access and no real credentials:
+
+```sh
+APP_MODE=demo
+PUBLIC_URL=https://pwp.company.interop.test
+PORT=8080
+AGENT_SANDBOX=true
+ALLOW_COMPAT_AGENT_SESSIONS=false
+ALLOW_INTEROP_TEST_HOSTS=true
+AGENT_CLIENT_IDS=https://pda.agent.interop.test/poppy/client.json
+NODE_EXTRA_CA_CERTS=/interop/ca.pem
+```
+
+Set `AGENT_CLIENT_IDS` to the exact identities supplied by the grid adapter. The exception permits RFC1918 IPv4 and IPv6 unique-local destinations only when the metadata/JWKS hostname ends in `.interop.test`. IPs may change between runs. Loopback, link-local (including cloud metadata), literal private-IP URLs, other `.test` names, and redirects remain blocked. HTTPS certificate verification, same-origin JWKS, client registration, signed assertions, DPoP, and operation approval are unchanged. Mount the grid's per-run CA before starting Node; never disable TLS verification.
+
+Startup rejects this flag for non-demo modes, non-HTTPS or non-grid origins, Cloudflare deployments, real provider credentials, or sandbox email delivery. Keep the Docker network isolated: the flag itself does not create network isolation. Synthetic account sign-in and the existing sandbox code-reading endpoint can be used in this configuration. Do not configure this flag on `sandbox.printwithpoppy.com` or production.
