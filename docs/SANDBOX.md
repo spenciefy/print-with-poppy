@@ -15,7 +15,7 @@ The live `poppy.json` links to sandbox discovery in its API description. This is
 ## Connect an agent
 
 1. Publish your HTTPS Poppy client metadata and JWKS with your own public signing key, and advertise Operations v1. Keep the private key in your agent.
-2. Send the client metadata URL to `hello@printwithpoppy.com` for registration. Poppy Demo Agent's `https://poppydemoagent.dev/poppy/client.json` and its interop harness identity `https://poppydemoagent.dev/poppy/interop/client.json` are preconfigured. The forgiving and strict test variants share the interop identity and use the same authentication and approval requirements. Registration on production and sandbox is separate.
+2. Send the client metadata URL to `hello@printwithpoppy.com` for registration. Poppy Demo Agent's `https://poppydemoagent.dev/poppy/client.json`, its interop harness identity `https://poppydemoagent.dev/poppy/interop/client.json`, and Muse's `https://muse.ai/poppy/agent.json` are preconfigured. The forgiving and strict test variants share the interop identity and use the same authentication and approval requirements. Registration on production and sandbox is separate.
 3. Discover `/.well-known/poppy.json` and its OAuth metadata on the sandbox origin. Open a native signed-out session with client/session assertions and DPoP; use the issued session token and fresh DPoP proof for every API request. No compatibility-session or unsigned-auth bypass is enabled.
 4. Read `/openapi.json` or browse `/docs`. The sandbox-only operations are included in that document. They are ordinary PWP API operations, not additions to the Poppy protocol.
 
