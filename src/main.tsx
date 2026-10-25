@@ -437,7 +437,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
     <div className="store-heading">
       <h1 id="home-title">Your photos, printed</h1>
       <p>Get your personal agent to deliver photo prints to your door</p>
-      <p>Upload your own photos, or ask your agent for the yellow, orange and red poppy prints shown below.</p>
+      <p>There is a gold mine of happiness to be unlocked in your phone’s camera roll. All you have to do is send those photos to your personal agent and tell it to use Print with Poppy.</p>
     </div>
   );
   const productSection = (
