@@ -1,6 +1,6 @@
 # Poppy 0.2 upgrade
 
-This implementation targets the [0.2 draft](https://personalagentprotocol.org/docs/0.2/spec) and [Operations v1](https://personalagentprotocol.org/docs/0.2/extensions/operations), reviewed against upstream commit [`39b35bd`](https://github.com/personal-agent-protocol/personal-agent-protocol/commit/39b35bd) on October 20, 2026. Optional MCP, conversations, browser sessions, device sign-in and feedback are not advertised or implemented by this upgrade.
+This implementation targets the [0.2 draft](https://personalagentprotocol.org/docs/0.2/spec) and [Operations v1](https://personalagentprotocol.org/docs/0.2/extensions/operations), reviewed against upstream commit [`39b35bd`](https://github.com/personal-agent-protocol/personal-agent-protocol/commit/39b35bd) on October 20, 2026. Optional MCP, conversations, browser sessions and feedback are not advertised or implemented by this upgrade. Device sign-in was added later (local copy); see [SIGN-IN.md](SIGN-IN.md).
 
 ## What changes and why
 

@@ -485,3 +485,14 @@ test("reorder proposes the same items for approval; idempotent, account-scoped a
   assert.equal(gone.status, 410);
   assert.equal(gone.body.error, "photo_expired");
 });
+
+test("consent CSP allows only the agent's logo origin and its callback origin as a form target", async () => {
+  const { consentPolicy } = await import("../server/signin-pages.js");
+  let header = "";
+  consentPolicy({ set: (_: string, v: string) => (header = v) } as any, "https://agent.example/logo.png", "https://agent.example/oauth/callback");
+  assert.match(header, /img-src 'self' blob: data: https:\/\/agent\.example;/);
+  assert.match(header, /form-action 'self' https:\/\/agent\.example;/);
+  assert.match(header, /object-src 'none'/);
+  consentPolicy({ set: (_: string, v: string) => (header = v) } as any);
+  assert.match(header, /form-action 'self';/);
+});

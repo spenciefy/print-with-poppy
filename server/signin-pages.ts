@@ -54,12 +54,18 @@ export function agentIdentity(clientId: string, metadata: any) {
   return { name, logo };
 }
 
-/** The default CSP, plus the agent's logo origin so the consent page can show it. */
-export function consentPolicy(res: Response, logo?: string) {
-  const extra = logo && new URL(logo).origin !== config.origin ? ` ${new URL(logo).origin}` : "";
+/**
+ * The site CSP, plus the agent's logo origin in img-src and, for Direct Sign-In,
+ * the agent's registered callback origin in form-action: browsers apply
+ * form-action to the redirect that follows the consent form, so `'self'` alone
+ * would block the redirect back to the agent.
+ */
+export function consentPolicy(res: Response, logo?: string, callback?: string) {
+  const origin = (url?: string) =>
+    url && new URL(url).origin !== config.origin ? ` ${new URL(url).origin}` : "";
   res.set(
     "Content-Security-Policy",
-    `default-src 'self'; img-src 'self' blob: data:${extra}; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; script-src 'self'; frame-ancestors 'none'`,
+    `default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self' blob: data:${origin(logo)}; form-action 'self'${origin(callback)}; frame-ancestors 'none'${config.origin.startsWith("https:") ? "; upgrade-insecure-requests" : ""}`,
   );
 }
 
@@ -97,7 +103,7 @@ export function renderSignIn(
   intro = "",
 ) {
   const agent = agentCard(flow);
-  consentPolicy(res, flow.logo);
+  consentPolicy(res, flow.logo, flow.redirectUri);
   if (flow.accountId) {
     res.type("html").send(
       page(

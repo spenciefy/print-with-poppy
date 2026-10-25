@@ -123,10 +123,23 @@ async function client() {
     }),
   });
   assert.equal(response.status, 200);
-  const { access_token: token } = await response.json();
+  const session = await response.json();
+  let token = session.access_token;
   return {
-    token,
+    get token() {
+      return token;
+    },
+    useToken(value: string) {
+      token = value;
+    },
+    session,
     proof,
+    clientAuth: async () => ({
+      client_id: clientId,
+      client_assertion_type:
+        "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+      client_assertion: await assertion(clientId),
+    }),
     async call(path: string, body?: any, extra: Record<string, string> = {}) {
       const method = body === undefined ? "GET" : "POST";
       return fetch(origin + path, {
@@ -308,6 +321,114 @@ const bad = await a.call("/api/orders", JSON.stringify(body), {
   "Idempotency-Key": randomUUID(),
 });
 assert.equal(bad.status, 400);
+
+// Device Sign-In, saved addresses and reorder through the Workers transport.
+const form = { "Content-Type": "application/x-www-form-urlencoded" };
+const d = await client();
+const deviceStart = await fetch(origin + "/oauth/device", {
+  method: "POST",
+  headers: form,
+  body: new URLSearchParams({ scope: "poppy:read poppy:write", ...(await d.clientAuth()) }),
+});
+assert.equal(deviceStart.status, 200);
+const deviceGrant = await deviceStart.json();
+assert.equal(deviceGrant.verification_uri, origin + "/device");
+const poll = async () =>
+  (
+    await fetch(origin + "/oauth/token", {
+      method: "POST",
+      headers: { ...form, DPoP: await d.proof("POST", origin + "/oauth/token") },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+        device_code: deviceGrant.device_code,
+        session_id: d.session.session_id,
+        ...(await d.clientAuth()),
+      }),
+    })
+  ).json();
+assert.equal((await poll()).error, "authorization_pending");
+const opened = await fetch(deviceGrant.verification_uri_complete);
+assert.equal(opened.status, 200);
+assert.equal(opened.headers.get("cache-control"), "no-store");
+let deviceCookie = "",
+  deviceFields: Record<string, string> = {};
+async function devicePost(route: string, values: Record<string, string> | URLSearchParams) {
+  const body = new URLSearchParams(deviceFields);
+  for (const [k, v] of values instanceof URLSearchParams ? values : Object.entries(values)) body.append(k, v);
+  const r = await fetch(origin + route, {
+    method: "POST",
+    headers: { ...form, Origin: origin, ...(deviceCookie ? { Cookie: deviceCookie } : {}) },
+    body,
+  });
+  const set = r.headers.get("set-cookie");
+  if (set?.startsWith("poppy_device=") && !deviceCookie) deviceCookie = set.split(";")[0];
+  const html = await r.text();
+  const flow = html.match(/name="flow" value="([^"]+)"/)?.[1];
+  if (flow) deviceFields = { flow, csrf: html.match(/name="csrf" value="([^"]+)"/)![1] };
+  return { r, html };
+}
+const entered = await devicePost("/device", { user_code: deviceGrant.user_code });
+assert.equal(entered.r.status, 200);
+assert.equal(entered.r.headers.get("referrer-policy"), "same-origin");
+assert.match(entered.r.headers.get("content-security-policy")!, /form-action 'self'/);
+assert.match(entered.html, /Demo Personal Agent/);
+const emailed = await devicePost("/device/email", { email: `device-${randomUUID()}@example.com` });
+const otp = emailed.html.match(/captured code is <strong>(\d{6})<\/strong>/)![1];
+assert.match((await devicePost("/device/verify", { code: otp })).html, /Allow access/);
+const decision = new URLSearchParams({ decision: "approve" });
+decision.append("scopes", "poppy:read");
+decision.append("scopes", "poppy:write");
+assert.match((await devicePost("/device/approve", decision)).html, /You’re connected/);
+const deviceTokens = await poll();
+assert.equal(deviceTokens.signed_in, true, JSON.stringify(deviceTokens.error));
+assert.equal(deviceTokens.scope, "poppy:read poppy:write");
+assert.equal((await poll()).error, "invalid_grant");
+d.useToken(deviceTokens.access_token);
+const saved = await d.call("/api/account/addresses", { address: body.address, label: "Home" });
+assert.equal(saved.status, 201);
+const spare = await (await d.call("/api/account/addresses", { address: { ...body.address, line1: "1 Spare Street" } })).json();
+const removed = await fetch(origin + `/api/account/addresses/${spare.id}`, {
+  method: "DELETE",
+  headers: {
+    Authorization: `DPoP ${d.token}`,
+    DPoP: await d.proof("DELETE", origin + `/api/account/addresses/${spare.id}`, d.token),
+  },
+});
+assert.equal(removed.status, 200);
+const dPhoto = await (await d.call("/api/photos/samples", { color: "red" })).json();
+const signedProposal = await d.call(
+  "/api/orders",
+  { items: [{ photoId: dPhoto.id, quantity: 2, fit: "contain" }] },
+  { "Idempotency-Key": randomUUID() },
+);
+assert.equal(signedProposal.status, 202);
+const signedOp = (await signedProposal.json()).operation;
+assert.match(signedOp.summary, /123 Main Street/);
+let settled = await (
+  await d.call(`/api/operations/${signedOp.operation_id}/confirm`, { revision: signedOp.revision, approved_by: "user" })
+).json();
+for (let i = 0; i < 40 && settled.state === "in_progress"; i++) {
+  await new Promise((r) => setTimeout(r, 500));
+  settled = await (await d.call(`/api/operations/${signedOp.operation_id}`)).json();
+}
+assert.equal(settled.state, "succeeded");
+const reordered = await d.call(
+  `/api/account/orders/${settled.result.data.order_id}/reorder`,
+  {},
+  { "Idempotency-Key": randomUUID() },
+);
+assert.equal(reordered.status, 202);
+const reorderOp = (await reordered.json()).operation;
+assert.equal(reorderOp.state, "proposed");
+assert.notEqual(reorderOp.terms.items[0].photoId, dPhoto.id);
+assert.equal((await fetch(reorderOp.terms.previews[0].url)).status, 200);
+const deviceRevoke = await fetch(origin + "/oauth/revoke", {
+  method: "POST",
+  headers: form,
+  body: new URLSearchParams({ token: deviceTokens.refresh_token, ...(await d.clientAuth()) }),
+});
+assert.equal(deviceRevoke.status, 200);
+assert.equal((await d.call("/api/account")).status, 403);
 console.log(
-  "Workers contracts passed: native auth, replay, media privacy, compatibility-off, concurrent proposal/confirmation, approval and ownership.",
+  "Workers contracts passed: native auth, replay, media privacy, compatibility-off, concurrent proposal/confirmation, approval and ownership, device sign-in, saved addresses, reorder and revocation.",
 );
