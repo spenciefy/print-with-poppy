@@ -158,3 +158,20 @@ export function loadFlow(
     );
   return f;
 }
+
+/** Show a sign-in problem (bad sandbox email, rate limit, email outage) on the page, not as JSON. */
+export async function pageErrors<T>(
+  res: Response,
+  show: (message: string) => void,
+  fn: () => Promise<T>,
+): Promise<T | undefined> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!(e instanceof HttpError) || ![400, 429, 503].includes(e.status)) throw e;
+    res.status(e.status);
+    if (e.status === 429) res.set("Retry-After", "3600");
+    show(e.message);
+    return undefined;
+  }
+}

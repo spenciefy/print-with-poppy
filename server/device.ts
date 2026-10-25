@@ -26,6 +26,7 @@ import {
   loadFlow,
   page,
   renderSignIn,
+  pageErrors,
   type BrowserFlow,
 } from "./signin-pages.js";
 import { client } from "./auth.js";
@@ -368,12 +369,12 @@ export function deviceRoutes(app: Express) {
     if (flow.accountId || flow.challengeId)
       throw new HttpError(409, "invalid_request", "Continue the existing sign-in.");
     const email = z.email().max(254).parse(req.body.email).trim().toLowerCase();
-    const result = await startCode(
-      `device:${flow.id}`,
-      email,
-      flow.scopes,
-      flow.clientId,
+    const result = await pageErrors(
+      res,
+      (message) => renderSignIn(flow, res, base, message, matchIntro(flow)),
+      () => startCode(`device:${flow.id}`, email, flow.scopes, flow.clientId),
     );
+    if (!result) return;
     flow.email = email;
     flow.challengeId = result.sign_in_id;
     put("browser-signin", flow.id, flow);
