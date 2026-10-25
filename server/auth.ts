@@ -16,6 +16,7 @@ import {
   refreshAccount,
   exchangeCode,
 } from "./accounts.js";
+import { pollDevice } from "./device.js";
 const cache = new Map<string, { expires: number; metadata: any; keys: any }>();
 const bad = (message = "Invalid agent identity.") =>
   new HttpError(401, "invalid_client", message);
@@ -27,16 +28,23 @@ export const publicJwk = (key: any) =>
   typeof key === "object" &&
   ["EC", "RSA", "OKP"].includes(key.kty) &&
   !privateKeyFields.some((field) => field in key);
+export const deviceGrantType = "urn:ietf:params:oauth:grant-type:device_code";
+// The published demo metadata and the metadata the store trusts internally are the same document.
+export const demoClientMetadata = () => ({
+  client_id: `${config.origin}/api/demo/agent.json`,
+  client_name: "Demo Personal Agent",
+  logo_uri: `${config.origin}/demo-agent-logo.svg`,
+  jwks_uri: `${config.origin}/api/demo/jwks.json`,
+  redirect_uris: [`${config.origin}/api/demo/callback`],
+  token_endpoint_auth_method: "private_key_jwt",
+  extensions: { operations: { version: "1" } },
+});
 export async function client(clientId: string) {
   if (config.demo && clientId === `${config.origin}/api/demo/agent.json`) {
     const key = get("demo-key", "identity");
     if (key)
       return {
-        metadata: {
-          client_name: "Demo Personal Agent",
-          redirect_uris: [`${config.origin}/api/demo/callback`],
-          extensions: { operations: { version: "1" } },
-        },
+        metadata: demoClientMetadata(),
         keys: createLocalJWKSet({ keys: [key.public] }),
       };
   }
@@ -201,6 +209,29 @@ export async function dpop(
     );
   }
 }
+/** private_key_jwt client authentication (RFC 7523) with aud = auth.issuer and one-time jti. */
+export async function authenticateClient(b: any, message?: string) {
+  if (
+    b.client_assertion_type !==
+      "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" ||
+    typeof b.client_id !== "string" ||
+    typeof b.client_assertion !== "string"
+  )
+    throw bad(message);
+  const c = await client(b.client_id);
+  try {
+    const ca = await verifyAssertion(
+      b.client_assertion,
+      c.keys,
+      b.client_id,
+      config.origin,
+    );
+    once(`assertion:${b.client_id}:${ca.jti}`, ca.exp! * 1000 + 5000);
+  } catch {
+    throw bad(message);
+  }
+  return c;
+}
 export async function issueToken(req: Request) {
   const b = req.body || {};
   if (
@@ -208,6 +239,7 @@ export async function issueToken(req: Request) {
       "urn:ietf:params:oauth:grant-type:jwt-bearer",
       "refresh_token",
       "authorization_code",
+      deviceGrantType,
     ].includes(b.grant_type)
   )
     throw new HttpError(
@@ -215,25 +247,9 @@ export async function issueToken(req: Request) {
       "unsupported_grant_type",
       "Unsupported token grant.",
     );
-  if (
-    b.client_assertion_type !==
-    "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-  )
-    throw bad();
-  const c = await client(b.client_id);
+  const c = await authenticateClient(b);
   const audience = config.origin;
-  let ca, sa;
-  try {
-    ca = await verifyAssertion(
-      b.client_assertion,
-      c.keys,
-      b.client_id,
-      audience,
-    );
-    once(`assertion:${b.client_id}:${ca.jti}`, ca.exp! * 1000 + 5000);
-  } catch {
-    throw bad();
-  }
+  let sa;
   if (b.grant_type === "urn:ietf:params:oauth:grant-type:jwt-bearer") {
     try {
       sa = await verifyAssertion(
@@ -268,6 +284,7 @@ export async function issueToken(req: Request) {
   if (b.grant_type === "refresh_token")
     return refreshAccount(b, thumb, c.metadata);
   if (b.grant_type === "authorization_code") return exchangeCode(b, thumb);
+  if (b.grant_type === deviceGrantType) return pollDevice(b, thumb);
   if (b.scope)
     throw new HttpError(
       400,

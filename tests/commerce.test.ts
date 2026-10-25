@@ -1270,6 +1270,7 @@ test("OTP isolation, wrong-code limits, expiration, account mismatch and no toke
     ).body.error,
     "invalid_scope",
   );
+  // A different account is refused before any code is sent (spec 4.4).
   const mismatch = await a.request(
     "/api/poppy/sign-in",
     postJson({
@@ -1277,15 +1278,9 @@ test("OTP isolation, wrong-code limits, expiration, account mismatch and no toke
       credentials: { email: `${randomUUID()}@example.com` },
     }),
   );
-  assert.equal(
-    (
-      await a.request(
-        `/api/poppy/sign-in/${mismatch.body.sign_in_id}`,
-        postJson({ code: otpFor(mismatch.body.sign_in_id) }),
-      )
-    ).body.error,
-    "account_mismatch",
-  );
+  assert.equal(mismatch.status, 400);
+  assert.equal(mismatch.body.error, "account_mismatch");
+  assert.equal(mismatch.body.sign_in_id, undefined);
   // Account-token expiry also removes account access from unexpired session tokens.
   const grantId = store.hash(signed.refresh_token),
     grant = store.get("account-token", grantId);
@@ -1386,14 +1381,10 @@ test("direct sign-in requires cookie/CSRF, email OTP, explicit consent, exact ca
     ).status,
     403,
   );
-  assert.equal(
-    (
-      await browser("/oauth/authorize/email", {
-        email: `${randomUUID()}@example.com`,
-      })
-    ).status,
-    200,
-  );
+  const emailed = await browser("/oauth/authorize/email", {
+    email: `${randomUUID()}@example.com`,
+  });
+  assert.equal(emailed.status, 200, await emailed.clone().text());
   const challenge = store.get("browser-signin", flow).challengeId;
   const verified = await browser("/oauth/authorize/verify", {
     code: otpFor(challenge),
@@ -1421,7 +1412,14 @@ test("direct sign-in requires cookie/CSRF, email OTP, explicit consent, exact ca
   const token = await oauth(a, fields);
   assert.equal(token.body.signed_in, true);
   assert.equal(token.body.scope, "poppy:read");
+  a.session.access_token = token.body.access_token;
+  assert.equal((await a.request("/api/account")).status, 200);
+  // A replayed code fails and revokes what it issued (RFC 6749 §4.1.2).
   assert.equal((await oauth(a, fields)).body.error, "invalid_grant");
+  assert.equal(
+    (await a.request("/api/account")).body.error,
+    "sign_in_required",
+  );
   assert.equal(
     (
       await browser("/oauth/authorize/approve", {
@@ -1431,8 +1429,6 @@ test("direct sign-in requires cookie/CSRF, email OTP, explicit consent, exact ca
     ).status,
     403,
   );
-  a.session.access_token = token.body.access_token;
-  assert.equal((await a.request("/api/account")).status, 200);
 });
 
 test("history pagination retains orders with identical timestamps and never matches email", async () => {
@@ -1532,9 +1528,12 @@ test("normal deployments do not advertise or expose agent sandbox controls", asy
       .status,
     404,
   );
+  // Plain demo exposes only the session-bound synthetic-account code readers.
+  assert.equal(schema.paths["/api/sandbox/orders/{id}/emails"], undefined);
+  assert.ok(schema.paths["/api/sandbox/sign-in/{id}/email"]);
   assert.equal(
     (await fetch(origin + "/api/sandbox/sign-in/test/email")).status,
-    404,
+    401,
   );
 });
 

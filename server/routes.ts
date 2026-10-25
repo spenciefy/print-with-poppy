@@ -23,9 +23,10 @@ import {
 import {
   authenticate,
   issueToken,
-  client,
-  verifyAssertion,
+  authenticateClient,
   compatibilitySession,
+  demoClientMetadata,
+  deviceGrantType,
 } from "./auth.js";
 import { upload } from "./photos.js";
 import {
@@ -44,6 +45,8 @@ import { openapi, agentInstructions } from "./openapi.js";
 import type { Session, Order } from "./types.js";
 import { sandboxRoutes, sandboxDescription } from "./sandbox.js";
 import { accountRoutes } from "./signin.js";
+import { deviceRoutes } from "./device.js";
+import { accountFeatureRoutes } from "./account-features.js";
 import { accountScopes, requireAccount, revokeAccount } from "./accounts.js";
 export async function registerRoutes(
   app: express.Express,
@@ -123,7 +126,9 @@ export async function registerRoutes(
       },
       auth: {
         issuer: config.origin,
+        // The hosted Agent Sandbox deliberately keeps Direct Sign-In unadvertised.
         ...(config.agentSandbox ? {} : { direct: { scopes: accountScopes } }),
+        device: { scopes: accountScopes },
         mediated: {
           endpoint: `${config.origin}/api/poppy/sign-in`,
           fields: [{ name: "email", label: "Email", secret: false }],
@@ -154,15 +159,20 @@ export async function registerRoutes(
       revocation_endpoint: `${config.origin}/oauth/revoke`,
       poppy_domains: [new URL(config.origin).hostname],
       authorization_endpoint: `${config.origin}/oauth/authorize`,
+      device_authorization_endpoint: `${config.origin}/oauth/device`,
       grant_types_supported: [
         "urn:ietf:params:oauth:grant-type:jwt-bearer",
         "authorization_code",
         "refresh_token",
+        deviceGrantType,
       ],
       response_types_supported: ["code"],
       code_challenge_methods_supported: ["S256"],
+      authorization_response_iss_parameter_supported: true,
       scopes_supported: accountScopes,
       token_endpoint_auth_methods_supported: ["private_key_jwt"],
+      token_endpoint_auth_signing_alg_values_supported: ["ES256", "RS256", "EdDSA"],
+      revocation_endpoint_auth_methods_supported: ["private_key_jwt"],
       dpop_signing_alg_values_supported: ["ES256", "RS256", "EdDSA"],
     }),
   );
@@ -185,39 +195,13 @@ export async function registerRoutes(
   app.post("/oauth/token", async (req, res) => res.json(await issueToken(req)));
   app.post("/oauth/revoke", async (req, res) => {
     const body = req.body || {};
-    if (
-      body.client_assertion_type !==
-      "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-    )
-      throw new HttpError(
-        401,
-        "invalid_client",
-        "A signed client assertion is required.",
-      );
-    const c = await client(body.client_id);
-    let assertion;
-    try {
-      assertion = await verifyAssertion(
-        body.client_assertion,
-        c.keys,
-        body.client_id,
-        config.origin,
-      );
-      once(
-        `assertion:${body.client_id}:${assertion.jti}`,
-        assertion.exp! * 1000 + 5000,
-      );
-    } catch {
-      throw new HttpError(
-        401,
-        "invalid_client",
-        "Invalid client assertion for revocation.",
-      );
-    }
+    await authenticateClient(body, "Invalid client assertion for revocation.");
     revokeAccount(body.token, body.client_id);
     res.sendStatus(200);
   });
   accountRoutes(app);
+  deviceRoutes(app);
+  accountFeatureRoutes(app);
   app.get("/media/:id/:fit", async (req, res) => {
     const photoId = String(req.params.id),
       fit = String(req.params.fit),
@@ -317,13 +301,18 @@ export async function registerRoutes(
       put("demo-key", "identity", key);
     }
     app.get("/api/demo/agent.json", (_req, res) =>
-      res.json({
-        client_id: `${config.origin}/api/demo/agent.json`,
-        jwks_uri: `${config.origin}/api/demo/jwks.json`,
-        token_endpoint_auth_method: "private_key_jwt",
-        extensions: { operations: { version: "1" } },
-      }),
+      res.json(demoClientMetadata()),
     );
+    // Direct Sign-In callback for the demo agent. The reference client reads the
+    // redirect itself; a person who lands here just sees where to go next.
+    app.get("/api/demo/callback", (req, res) => {
+      const ok = typeof req.query.code === "string";
+      res
+        .type("html")
+        .send(
+          `<!doctype html><meta name="viewport" content="width=device-width"><title>Demo agent</title><body style="font:18px/1.6 system-ui;max-width:560px;margin:15vh auto;padding:0 24px;background:#faf6ee;color:#30291f"><h1>${ok ? "Sign-in returned to the demo agent" : "Sign-in did not complete"}</h1><p>${ok ? "The demo agent finishes sign-in by exchanging this one-time code. You can close this tab." : "Return to the demo agent and start again."}</p></body>`,
+        );
+    });
     app.get("/api/demo/jwks.json", (_req, res) =>
       res.json({ keys: [key.public] }),
     );

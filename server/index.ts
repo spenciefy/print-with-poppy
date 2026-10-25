@@ -54,6 +54,7 @@ export const oauthLimiter = rateLimit({
   },
 });
 app.use("/oauth", oauthLimiter);
+app.use("/device", oauthLimiter);
 app.post(
   "/api/webhooks/stripe",
   express.raw({ type: "application/json", limit: "1mb" }),
@@ -103,6 +104,7 @@ app.use((req, res, next) => {
   if (
     req.path.startsWith("/api") ||
     req.path.startsWith("/oauth") ||
+    /^\/device(\/|$)/.test(req.path) ||
     req.path.startsWith("/media")
   )
     res.set("Cache-Control", "no-store");
@@ -118,7 +120,7 @@ await registerRoutes(
   rateLimit({ windowMs: 60000, limit: 30 }),
   express.raw({ type: "multipart/form-data", limit: batchBodyLimit }),
 );
-app.use(["/api", "/oauth", "/media"], (_req, res) =>
+app.use(["/api", "/oauth", "/device", "/media"], (_req, res) =>
   res.status(404).json({ error: "not_found", message: "Endpoint not found." }),
 );
 const dist = path.resolve("dist");

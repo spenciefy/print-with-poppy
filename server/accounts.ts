@@ -17,6 +17,21 @@ import { escapeHtml } from "./email.js";
 import type { Session, Order } from "./types.js";
 
 export const accountScopes = ["poppy:read", "poppy:write"];
+/** Synthetic test accounts: the only ones whose captured demo codes are ever shown or returned. */
+export const syntheticEmail = (email: unknown) =>
+  typeof email === "string" && /@example\.(com|org|net)$/.test(email);
+/**
+ * Demo/Agent Sandbox only: the captured code of an active challenge for a synthetic
+ * account. Demo stores never send email; production never stores raw codes.
+ */
+export function demoSignInCode(challengeId: string) {
+  if (!config.demo) return undefined;
+  const c = get("signin-code", challengeId);
+  if (!c || c.used || c.expires <= Date.now() || !syntheticEmail(c.email))
+    return undefined;
+  const message = get("demo-signin-email", challengeId);
+  return message?.text?.match(/code is (\d{6})/)?.[1] as string | undefined;
+}
 export function scopes(value: unknown, allowed = accountScopes) {
   if (typeof value !== "string" || !value.trim())
     throw new HttpError(
@@ -170,6 +185,11 @@ export function revokeAccount(token: unknown, clientId: string) {
   const grantId = hash(token),
     grant = get("account-token", grantId);
   if (!grant || grant.clientId !== clientId) return;
+  revokeGrant(grantId);
+}
+export function revokeGrant(grantId: string) {
+  const grant = get("account-token", grantId);
+  if (!grant) return;
   put("account-token", grantId, { ...grant, revoked: true }, grant.accountId);
   for (const session of all<Session>("session")) {
     if (session.grantId === grantId) {
@@ -201,7 +221,7 @@ export async function startCode(
   clientId: string,
 ) {
   const email = z.email().max(254).parse(emailInput).trim().toLowerCase();
-  if (config.agentSandbox && !/@example\.(com|org|net)$/.test(email))
+  if (config.agentSandbox && !syntheticEmail(email))
     throw new HttpError(
       400,
       "test_email_required",
@@ -332,29 +352,37 @@ export function history(session: Session, cursor?: string) {
 }
 export function cleanupSignIns() {
   db.prepare(
-    "DELETE FROM records WHERE kind IN ('signin-code','browser-signin','authorization-code','signin-rate') AND json_extract(body, '$.expires') < ?",
+    "DELETE FROM records WHERE kind IN ('signin-code','browser-signin','authorization-code','signin-rate','device-grant','device-user-code') AND json_extract(body, '$.expires') < ?",
   ).run(Date.now() - 86400000);
 }
 
 export function exchangeCode(b: any, thumb: string) {
-  return db.transaction(() => {
+  // Errors are returned from the transaction, not thrown, so that marking a reused
+  // code's grant revoked is committed rather than rolled back.
+  const outcome = db.transaction(() => {
     const codeId = hash(typeof b.code === "string" ? b.code : "");
     const code = get("authorization-code", codeId);
-    if (
-      !code ||
-      code.used ||
-      code.expires <= Date.now() ||
-      code.clientId !== b.client_id ||
-      code.redirectUri !== b.redirect_uri ||
-      typeof b.code_verifier !== "string" ||
-      !/^[A-Za-z0-9._~-]{43,128}$/.test(b.code_verifier) ||
-      hash(b.code_verifier) !== code.challenge
-    )
-      throw new HttpError(
+    const invalid = {
+      error: new HttpError(
         400,
         "invalid_grant",
         "Authorization code or PKCE verifier is invalid.",
-      );
+      ),
+    };
+    if (!code || code.clientId !== b.client_id) return invalid;
+    if (code.used) {
+      // RFC 6749 §4.1.2: a replayed code revokes what it already issued.
+      if (code.grantId) revokeGrant(code.grantId);
+      return invalid;
+    }
+    if (
+      code.expires <= Date.now() ||
+      code.redirectUri !== b.redirect_uri ||
+      typeof b.code_verifier !== "string" ||
+      !/^[A-Za-z0-9._~-]{43,128}$/.test(b.code_verifier) ||
+      !equal(hash(b.code_verifier), code.challenge)
+    )
+      return invalid;
     const session =
       typeof b.session_id === "string" && get<Session>("session", b.session_id);
     if (
@@ -363,18 +391,39 @@ export function exchangeCode(b: any, thumb: string) {
       session.compatibility ||
       session.demo
     )
-      throw new HttpError(
-        400,
-        "invalid_session",
-        "An existing native Poppy session is required.",
-      );
-    checkAccount(session, code.accountId);
-    put("authorization-code", codeId, { ...code, used: true });
-    return signIn(
-      session,
-      code.accountId,
-      b.scope === undefined ? code.scopes : scopes(b.scope, code.scopes),
-      thumb,
-    );
+      return {
+        error: new HttpError(
+          400,
+          "invalid_session",
+          "An existing native Poppy session is required.",
+        ),
+      };
+    let granted: string[];
+    try {
+      granted =
+        b.scope === undefined ? code.scopes : scopes(b.scope, code.scopes);
+    } catch (e) {
+      return { error: e as HttpError };
+    }
+    // Spent either way: a different account issues no tokens (spec 4.4).
+    if (session.accountBinding && session.accountBinding !== code.accountId) {
+      put("authorization-code", codeId, { ...code, used: true });
+      return {
+        error: new HttpError(
+          400,
+          "account_mismatch",
+          "Start a new session to use a different account.",
+        ),
+      };
+    }
+    const result = signIn(session, code.accountId, granted, thumb);
+    put("authorization-code", codeId, {
+      ...code,
+      used: true,
+      grantId: hash(result.refresh_token),
+    });
+    return { result };
   })();
+  if ("error" in outcome) throw outcome.error;
+  return outcome.result;
 }

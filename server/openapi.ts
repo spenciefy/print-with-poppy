@@ -1,6 +1,6 @@
 import { batchFields } from "./batch-photos.js";
 import { orderingGuidance } from "./agent-guidance.js";
-import { sandboxPaths, sandboxInstructions } from "./sandbox.js";
+import { sandboxPaths, signInHelperPaths, sandboxInstructions } from "./sandbox.js";
 import { priceSummary, offer } from "../src/offer.js";
 import { config } from "./config.js";
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
@@ -156,6 +156,7 @@ export function openapi(compatibility = false) {
     },
     paths: {
       ...(config.agentSandbox ? sandboxPaths : {}),
+      ...(config.demo && !compatibility ? signInHelperPaths : {}),
       ...(compatibility
         ? {
             "/api/agent-sessions": {

@@ -25,6 +25,7 @@ import {
   type Order,
 } from "./types.js";
 import { requireAccount } from "./accounts.js";
+import { resolveAccountDefaults } from "./addresses.js";
 export async function propose(body: unknown, session: Session, key: string) {
   if (session.accountId) requireAccount(session, "poppy:write");
   if (!session.extensions)
@@ -40,7 +41,7 @@ export async function propose(body: unknown, session: Session, key: string) {
       "idempotency_key_required",
       "Supply a unique Idempotency-Key of 16–128 letters, digits, underscores or hyphens.",
     );
-  const p = proposalSchema.parse(body);
+  const p = proposalSchema.parse(resolveAccountDefaults(body, session));
   const requestKey = `${session.id}:${key}`;
   const existing = get("proposal_key", requestKey);
   if (existing) {

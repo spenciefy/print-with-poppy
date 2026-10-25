@@ -131,6 +131,9 @@ export function router() {
     post(path: string, ...handlers: any[]) {
       (app.post as any)(path, ...handlers.map(wrap));
     },
+    delete(path: string, ...handlers: any[]) {
+      (app.delete as any)(path, ...handlers.map(wrap));
+    },
     use(paths: string | string[], handler: any) {
       for (const path of Array.isArray(paths) ? paths : [paths]) {
         app.use(`${path}/*`, wrap(handler));

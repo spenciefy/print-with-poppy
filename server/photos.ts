@@ -59,3 +59,46 @@ export async function preparePoster(p: Photo, fit: "contain" | "cover", product:
   if (!source) throw new HttpError(422, "reupload_required", "Upload this photo again to prepare the larger print.");
   await media.write(p.id, await media.render(source, p, fit, product, color));
 }
+
+/**
+ * Copy an account order's photo into the current session for a reorder. Photos stay
+ * session-owned; the copy shares no record with the original and follows the same
+ * retention policy. Returns 410 photo_expired once retention has removed the source.
+ */
+export async function clonePhoto(sourceId: string, owner: string) {
+  const source = get<Photo>("photo", sourceId);
+  const expired = () =>
+    new HttpError(
+      410,
+      "photo_expired",
+      "The photos from this order are no longer stored. Upload them again to order more prints.",
+    );
+  if (!source || source.deleted) throw expired();
+  if (all<Photo>("photo", owner).filter((p) => !p.deleted).length >= 100)
+    throw new HttpError(429, "photo_limit", "Maximum 100 stored photos per session.");
+  const files: Record<string, Buffer> = {};
+  for (const name of ["original.jpg", "contain.jpg", "cover.jpg"]) {
+    const file = await media.read(source.id, name);
+    if (!file) throw expired();
+    files[name] = file;
+  }
+  const photoId = id("photo");
+  await media.write(photoId, files);
+  const p: Photo = {
+    id: photoId,
+    owner,
+    name: `Photo ${all<Photo>("photo", owner).length + 1}`,
+    width: source.width,
+    height: source.height,
+    lowResolution: source.lowResolution,
+    created: Date.now(),
+  };
+  put("photo", photoId, p, owner);
+  return p;
+}
+export function photosAvailable(photoIds: string[]) {
+  return photoIds.every((photoId) => {
+    const p = get<Photo>("photo", photoId);
+    return !!p && !p.deleted;
+  });
+}
