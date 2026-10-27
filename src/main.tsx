@@ -1,3 +1,4 @@
+import "./auth-explainer.css";
 import { orderingMethodLabel } from "./ordering-method";
 import React, { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
@@ -1039,6 +1040,24 @@ function OrderPage({ checkout = false }: { checkout?: boolean }) {
     </main>
   );
 }
+function AuthExplainer() {
+  return (
+    <main className="document auth-explainer" id="auth-story">
+      <h1>How does my agent connect securely?</h1>
+      <p>Your agent connects. You stay in control.</p>
+      <div className="auth-simple">
+        <div className="auth-top">
+          <div className="auth-party"><span className="auth-symbol" aria-hidden="true">↗</span><strong>Your personal agent</strong></div>
+          <div className="auth-link"><span>Verified identity</span><div className="auth-line" aria-hidden="true"><i /></div><span>Requests protected by DPoP</span></div>
+          <div className="auth-party"><img src="/photos/poppy-abstract-cluster.webp" alt="" /><strong>Print with Poppy</strong></div>
+        </div>
+        <div className="auth-stem" aria-hidden="true" />
+        <div className="auth-you"><span aria-hidden="true">☺</span><strong>You’re in charge</strong><p>Connect your account with an email code <small>(optional)</small>.<br />Approve your order before checkout.</p></div>
+        <p className="auth-note">Poppy verifies your agent’s signature. DPoP means a stolen session token alone can’t be used to act as your agent.</p>
+      </div>
+    </main>
+  );
+}
 function App() {
   const [config, setConfig] = useState<Config>({
     mode: "loading",
@@ -1086,7 +1105,9 @@ function App() {
     <>
       {config.environment === "agent-sandbox" && <aside className="sandbox-banner" aria-label="Sandbox environment"><strong>{config.hosting === "cloudflare" ? "Cloudflare sandbox" : "Sandbox environment"}</strong><span>Sample orders only. No real payments or prints. Test emails are sent to your order email address when enabled.</span><a href="/sandbox">Testing guide ↗</a></aside>}
       <Header route={route} navigate={navigate} />
-      {route === "/shirt" ? (
+      {route === "/auth-explainer" ? (
+        <AuthExplainer />
+      ) : route === "/shirt" ? (
         <ShirtExtra config={config} />
       ) : route === "/demo" ? (
         <Demo />
