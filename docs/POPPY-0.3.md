@@ -33,3 +33,28 @@ The demo agent (`/api/demo/agent.json`) lists `operations` version 2. `scripts/p
 - The protocol site's kit (`implement-personal-agent-protocol.zip`) validator checks `poppy.json` offline (`--file`); its live checks need an HTTPS deployment.
 
 Spec questions found on the way: [SPEC-FEEDBACK-0.3.md](SPEC-FEEDBACK-0.3.md).
+
+## Review against the published draft (2026-10-28)
+
+Checked against the published [0.3 specification](https://personalagentprotocol.org/docs/0.3/spec.md), [Operations v2](https://personalagentprotocol.org/docs/0.3/extensions/operations.md), and [Mediated Sign-In v1](https://personalagentprotocol.org/docs/0.3/extensions/mediated-sign-in.md). This is an implementation review of the advertised API/sign-in features, not certification of every optional protocol feature or an external agent's interoperability.
+
+| Requirement | Implementation / regression coverage |
+| --- | --- |
+| Discovery, issuer/resource association, advertised grants and scopes | `server/routes.ts`; discovery checks in `tests/pap-03.test.ts` |
+| Directly signed client assertions; exact issuer audience; ES256 and PS384 | `server/auth.ts`; client assertion tests |
+| Delegated ES256 Session signatures, delegation expiry, key thumbprints, method/URL and token hash | `server/delegation.ts`, `server/auth.ts`; delegation and Session-header tests |
+| Stable client/session/user identity, rotating delegated keys, account binding, ended sessions | `server/sessions.ts`; Session tests use fresh delegated keys across requests |
+| OAuth account permissions, refresh narrowing, revocation and error challenges | `server/accounts.ts`, `server/http-errors.ts`; token/error and sign-in tests |
+| Direct PKCE/consent, Device polling/consent, Mediated OTP | `server/signin.ts`, `server/device.ts`, `server/mediated.ts`; `tests/signin-types.test.ts` and `tests/pap-03.test.ts` |
+| Operations v2 exact-revision approval, ownership, expiry, retries and at-most-once ordering | `server/commerce.ts`; `tests/commerce.test.ts` |
+| Structured approval headers, including unknown members and quoted commas | RFC 9651 parser with explicit String-only identifiers; parser and order/retry regression tests |
+| Metadata fetch protections | `server/protocol-http.ts`; network/redirect tests; isolated local interop exceptions remain explicit |
+
+DPoP-bound OAuth tokens are optional and intentionally not advertised. Browser join, MCP, conversations, feedback and excluded tasks are not advertised; they are not implemented by this API-only store. Mediated Sign-In remains a transitional compatibility option: the extension recommends retiring it once Direct/Device cover its scopes. Prefer Direct/Device and do not describe mediated sign-in as the preferred long-term flow.
+
+### Release gates
+
+- Deploy verification must expect protocol `0.3` and Operations `2` (not the old `0.2` assertion).
+- Run CI and the local Cloudflare runtime/provider-fixture checks on the final commit.
+- Run an independent agent against a sandbox before production. On 2026-10-28, `https://poppydemoagent.dev/poppy/client.json` still advertised Operations `1`; that deployment cannot order through this store's Operations `2` contract. Recheck its metadata and perform the actual flow; a version claim alone is insufficient.
+- This is a breaking native-protocol upgrade. Existing 0.2 native sessions/tokens do not establish 0.3 access; agents need the new transport and account sign-in. HTTP compatibility is a separate path, not evidence of native interoperability.
