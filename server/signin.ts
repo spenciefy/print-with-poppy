@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import type { Session } from "./types.js";
 import { z } from "zod";
 import { config } from "./config.js";
 import { authenticate, client } from "./auth.js";
@@ -10,76 +11,24 @@ import {
   requireAccount,
   history,
 } from "./accounts.js";
-import { get, put, id, hash, equal, HttpError } from "./store.js";
-import { escapeHtml as esc } from "./email.js";
+import { get, put, id, hash, HttpError } from "./store.js";
 import { orderView } from "./commerce.js";
+import { savedAddresses, addressView } from "./addresses.js";
+import { photosAvailable } from "./photos.js";
+import {
+  agentIdentity,
+  loadFlow,
+  page,
+  renderSignIn,
+  consentPolicy,
+  pageErrors,
+  type BrowserFlow,
+} from "./signin-pages.js";
 
-const scopeText = (scope: string) =>
-  scope === "poppy:read"
-    ? "View your order history and delivery details"
-    : "Save new orders to your account (each purchase still needs approval)";
-function page(title: string, content: string) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · Print with Poppy</title><style> *{box-sizing:border-box}body{margin:0;background:#faf6ee;color:#30291f;font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:500px;padding:36px 24px;margin:6vh auto}header{display:flex;align-items:center;gap:12px;margin-bottom:38px;font-size:21px;font-weight:600}header img{width:64px;height:64px}h1{font-size:30px;line-height:1.2;letter-spacing:-1px}p{color:#6e6155}label{display:block;margin:18px 0}input[type=email],input[type=text]{width:100%;border:1px solid #b9ac9a;border-radius:8px;padding:14px;background:white;font:inherit}input[type=checkbox]{width:18px;height:18px;margin-right:8px;accent-color:#c34408}button{width:100%;padding:14px;border:0;border-radius:8px;background:#c34408;color:white;font:inherit;font-weight:600;cursor:pointer;margin:8px 0}button.secondary{background:transparent;color:#6e6155;border:1px solid #cfc3b3}small{color:#6e6155}a{color:#a53d0d}.agent{overflow-wrap:anywhere;padding:16px;background:#f7ebdf;border-radius:8px}.error{color:#a02b13}</style></head><body><main><header><img src="/photos/poppy-email-logo.png" alt=""><span>Print with Poppy</span></header><h1>${esc(title)}</h1>${content}</main></body></html>`;
-}
-function hidden(flow: any) {
-  return `<input type="hidden" name="flow" value="${esc(flow.id)}"><input type="hidden" name="csrf" value="${esc(flow.csrf)}">`;
-}
-function render(flow: any, res: Response, error = "") {
-  const agent = `<div class="agent"><strong>${esc(flow.name)}</strong><br><small>${esc(new URL(flow.clientId).hostname)}</small></div>`;
-  if (flow.accountId) {
-    res
-      .type("html")
-      .send(
-        page(
-          "Connect your personal agent",
-          `${agent}<p>Signed in as ${esc(get("account", flow.accountId).email)}. Choose what this agent can access.</p>${error ? `<p role="alert" class="error">${esc(error)}</p>` : ""}<form method="post" action="/oauth/authorize/approve">${hidden(flow)}${flow.scopes.map((s: string) => `<label><input type="checkbox" name="scopes" value="${s}" checked>${scopeText(s)}</label>`).join("")}<button name="decision" value="approve">Allow access</button><button class="secondary" name="decision" value="deny">Cancel</button></form><small>This does not approve a purchase. Your agent can disconnect at any time.</small>`,
-        ),
-      );
-  } else if (flow.challengeId) {
-    res
-      .type("html")
-      .send(
-        page(
-          "Check your email",
-          `${agent}<p>Enter the six-digit code sent to ${esc(flow.email)}.</p>${error ? `<p role="alert" class="error">${esc(error)}</p>` : ""}<form method="post" action="/oauth/authorize/verify">${hidden(flow)}<label for="code">Email code</label><input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required autofocus><button>Continue</button></form><small>The code expires in 10 minutes. You’ll review access next.</small>`,
-        ),
-      );
-  } else {
-    res
-      .type("html")
-      .send(
-        page(
-          "Sign in with your email",
-          `${agent}<p>Connect your Print with Poppy account to this agent. We’ll email you a code—no password needed.</p><form method="post" action="/oauth/authorize/email">${hidden(flow)}<label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" maxlength="254" required><button>Send code</button></form><small>New here? Verifying your email creates your account.</small>`,
-        ),
-      );
-  }
-}
-function browserFlow(req: Request) {
-  const f =
-    typeof req.body.flow === "string" && get("browser-signin", req.body.flow);
-  const cookie = (req.get("Cookie") || "")
-    .split(";")
-    .map((s) => s.trim())
-    .find((s) => s.startsWith("poppy_signin="))
-    ?.slice("poppy_signin=".length);
-  if (
-    !f ||
-    f.used ||
-    f.expires <= Date.now() ||
-    !cookie ||
-    !equal(hash(cookie), f.browserHash) ||
-    typeof req.body.csrf !== "string" ||
-    !equal(req.body.csrf, f.csrf) ||
-    req.get("Origin") !== config.origin
-  )
-    throw new HttpError(
-      403,
-      "invalid_request",
-      "Sign-in expired. Start again from your personal agent.",
-    );
-  return f;
-}
+const base = "/oauth/authorize";
+const render = (flow: BrowserFlow, res: Response, error = "") =>
+  renderSignIn(flow, res, base, error);
+const browserFlow = (req: Request) => loadFlow(req, "direct", "poppy_signin");
 export function accountRoutes(app: Express) {
   // Keep same-origin form Origin headers while suppressing referrers to agent callbacks.
   app.use("/oauth/authorize", (_req, res, next) => {
@@ -94,6 +43,8 @@ export function accountRoutes(app: Express) {
         "native_session_required",
         "Use a native Poppy session to sign in.",
       );
+    // Missing, unknown or unavailable scopes are invalid_scope (spec 4.4, 4.7).
+    const requested = scopes(req.body?.scope);
     const b = z
       .object({
         scope: z.string(),
@@ -101,13 +52,23 @@ export function accountRoutes(app: Express) {
       })
       .strict()
       .parse(req.body);
+    // A Session can only ever be signed in to one account: refuse early, before
+    // sending a code, when these credentials are for another account (spec 4.4).
+    const bound = get<Session>("session", session.id)?.accountBinding;
+    if (bound) {
+      const existing = get(
+        "account-email",
+        hash(b.credentials.email.trim().toLowerCase()),
+      );
+      if (existing?.id !== bound)
+        throw new HttpError(
+          400,
+          "account_mismatch",
+          "This session was signed in to a different account. Start a new session.",
+        );
+    }
     res.json(
-      await startCode(
-        session.id,
-        b.credentials.email,
-        scopes(b.scope),
-        session.clientId,
-      ),
+      await startCode(session.id, b.credentials.email, requested, session.clientId),
     );
   });
   app.post("/api/poppy/sign-in/:id", async (req, res) => {
@@ -136,7 +97,15 @@ export function accountRoutes(app: Express) {
     const session = await authenticate(req);
     const accountId = requireAccount(session);
     const account = get("account", accountId);
-    res.json({ email: account.email, scope: session.scopes!.join(" ") });
+    const addresses = savedAddresses(accountId);
+    res.json({
+      email: account.email,
+      scope: session.scopes!.join(" "),
+      saved_addresses: addresses.length,
+      default_address: addresses.find((a) => a.default)
+        ? addressView(addresses.find((a) => a.default)!)
+        : null,
+    });
   });
   app.get("/api/account/orders", async (req, res) => {
     const session = await authenticate(req);
@@ -149,22 +118,22 @@ export function accountRoutes(app: Express) {
       orders: result.rows.map((o) => ({
         ...orderView(o),
         checkoutUrl: undefined,
+        // reorderOrder (poppy:write) proposes the same items again, for approval.
+        reorderable: photosAvailable(o.quote.items.map((i) => i.photoId)),
       })),
       next_cursor: result.next,
     });
   });
   app.get("/oauth/authorize", async (req, res) => {
-    const q = z
-      .object({
-        response_type: z.literal("code"),
-        client_id: z.string().url(),
-        redirect_uri: z.string().url(),
-        scope: z.string(),
-        state: z.string().min(1).max(2048),
-        code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-        code_challenge_method: z.literal("S256"),
-      })
-      .parse(req.query);
+    const q = req.query as Record<string, unknown>;
+    // Until client_id and redirect_uri are verified, errors are shown here and
+    // never redirected (RFC 6749 §4.1.2.1). Repeated parameters arrive as arrays.
+    if (typeof q.client_id !== "string" || typeof q.redirect_uri !== "string")
+      throw new HttpError(
+        400,
+        "invalid_request",
+        "client_id and redirect_uri are required, once each.",
+      );
     const c = await client(q.client_id);
     if (!c.metadata.redirect_uris?.includes(q.redirect_uri))
       throw new HttpError(
@@ -172,16 +141,45 @@ export function accountRoutes(app: Express) {
         "invalid_request",
         "The agent callback URL is not registered.",
       );
-    const requested = scopes(q.scope);
+    const redirectUri = q.redirect_uri;
+    const state = typeof q.state === "string" ? q.state : undefined;
+    // Other errors go back to the agent with state and iss (RFC 9207).
+    const fail = (error: string, description: string) => {
+      const destination = new URL(redirectUri);
+      destination.searchParams.set("error", error);
+      destination.searchParams.set("error_description", description);
+      if (state && state.length <= 2048) destination.searchParams.set("state", state);
+      destination.searchParams.set("iss", config.origin);
+      res.redirect(302, destination.href);
+    };
+    if (q.response_type !== "code")
+      return fail("unsupported_response_type", "Use response_type=code.");
+    if (!state || state.length > 2048)
+      return fail("invalid_request", "A random state value is required.");
+    if (
+      q.code_challenge_method !== "S256" ||
+      typeof q.code_challenge !== "string" ||
+      !/^[A-Za-z0-9_-]{43}$/.test(q.code_challenge)
+    )
+      return fail("invalid_request", "PKCE with code_challenge_method=S256 is required.");
+    let requested: string[];
+    try {
+      requested = scopes(q.scope);
+    } catch {
+      return fail("invalid_scope", "Request poppy:read and/or poppy:write.");
+    }
+    const { name, logo } = agentIdentity(q.client_id, c.metadata);
     const browser = id("browser"),
-      flow = {
+      flow: BrowserFlow = {
         id: id("flow"),
+        kind: "direct",
         csrf: id("csrf"),
         browserHash: hash(browser),
         clientId: q.client_id,
-        name: String(c.metadata.client_name || new URL(q.client_id).hostname),
-        redirectUri: q.redirect_uri,
-        state: q.state,
+        name,
+        logo,
+        redirectUri,
+        state,
         challenge: q.code_challenge,
         scopes: requested,
         expires: Date.now() + 15 * 60000,
@@ -205,12 +203,12 @@ export function accountRoutes(app: Express) {
         "Continue the existing sign-in.",
       );
     const email = z.email().max(254).parse(req.body.email).trim().toLowerCase();
-    const result = await startCode(
-      `browser:${flow.id}`,
-      email,
-      flow.scopes,
-      flow.clientId,
+    const result = await pageErrors(
+      res,
+      (message) => render(flow, res, message),
+      () => startCode(`browser:${flow.id}`, email, flow.scopes, flow.clientId),
     );
+    if (!result) return;
     flow.email = email;
     flow.challengeId = result.sign_in_id;
     put("browser-signin", flow.id, flow);
@@ -229,6 +227,7 @@ export function accountRoutes(app: Express) {
       if (result.status === "failed" || result.status === "expired") {
         flow.used = true;
         put("browser-signin", flow.id, flow);
+        consentPolicy(res);
         res
           .status(400)
           .type("html")
@@ -249,8 +248,8 @@ export function accountRoutes(app: Express) {
     const flow = browserFlow(req);
     if (!flow.accountId)
       throw new HttpError(403, "sign_in_required", "Verify your email first.");
-    const destination = new URL(flow.redirectUri);
-    destination.searchParams.set("state", flow.state);
+    const destination = new URL(flow.redirectUri!);
+    destination.searchParams.set("state", flow.state!);
     destination.searchParams.set("iss", config.origin);
     if (req.body.decision === "deny")
       destination.searchParams.set("error", "access_denied");
@@ -264,7 +263,7 @@ export function accountRoutes(app: Express) {
           (s: any) => typeof s !== "string" || !flow.scopes.includes(s),
         )
       ) {
-        render(flow, res, "Choose at least one permission, or cancel.");
+        render(flow, res, "Choose at least one permission, or deny.");
         return;
       }
       const code = id("code");
@@ -278,7 +277,7 @@ export function accountRoutes(app: Express) {
       });
       destination.searchParams.set("code", code);
     } else
-      throw new HttpError(400, "invalid_request", "Choose allow or cancel.");
+      throw new HttpError(400, "invalid_request", "Choose allow or deny.");
     flow.used = true;
     put("browser-signin", flow.id, flow);
     res.clearCookie("poppy_signin", { path: "/oauth" });

@@ -58,7 +58,8 @@ export class CommerceState extends DurableObject<Env> {
   }
   private rate(request: Request) {
     const path = new URL(request.url).pathname;
-    const limit = path.startsWith("/oauth")
+    const oauth = path.startsWith("/oauth") || /^\/device(\/|$)/.test(path);
+    const limit = oauth
       ? 30
       : path === "/api/agent-sessions"
         ? 10
@@ -66,7 +67,7 @@ export class CommerceState extends DurableObject<Env> {
     const window = path === "/api/agent-sessions" ? 3600000 : 60000;
     const now = Date.now(),
       key = hash(
-        `${request.headers.get("CF-Connecting-IP") || "local"}:${path.startsWith("/oauth") ? "oauth" : path === "/api/agent-sessions" ? "compat" : "api"}:${Math.floor(now / window)}`,
+        `${request.headers.get("CF-Connecting-IP") || "local"}:${oauth ? "oauth" : path === "/api/agent-sessions" ? "compat" : "api"}:${Math.floor(now / window)}`,
       );
     const sql = this.ctx.storage.sql;
     sql.exec("DELETE FROM rate_limits WHERE expires<?", now);

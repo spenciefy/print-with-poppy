@@ -187,7 +187,7 @@ export default {
         } else if (path.startsWith("/media/"))
           response = await serveMedia(request, env);
         else if (
-          /^\/(api|oauth)(\/|$)/.test(path) ||
+          /^\/(api|oauth|device)(\/|$)/.test(path) ||
           path.startsWith("/.well-known/") ||
           ["/openapi.json", "/agent.txt", "/sandbox"].includes(path)
         )
@@ -234,11 +234,13 @@ export default {
       if (!headers.has("Referrer-Policy"))
         headers.set("Referrer-Policy", "no-referrer");
       headers.set("X-Frame-Options", "DENY");
-      headers.set(
+      // Sign-in pages add only the requesting agent's logo origin to img-src.
+      if (!/^\/(oauth\/authorize|device)(\/|$)/.test(path) || !headers.has("Content-Security-Policy"))
+        headers.set(
         "Content-Security-Policy",
         "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; script-src 'self'; frame-ancestors 'none'",
       );
-      if (/^\/(api|oauth|media|order)(\/|$)/.test(path))
+      if (/^\/(api|oauth|device|media|order)(\/|$)/.test(path))
         headers.set("Cache-Control", "no-store");
       return new Response(response.body, { status: response.status, headers });
     });

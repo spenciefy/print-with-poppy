@@ -8,14 +8,16 @@ Print with Poppy supports optional accounts through Poppy draft 0.2. Guest order
 
 **Direct:** discover `auth.direct` and the OAuth `authorization_endpoint`. Open `/oauth/authorize` with `response_type=code`, registered `client_id` and exact `redirect_uri`, requested `scope`, random `state`, and an S256 PKCE challenge. The customer enters an email, verifies its code, then explicitly selects permissions and allows or declines. The callback includes `state` and `iss`. Exchange the single-use code at `/oauth/token` with PKCE verifier, client assertion, DPoP and the existing `session_id`.
 
+**Device:** discover `auth.device` and the OAuth `device_authorization_endpoint`. `POST /oauth/device` with `scope` and the client assertion (no DPoP). Show the customer `verification_uri_complete` (or `verification_uri` and `user_code`) with the store's name and domain, after checking the link's host. The customer enters the code at `/device`, verifies an email code and selects permissions or denies. Poll `/oauth/token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code`, `device_code`, `session_id`, client assertion and DPoP every `interval` seconds; handle `authorization_pending`, `slow_down`, `access_denied` and `expired_token`. The first polling Session owns the code; it is redeemed once. Details: [SIGN-IN.md](SIGN-IN.md).
+
 **Mediated:** discover `auth.mediated`; explain the requested permissions and obtain the user's agreement before sending `{scope, credentials: {email}}` to `/api/poppy/sign-in` with a native Session Token and DPoP. The store emails a code and returns `code_required`, `sign_in_id`, `code.sent_to` and `expires_at`. Submit `{code}` to `/api/poppy/sign-in/{sign_in_id}` in that same session. A correct code returns `complete` plus Account and Session Tokens. The code email identifies the requesting agent and permissions. The agent must protect the code and never log it.
 
-Both paths return a one-hour DPoP Session Token and a 30-day Account Token (`refresh_token`). Only the client transport should handle tokens: keep them out of model context, chats, URLs and logs. Authentication does not approve a purchase.
+All three paths return a one-hour DPoP Session Token and a 30-day Account Token (`refresh_token`). Only the client transport should handle tokens: keep them out of model context, chats, URLs and logs. Authentication does not approve a purchase.
 
 ## Access and history
 
-- `poppy:read`: `GET /api/account`, `GET /api/account/orders`, and reading account-owned orders/operations. History has up to 50 orders per page; pass `next_cursor` back as `cursor`.
-- `poppy:write`: propose/confirm/cancel orders in a signed-in account. Request both scopes for a full signed-in order flow. Every purchase still requires explicit operations approval and payment.
+- `poppy:read`: `GET /api/account`, `GET /api/account/orders`, `GET /api/account/addresses`, and reading account-owned orders/operations. History has up to 50 orders per page; pass `next_cursor` back as `cursor`.
+- `poppy:write`: propose/confirm/cancel orders in a signed-in account, save/delete/default shipping addresses, and propose reorders (`POST /api/account/orders/{id}/reorder`). A signed-in proposal may omit the address (default saved address) or pass `addressId`, and may omit the email (account email); the summary shows the resolved values for approval. A reorder only creates a proposal; approval and payment are still required. Request both scopes for a full signed-in order flow. Every purchase still requires explicit operations approval and payment.
 - New orders proposed while signed in are linked to that account, even when the delivery/confirmation email differs (for example, a gift).
 - Earlier guest orders are **not** claimed by matching their email. They remain accessible through their original session and private order link. No automated guest-order claim feature is offered.
 - Photos remain session-owned; signing in does not give another session access to arbitrary uploaded photos. Account history includes order previews, subject to the existing photo-retention policy. History never extends photo retention or exposes reusable checkout links.
@@ -40,9 +42,9 @@ Send the Account Token as `token` to `/oauth/revoke`, with the client's assertio
 
 ## Verification
 
-Run `npm run check`. The commerce tests exercise signed-out and signed-in purchase flows, account isolation, stale tokens, refresh, scope reduction, revocation, OTP replay/expiry/attempt limits, browser consent, CSRF, callback validation and PKCE. Provider calls are simulated: passing these tests does not establish real email delivery or DPA UI interoperability.
+Run `npm run check`. `tests/signin-types.test.ts` and `tests/signin-sandbox.test.ts` cover Device Sign-In, the audited Direct/Mediated fixes, saved addresses and reorder. The commerce tests exercise signed-out and signed-in purchase flows, account isolation, stale tokens, refresh, scope reduction, revocation, OTP replay/expiry/attempt limits, browser consent, CSRF, callback validation and PKCE. Provider calls are simulated: passing these tests does not establish real email delivery or DPA UI interoperability.
 
-In `APP_MODE=demo`, code emails are stored privately as `demo-signin-email` records for local verification, never sent. Plain local demo mode has no public code-retrieval endpoint. Hosted Agent Sandbox exposes a session-owned captured-code endpoint for synthetic accounts only; see [SANDBOX.md](SANDBOX.md). Production always uses Resend.
+In `APP_MODE=demo`, code emails are stored privately as `demo-signin-email` records, never sent. For synthetic `@example.com/.org/.net` accounts only, demo and Agent Sandbox stores show the captured code on the Direct and Device pages and return it through the session-bound `getSandboxSignInEmail` and `getSandboxDeviceSignInEmail` helpers; see [SIGN-IN.md](SIGN-IN.md#demo-and-sandbox-codes). Production always uses Resend and registers none of these.
 
 Spec: https://personalagentprotocol.org/docs/0.2/spec (sections 4.4–4.9).
 

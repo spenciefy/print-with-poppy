@@ -8,6 +8,7 @@ export default defineConfig({
       "/api": "http://127.0.0.1:8787",
       "/.well-known": "http://127.0.0.1:8787",
       "/oauth": "http://127.0.0.1:8787",
+      "/device": "http://127.0.0.1:8787",
       "/media": "http://127.0.0.1:8787",
       "/openapi.json": "http://127.0.0.1:8787",
       "/agent.txt": "http://127.0.0.1:8787",

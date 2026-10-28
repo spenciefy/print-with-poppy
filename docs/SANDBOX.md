@@ -53,7 +53,9 @@ Sandbox advertises **mediated sign-in**. Start it using a native signed-out sess
 
 The response contains `sign_in_id`. Call `getSandboxSignInEmail` (GET `/api/sandbox/sign-in/{id}/email`) in that same session, read the captured code, and complete the mediated challenge normally. This endpoint refuses other sessions, consumed challenges and expired challenges. Exchange the returned account token for a signed-in session token, create a new order, and call `listAccountOrders`. Guest orders are not retroactively linked. Do not log or share tokens or OTPs.
 
-Direct browser sign-in is not advertised in the hosted sandbox. Production OTP delivery remains real and never exposes this test-only endpoint.
+Sandbox also advertises **device sign-in** (`auth.device`). Start it at `/oauth/device`, open the verification link, enter a synthetic email there, and complete it: the page shows the captured code, and a test agent can read it with `getSandboxDeviceSignInEmail` (POST `/api/sandbox/device-sign-in/email` with `{device_code}`; only the agent that started it, and the Session that polled it). Poll `/oauth/token` with the device code grant and your `session_id`. Signed in, try saved addresses (omit `address` on `proposeOrder`) and `reorderOrder`; both still end in a proposal you approve. See [SIGN-IN.md](SIGN-IN.md).
+
+Direct browser sign-in is not advertised in the hosted sandbox. Production OTP delivery remains real and never exposes these test-only endpoints.
 
 ## Run your own sandbox
 

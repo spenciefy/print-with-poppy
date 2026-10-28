@@ -625,18 +625,31 @@ function Guide({ config }: { config: Config }) {
         above. Muse and Instinct have not yet been verified end to end.
       </p>}
       <h3>Optional: sign in to save and view orders</h3>
-      {sandbox ? <p>Use <code>auth.mediated</code> with a unique @example.com, @example.org or @example.net email. Retrieve the captured OTP with <code>getSandboxSignInEmail</code> in the same session, then complete sign-in. Request <code>poppy:read poppy:write</code> to save and view orders. No email is sent.</p> : <p>
+      {sandbox ? <p>Use <code>auth.mediated</code> with a unique @example.com, @example.org or @example.net email and retrieve the captured OTP with <code>getSandboxSignInEmail</code> in the same session, or <code>auth.device</code>: <code>POST /oauth/device</code>, open the verification link (it shows the captured code for synthetic accounts; a test agent can read it with <code>getSandboxDeviceSignInEmail</code>), then poll <code>/oauth/token</code> with the device code grant and your <code>session_id</code>. Request <code>poppy:read poppy:write</code> to save and view orders. No email is sent.</p> : <p>
         Use <code>auth.direct</code> for a browser sign-in with email OTP and
-        consent, or <code>auth.mediated</code> to enter an email and then the
-        code through your agent. Request <code>poppy:read</code> for history and
-        <code>poppy:write</code> to save new orders. Get the user’s permission
-        first.
+        consent, <code>auth.device</code> to show the user a link and short code
+        they open on any device (<code>POST /oauth/device</code>, then poll{" "}
+        <code>/oauth/token</code> with the device code grant and your{" "}
+        <code>session_id</code>), or <code>auth.mediated</code> to enter an
+        email and then the code through your agent. Request{" "}
+        <code>poppy:read</code> for history and saved addresses and{" "}
+        <code>poppy:write</code> to save new orders and addresses. Get the
+        user’s permission first.
       </p>}
       <p>
         Read <code>GET /api/account/orders</code> with a signed-in session. Keep
         the Account Token private and use it to renew sessions at
         <code> /oauth/token</code>. Disconnect at <code>/oauth/revoke</code>.
         Older guest orders are not automatically linked.
+      </p>
+      <p>
+        Signed in, offer saved addresses from{" "}
+        <code>GET /api/account/addresses</code>. With <code>poppy:write</code>,
+        an order may omit the address to use the default (or pass{" "}
+        <code>addressId</code>) and omit the email to use the account’s.{" "}
+        <code>POST /api/account/orders/{"{id}"}/reorder</code> proposes a past
+        order again at today’s prices; it still needs the user’s approval like
+        any order.
       </p>
       <h2>3. Upload photos or choose poppy artwork</h2>
       <p>
@@ -732,7 +745,8 @@ function Privacy({ config }: { config: Config }) {
       <p>
         We verify your email with a one-time code sent by Resend. With your
         permission, a connected personal agent can view your account’s order
-        history. New orders placed while signed in are linked to your account;
+        history and the shipping addresses you choose to save, and propose a
+        reorder for your approval. New orders placed while signed in are linked to your account;
         existing guest orders are not automatically linked. Disconnect through
         your agent to revoke access. Sign-in requests expire in minutes, and
         account access expires after 30 days unless you sign in again.

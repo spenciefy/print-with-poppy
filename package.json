@@ -9,6 +9,7 @@
     "start": "tsx server/index.ts",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "tsx scripts/agent.ts --approve-demo",
+    "test:e2e:signin": "tsx scripts/signin-e2e.ts",
     "check": "npm run build && npm test",
     "agent:demo": "tsx scripts/agent.ts",
     "format": "prettier --write server src scripts tests *.json *.ts *.md",
