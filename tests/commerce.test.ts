@@ -292,6 +292,24 @@ test("changed revisions, standing permissions, expired quotes and cancelled prop
     0,
   );
 });
+test("approval headers accept structured fields and require String identifiers", () => {
+  const expected = { operation_id: "op_123", revision: "rev_123" };
+  for (const header of [
+    'operation_id="op_123", revision="rev_123", extra=("a,b" token)',
+    'operation_id="op_123";note="a,b", revision="rev_123"',
+    'extra=%"caf%c3%a9", operation_id="op_123", revision="rev_123", date=@123, flag',
+  ]) assert.deepEqual(commerce.parseApproval(header), expected, header);
+  for (const header of [
+    undefined,
+    'operation_id="op_123"',
+    'operation_id=op_123, revision="rev_123"',
+    'operation_id="op_123", revision=123',
+    'operation_id="op_123", revision=("rev_123")',
+    'operation_id="op_123", revision=%"rev_123"',
+    'operation_id="op_123", revision="rev_123", extra=("unterminated"',
+    'operation_id="op_123", revision="rev_123",',
+  ]) assert.equal(commerce.parseApproval(header), undefined, String(header));
+});
 test("operations: the same request gets the same operation; an approval covers only its exact request and revision", async () => {
   const f = await fixture();
   assert.equal((await proposeVia(f.a, f.proposal)).body.operation.operation_id, f.op.operation_id);
@@ -323,11 +341,16 @@ test("operations: the same request gets the same operation; an approval covers o
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Poppy-Approval": `operation_id="${f.op.operation_id}", revision="${f.op.revision}", note="hi";x=1, flag`,
+      "Poppy-Approval": `operation_id="${f.op.operation_id}";note="a,b", revision="${f.op.revision}", extra=("a,b" token);x=1, flag`,
     },
     body: JSON.stringify(f.proposal),
   });
   assert.equal(extra.status, 201, JSON.stringify(extra.body));
+  const retry = await approveVia(f.a, "/api/orders", f.proposal, f.op);
+  assert.equal(retry.status, 201);
+  assert.ok(extra.body.id);
+  assert.equal(retry.body.id, extra.body.id);
+  assert.equal(store.all<any>("order").filter((o) => o.operationId === f.op.operation_id).length, 1);
   const stranger = await makeAgent();
   assert.equal((await proposeVia(stranger, f.proposal)).status, 404);
 });

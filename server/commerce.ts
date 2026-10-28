@@ -1,3 +1,4 @@
+import { parseDictionary } from "http-structured-fields";
 import { sessionOrderingMethod, quoteOrderingMethod, orderSuccessMessage } from "./ordering-method.js";
 import { receipt } from "./receipt.js";
 import { redeemCoupon } from "./coupons.js";
@@ -61,19 +62,19 @@ export function requestFingerprint(session: Session, method: string, path: strin
 /** RFC 9651 Dictionary: `operation_id="…", revision="…"`; anything else is ignored. */
 export function parseApproval(header: string | undefined) {
   if (!header) return undefined;
-  const members: Record<string, string> = {};
-  const re = /\s*([a-z*][a-z0-9_.*-]*)(?:=("(?:[^"\\]|\\["\\])*"|[^,;]*))?((?:\s*;[^,]*)?)\s*(?:,|$)/gy;
-  let match: RegExpExecArray | null;
-  let consumed = 0;
-  while (consumed < header.length && (match = re.exec(header))) {
-    if (match[0] === "") break;
-    consumed = re.lastIndex;
-    const value = match[2];
-    if (value?.startsWith('"')) members[match[1]] = value.slice(1, -1).replace(/\\(["\\])/g, "$1");
+  try {
+    const members = parseDictionary(header);
+    const operation = members.get("operation_id");
+    const revision = members.get("revision");
+    // Only RFC Strings count, not Tokens, Display Strings or Inner Lists.
+    // Unknown members and parameters are parsed but do not affect approval.
+    return operation?.type === "item" && operation.value.type === "string" &&
+      revision?.type === "item" && revision.value.type === "string"
+      ? { operation_id: operation.value.value, revision: revision.value.value }
+      : undefined;
+  } catch {
+    return undefined; // Unparseable: ignore the field, never approve an action.
   }
-  if (consumed !== header.length) return undefined; // Unparseable: ignore the field.
-  const { operation_id, revision } = members;
-  return typeof operation_id === "string" && typeof revision === "string" ? { operation_id, revision } : undefined;
 }
 const newRevision = (expires: number) => `${Math.floor(expires / 1000)}-${id("r").slice(2)}`;
 
