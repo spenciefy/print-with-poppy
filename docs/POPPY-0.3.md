@@ -58,3 +58,7 @@ DPoP-bound OAuth tokens are optional and intentionally not advertised. Browser j
 - Run CI and the local Cloudflare runtime/provider-fixture checks on the final commit.
 - Run an independent agent against a sandbox before production. On 2026-10-28, `https://poppydemoagent.dev/poppy/client.json` still advertised Operations `1`; that deployment cannot order through this store's Operations `2` contract. Recheck its metadata and perform the actual flow; a version claim alone is insufficient.
 - This is a breaking native-protocol upgrade. Existing 0.2 native sessions/tokens do not establish 0.3 access; agents need the new transport and account sign-in. HTTP compatibility is a separate path, not evidence of native interoperability.
+
+### Local verification after reconciling main
+
+On 2026-10-28, `npm run check` passed all 90 tests and the build. The full `npm run test:cloudflare` passed with media containers: uploads, ownership/media privacy, concurrent proposals and approvals, saved addresses, reorder, refresh/revocation, and a native reference-agent shirt order through simulated payment, shipment and two captured emails. `node scripts/cloudflare/test-production.mjs` passed with inert provider credentials after updating its missing-session assertion to `400 invalid_session` with no OAuth challenge. These checks made no real payment or provider fulfillment request and are not a live PDA interoperability test.
