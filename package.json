@@ -36,7 +36,7 @@
     "http-structured-fields": "1.0.0",
     "jose": "6.2.12",
     "multer": "2.4.0",
-    "react": "19.3.0",
+    "react": "19.3.1",
     "react-dom": "19.3.0",
     "sharp": "0.35.5",
     "stripe": "23.0.0",
