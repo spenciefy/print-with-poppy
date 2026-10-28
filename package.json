@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261021.1",
-    "@scalar/api-reference": "1.73.1",
+    "@scalar/api-reference": "1.76.2",
     "@types/better-sqlite3": "9.6.0",
     "@types/express": "5.0.6",
     "@types/multer": "2.3.0",
@@ -56,7 +56,7 @@
     "esbuild": "^0.28.2",
     "prettier": "3.9.10",
     "typescript": "7.0.2",
-    "wrangler": "^4.151.3"
+    "wrangler": "^4.155.0"
   },
   "engines": {
     "node": "22.x"
