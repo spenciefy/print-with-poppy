@@ -14,18 +14,18 @@ The live `poppy.json` links to sandbox discovery in its API description. This is
 
 ## Connect an agent
 
-1. Publish your HTTPS Poppy client metadata and JWKS with your own public signing key, and advertise Operations v1. Keep the private key in your agent.
+1. Publish your HTTPS Poppy client metadata and JWKS with your own public signing key, and list the operations extension, version 2 (`"extensions": {"operations": {"version": "2"}}`). Keep the private key in your agent.
 2. Send the client metadata URL to `hello@printwithpoppy.com` for registration. Poppy Demo Agent's `https://poppydemoagent.dev/poppy/client.json`, its interop harness identity `https://poppydemoagent.dev/poppy/interop/client.json`, and Muse's `https://muse.ai/poppy/agent.json` are preconfigured. The forgiving and strict test variants share the interop identity and use the same authentication and approval requirements. Registration on production and sandbox is separate.
-3. Discover `/.well-known/poppy.json` and its OAuth metadata on the sandbox origin. Open a native signed-out session with client/session assertions and DPoP; use the issued session token and fresh DPoP proof for every API request. No compatibility-session or unsigned-auth bypass is enabled.
+3. Discover `/.well-known/poppy.json` and its OAuth metadata on the sandbox origin. Send a `Poppy-Session` header (a Session JWT signed by a delegated key, `pap_dlg`) on every API request; a new `sid` starts a signed-out Session. Client assertions at the OAuth endpoints are signed directly by your `jwks_uri` key. No compatibility-session or unsigned-auth bypass is enabled.
 4. Read `/openapi.json` or browse `/docs`. The sandbox-only operations are included in that document. They are ordinary PWP API operations, not additions to the Poppy protocol.
 
 ## End-to-end order test
 
-Keep one session for the whole order. These are OpenAPI operation IDs (your agent's generic API tool may name its arguments differently):
+Keep one Session (one `sid`) for the whole order. These are OpenAPI operation IDs (your agent's generic API tool may name its arguments differently):
 
 1. `getCatalog`: choose `prints` or `poster`.
 2. Prefer `uploadPhotos` (`POST /api/photos/batch`) for multiple JPEG/PNG/WebP files: attach 1–10 files as `photo1` through `photo10`, up to 20 MB combined. One request lets compatible agents show one approval for the selected files. Read each result: keep successful photo IDs and retry only failed fields. For a single image, `uploadPhoto` still accepts multipart field `photo`. Obtain user approval to transmit attachments.
-3. `proposeOrder`: send a **JSON object**, not a quoted JSON string. Supply an `Idempotency-Key`, complete synthetic US shipping address, email, and photo items. For example:
+3. `proposeOrder`: send a **JSON object**, not a quoted JSON string. Supply a complete synthetic US shipping address, email, and photo items. It answers 403 `approval_required` with the operation. For example:
 
 ```json
 {
@@ -36,12 +36,12 @@ Keep one session for the whole order. These are OpenAPI operation IDs (your agen
 }
 ```
 
-4. Show the returned summary, photos/crops, address and illustrative total. Get approval, then confirm that revision through the Operations extension. Poll the operation until `succeeded`; `result.data.order_id` is the order to simulate. Success here means checkout prepared, not payment.
+4. Show the operation's summary, photos/crops, address and illustrative total. Get approval, then send the same `proposeOrder` request again with `Poppy-Approval: operation_id="…", revision="…"` (Operations v2). It returns the order (201); its `id` is the order to simulate. Retrying with the same approval returns the same order. Success here means checkout is being prepared, not payment.
 5. `simulatePayment`: POST `/api/sandbox/orders/{id}/pay`, no body or card required. Your client may request approval for this write. Poll `getOrder` until `printing`.
 6. `simulateShipment`: POST `/api/sandbox/orders/{id}/ship`. Poll until `shipped`.
 7. `getSandboxEmails`: GET `/api/sandbox/orders/{id}/emails` until confirmation and shipment previews are present. Each email has `delivery: "captured"` or `"submitted"` and, after Resend acceptance, a `providerId`. Submitted means accepted by Resend, not confirmed inbox delivery.
 
-Payment and shipment simulation are safe to repeat on the same order. Controls require the originating authenticated session; another session gets 404. Payment requires a prepared, unexpired checkout following approval. Shipping requires simulated payment and fulfillment. Carrier names and tracking numbers are explicitly synthetic. The returned `status_url` and `checkout_url` show the order and a no-charge simulation UI.
+Payment and shipment simulation are safe to repeat on the same order. Controls require the originating Session (or, for an account order, a Session signed in to that account); others get 404. Payment requires a prepared, unexpired checkout following approval. Shipping requires simulated payment and fulfillment. Carrier names and tracking numbers are explicitly synthetic. The returned `status_url` and `checkout_url` show the order and a no-charge simulation UI.
 
 A suggested agent prompt:
 
@@ -49,13 +49,13 @@ A suggested agent prompt:
 
 ## Optional customer-account test
 
-Sandbox advertises **mediated sign-in**. Start it using a native signed-out session, a unique email at `example.com`, `example.org`, or `example.net`, and `poppy:read poppy:write` scopes. Other email domains are rejected. This is a simulation of email ownership, not verification of a real address.
+Sandbox offers **Mediated Sign-In** (the extension grant) and **device sign-in** (the `device_code` grant in the issuer metadata), with the store's scopes `orders:read`, `orders:write` and `addresses` (mediated: the first two). For Mediated, send the grant `https://personalagentprotocol.org/grant/mediated-sign-in` to `/oauth/token` with your client assertion, a unique email at `example.com`, `example.org`, or `example.net`, and `scope=orders:read orders:write`. Other email domains are rejected. This is a simulation of email ownership, not verification of a real address.
 
-The response contains `sign_in_id`. Call `getSandboxSignInEmail` (GET `/api/sandbox/sign-in/{id}/email`) in that same session, read the captured code, and complete the mediated challenge normally. This endpoint refuses other sessions, consumed challenges and expired challenges. Exchange the returned account token for a signed-in session token, create a new order, and call `listAccountOrders`. Guest orders are not retroactively linked. Do not log or share tokens or OTPs.
+The `code_required` answer contains `sign_in_id`. Call `getSandboxSignInEmail` (GET `/api/sandbox/sign-in/{sign_in_id}/email`, with your Session header), read the captured code, and send the same grant with `sign_in_id` and `one_time_code`. The helper refuses other agents, consumed and expired sign-ins. Send the access token with your Session header, create a new order, and call `listAccountOrders`. Guest orders are not retroactively linked. Do not log or share tokens or OTPs.
 
-Sandbox also advertises **device sign-in** (`auth.device`). Start it at `/oauth/device`, open the verification link, enter a synthetic email there, and complete it: the page shows the captured code, and a test agent can read it with `getSandboxDeviceSignInEmail` (POST `/api/sandbox/device-sign-in/email` with `{device_code}`; only the agent that started it, and the Session that polled it). Poll `/oauth/token` with the device code grant and your `session_id`. Signed in, try saved addresses (omit `address` on `proposeOrder`) and `reorderOrder`; both still end in a proposal you approve. See [SIGN-IN.md](SIGN-IN.md).
+For **device sign-in**, start it at `/oauth/device`, open the verification link, enter a synthetic email there, and complete it: the page shows the captured code, and a test agent can read it with `getSandboxDeviceSignInEmail` (POST `/api/sandbox/device-sign-in/email` with `{device_code}`; only the agent that started it). Poll `/oauth/token` with the device code grant and your client assertion. Signed in, try saved addresses (omit `address` on `proposeOrder`) and `reorderOrder`; both still need your approval of the operation. See [SIGN-IN.md](SIGN-IN.md).
 
-Direct browser sign-in is not advertised in the hosted sandbox. Production OTP delivery remains real and never exposes these test-only endpoints.
+Direct Sign-In isn't offered in the hosted sandbox (no `authorization_code` grant). Production OTP delivery remains real and never exposes these test-only endpoints.
 
 ## Run your own sandbox
 
@@ -86,7 +86,7 @@ The private JWK stays local and should have a `kid` matching its published publi
 
 ## What passing proves
 
-The sandbox exercises actual discovery, JWT/DPoP authentication, image processing, pricing, operation approval, checkout preparation, order state changes, and email rendering. Provider responses are simulated. It does not prove Stripe charging, physical print quality, production tax calculations, carrier delivery, or inbox delivery.
+The sandbox exercises actual discovery, client assertions and Session JWTs, image processing, pricing, operation approval, checkout preparation, order state changes, and email rendering. Provider responses are simulated. It does not prove Stripe charging, physical print quality, production tax calculations, carrier delivery, or inbox delivery.
 
 ## Real sandbox order emails
 
@@ -100,9 +100,9 @@ Use the deployed [DPA](https://poppydemoagent.dev/) with its existing GitHub log
 
 For operator reference-client coverage, append `--sandbox-account` to the documented command to exercise captured OTP and order history. Append `--tshirt` to include the custom orange, size M T-shirt in the same order. The script verifies native ordering provenance and two captured emails. It uses sample poppy artwork; it never pays or prints a real order.
 
-## Poppy 0.2 migration
+## Poppy 0.3
 
-The reference client targets draft 0.2 and refuses other advertised versions. Both assertions use `auth.issuer` as their audience; DPoP still targets the requested endpoint. Keep `ALLOW_COMPAT_AGENT_SESSIONS=false` for native verification. Follow [the upgrade checklist](POPPY-0.2.md) before deploying the change to production; a successful local reference run is not a hosted PDA browser test.
+The reference client targets the published draft 0.3 and refuses other advertised versions. Client assertions use the issuer as their audience and are signed directly by the `jwks_uri` key; Session JWTs are signed by per-User delegated keys carrying their `pap_dlg` delegation and name each request's method and URL. See [POPPY-0.3.md](POPPY-0.3.md). Keep `ALLOW_COMPAT_AGENT_SESSIONS=false` for native verification. Follow [the upgrade checklist](POPPY-0.2.md) before deploying the change to production; a successful local reference run is not a hosted PDA browser test.
 
 ## Isolated Docker interop grid
 

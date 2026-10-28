@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import { randomUUID, createHash } from "node:crypto";
 import { generateKeyPair, exportJWK, importJWK, SignJWT } from "jose";
+import { poppyAgent, delegate, jti } from "../scripts/poppy-delegation.js";
 import sharp from "sharp";
 const temp = await fs.mkdtemp(`${os.tmpdir()}/poppy-test-`);
 process.env.STRIPE_SECRET_KEY = "sk_test_local_contract_only";
@@ -37,75 +38,65 @@ const origin = "http://localhost:8791";
 const clientId = origin + "/api/demo/agent.json";
 const key = store.get("demo-key", "identity");
 const signing = await importJWK(key.private, "ES256");
+// The demo agent (0.3): its jwks_uri key signs client assertions and
+// delegations; delegated keys sign the per-request Session JWTs.
+const agentSigner = await poppyAgent(key.private, clientId, origin);
+/** Test-only: the store's internal id for the Session a client_id + sid names. */
+const sessionFor = (sid: string) =>
+  store.get("session-sid", store.hash(`${clientId}\n${sid}`))?.sessionId as string;
 async function makeAgent(user = randomUUID()) {
-  const pair = await generateKeyPair("ES256", { extractable: true });
-  const jwk = await exportJWK(pair.publicKey);
-  async function proof(method: string, url: string, token?: string) {
-    return new SignJWT({
-      htm: method,
-      htu: url,
-      ...(token
-        ? { ath: createHash("sha256").update(token).digest("base64url") }
-        : {}),
-    })
-      .setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk })
-      .setIssuedAt()
-      .setJti(randomUUID())
-      .sign(pair.privateKey);
-  }
-  async function assertion(
-    subject: string,
-    audience = origin,
-  ) {
-    return new SignJWT({})
-      .setProtectedHeader({ alg: "ES256", kid: "demo" })
-      .setIssuer(clientId)
-      .setSubject(subject)
-      .setAudience(audience)
-      .setIssuedAt()
-      .setExpirationTime("60s")
-      .setJti(randomUUID())
-      .sign(signing);
-  }
-  async function token(sessionId?: string) {
-    const r = await fetch(origin + "/oauth/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        DPoP: await proof("POST", origin + "/oauth/token"),
-      },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        client_id: clientId,
-        client_assertion_type:
-          "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-        client_assertion: await assertion(clientId),
-        assertion: await assertion(user),
-        ...(sessionId ? { session_id: sessionId } : {}),
-      }),
-    });
-    const b = await r.json();
-    assert.equal(r.status, 200, JSON.stringify(b));
-    return b;
-  }
-  const session = await token();
+  const session: { sid: string; sub: string; access_token?: string; refresh_token?: string; session_id: string } = {
+    sid: jti(),
+    sub: user,
+    session_id: "",
+  };
+  const sessionJwt = (method: string, url: string, token?: string) =>
+    agentSigner.sessionJwt(session, method, url, token);
   async function request(route: string, init: RequestInit = {}) {
+    const token = session.access_token;
     const r = await fetch(origin + route, {
       ...init,
       headers: {
-        Authorization: `DPoP ${session.access_token}`,
-        DPoP: await proof(
-          init.method || "GET",
-          origin + new URL(route, origin).pathname,
-          session.access_token,
-        ),
+        "Poppy-Session": await sessionJwt(init.method || "GET", origin + new URL(route, origin).pathname, token),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init.headers,
       },
     });
-    return { status: r.status, body: await r.json() };
+    return { status: r.status, body: await r.json(), headers: r.headers };
   }
-  return { session, request, proof, token, assertion };
+  /** Start a new Session (a new sid), or continue the current one. */
+  async function token(renew?: string) {
+    if (!renew) session.sid = jti();
+    const r = await request("/api/catalog");
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    session.session_id = sessionFor(session.sid);
+    return { session_id: session.session_id };
+  }
+  await token();
+  return {
+    session,
+    request,
+    token,
+    sessionJwt,
+    assertion: (_subject?: string, _audience?: string) => agentSigner.clientAssertion(),
+  };
 }
+type Agent = Awaited<ReturnType<typeof makeAgent>>;
+/** Operations v2: send the same request again with the approval. */
+async function approveVia(a: Agent, route: string, body: unknown, op: { operation_id: string; revision: string }) {
+  return a.request(route, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}"`,
+    },
+    body: JSON.stringify(body),
+  });
+}
+const proposeVia = (a: Agent, body: unknown, route = "/api/orders") =>
+  a.request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+/** Test-only: the current revision of a stored operation. */
+const rev = (opId: string) => store.get("operation", opId).revision as string;
 const address = {
   name: "Test Recipient",
   line1: "123 Market Street",
@@ -134,38 +125,33 @@ async function fixture() {
     address,
     items: [{ photoId: uploaded.body.id, quantity: 2, fit: "contain" }],
   };
-  const key = randomUUID();
-  const r = await a.request("/api/orders", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Idempotency-Key": key },
-    body: JSON.stringify(proposal),
-  });
-  assert.equal(r.status, 202, JSON.stringify(r.body));
-  return { a, photo: uploaded.body, proposal, key, op: r.body.operation };
+  const r = await proposeVia(a, proposal);
+  assert.equal(r.status, 403, JSON.stringify(r.body));
+  assert.equal(r.body.error, "approval_required");
+  return { a, photo: uploaded.body, proposal, op: r.body.operation };
 }
-test("real Poppy discovery, DPoP upload, immutable approval, one payment, one print order and emails", async () => {
+test("real Poppy discovery, Session-header upload, immutable approval, one payment, one print order and emails", async () => {
   const discovery = await (
     await fetch(origin + "/.well-known/poppy.json")
   ).json();
-  assert.equal(discovery.extensions.operations.version, "1");
+  assert.equal(discovery.extensions.operations.version, "2");
   const f = await fixture();
   assert.match(
     f.op.summary,
     /123 Market Street, Unit 9, San Francisco, CA 94103/,
   );
-  assert.equal(f.op.confirmation, null);
+  // Operations v2 object: exactly these fields, and nothing performed yet.
+  for (const k of ["operation_id", "revision", "summary", "terms", "expires_at"]) assert.ok(k in f.op, k);
+  for (const k of ["state", "confirmation", "result", "user_approval_required", "owner", "principal", "request"]) assert.equal(k in f.op, false, k);
+  assert.match(f.op.revision, /^[A-Za-z0-9_-]+$/);
   assert.equal(store.all("order").length, 0);
-  const approve = {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ revision: 1, approved_by: "user" }),
-  };
   const [one, two] = await Promise.all([
-    f.a.request(`/api/operations/${f.op.operation_id}/confirm`, approve),
-    f.a.request(`/api/operations/${f.op.operation_id}/confirm`, approve),
+    approveVia(f.a, "/api/orders", f.proposal, f.op),
+    approveVia(f.a, "/api/orders", f.proposal, f.op),
   ]);
-  assert.equal(one.status, 200);
-  assert.equal(two.status, 200);
+  assert.equal(one.status, 201, JSON.stringify(one.body));
+  assert.equal(two.status, 201, JSON.stringify(two.body));
+  assert.equal(one.body.id, two.body.id);
   await worker.tick();
   const op = commerce.readOperation(f.op.operation_id, f.a.session.session_id);
   assert.equal(op.state, "succeeded");
@@ -234,86 +220,62 @@ test("real Poppy discovery, DPoP upload, immutable approval, one payment, one pr
   );
   const stranger = await makeAgent();
   assert.equal((await stranger.request(`/api/orders/${o.id}`)).status, 404);
-  assert.equal(
-    (await stranger.request(`/api/operations/${f.op.operation_id}`)).status,
-    404,
-  );
+  // Another User can't approve it: handled as a new request, and the photo isn't theirs.
+  const foreign = await approveVia(stranger, "/api/orders", f.proposal, f.op);
+  assert.equal(foreign.status, 404);
+  assert.equal(store.all("order").length, 1);
   const badView = await fetch(origin + `/api/order-view/${o.id}`);
   assert.equal(badView.status, 404);
 });
-test("proof replay, wrong method, token binding, expired token, and session renewal are enforced", async () => {
+test("Session JWT replay, wrong method, ath binding, expired tokens and continuing a Session are enforced", async () => {
   const a = await makeAgent();
-  const missingProof = await fetch(origin + "/api/photos", {
-    method: "POST",
-    headers: { Authorization: `DPoP ${a.session.access_token}` },
-  });
-  assert.equal(missingProof.status, 401);
-  assert.equal((await missingProof.json()).error, "invalid_dpop_proof");
-  const proof = await a.proof(
-    "GET",
-    origin + "/api/orders/not_found",
-    a.session.access_token,
-  );
-  const headers = {
-    Authorization: `DPoP ${a.session.access_token}`,
-    DPoP: proof,
-  };
-  assert.equal(
-    (await fetch(origin + "/api/orders/not_found", { headers })).status,
-    404,
-  );
-  assert.equal(
-    (await fetch(origin + "/api/orders/not_found", { headers })).status,
-    401,
-  );
-  const wrong = await a.proof(
-    "POST",
-    origin + "/api/orders/not_found",
-    a.session.access_token,
-  );
-  assert.equal(
-    (
-      await fetch(origin + "/api/orders/not_found", {
-        headers: { ...headers, DPoP: wrong },
-      })
-    ).status,
-    401,
-  );
-  const other = await makeAgent();
-  const mismatched = await other.proof(
-    "GET",
-    origin + "/api/orders/not_found",
-    a.session.access_token,
-  );
-  assert.equal(
-    (
-      await fetch(origin + "/api/orders/not_found", {
-        headers: { ...headers, DPoP: mismatched },
-      })
-    ).status,
-    401,
-  );
-  const renewed = await a.token(a.session.session_id);
-  assert.equal(renewed.session_id, a.session.session_id);
-  const tokenHash = store.hash(a.session.access_token);
+  const missing = await fetch(origin + "/api/photos", { method: "POST" });
+  assert.equal(missing.status, 400);
+  assert.equal((await missing.json()).error, "invalid_session");
+  const url = origin + "/api/orders/not_found";
+  const jwt = await a.sessionJwt("GET", url);
+  assert.equal((await fetch(url, { headers: { "Poppy-Session": jwt } })).status, 404);
+  const replay = await fetch(url, { headers: { "Poppy-Session": jwt } });
+  assert.equal(replay.status, 400);
+  assert.equal((await replay.json()).error, "invalid_session");
+  const wrong = await a.sessionJwt("POST", url);
+  assert.equal((await fetch(url, { headers: { "Poppy-Session": wrong } })).status, 400);
+  const signed = await login(a);
+  // ath must cover the access token sent with it.
+  const noAth = await a.sessionJwt("GET", url);
+  const r1 = await fetch(url, { headers: { "Poppy-Session": noAth, Authorization: `Bearer ${signed.access_token}` } });
+  assert.equal(r1.status, 400);
+  const otherToken = await a.sessionJwt("GET", url, "tok_other");
+  const r2 = await fetch(url, { headers: { "Poppy-Session": otherToken, Authorization: `Bearer ${signed.access_token}` } });
+  assert.equal(r2.status, 400);
+  // The same sid continues the Session; a new sid is a new Session.
+  const first = a.session.session_id;
+  assert.equal((await a.token(a.session.sid)).session_id, first);
+  assert.notEqual((await a.token()).session_id, first);
+  a.session.access_token = signed.access_token;
+  assert.equal((await a.request("/api/account")).status, 200);
+  const tokenHash = store.hash(signed.access_token);
   const record = store.get("token", tokenHash);
   store.put("token", tokenHash, { ...record, expires: 0 });
-  assert.equal((await a.request("/api/orders/not_found")).status, 401);
+  const expired = await a.request("/api/account");
+  assert.equal(expired.status, 401);
+  assert.equal(expired.body.error, "invalid_token");
+  assert.equal(expired.headers.get("www-authenticate"), 'Bearer error="invalid_token"');
 });
 test("changed revisions, standing permissions, expired quotes and cancelled proposals cannot purchase", async () => {
   const f = await fixture();
   const owner = f.a.session.session_id;
   assert.throws(
-    () => commerce.confirm(f.op.operation_id, owner, 2, "user"),
+    () => commerce.confirm(f.op.operation_id, owner, "stale-revision", "user"),
     /current terms/,
   );
   assert.throws(
-    () => commerce.confirm(f.op.operation_id, owner, 1, "standing_permission"),
+    () => commerce.confirm(f.op.operation_id, owner, rev(f.op.operation_id), "standing_permission"),
     /approval/,
   );
   commerce.cancel(f.op.operation_id, owner);
   assert.equal(
-    commerce.confirm(f.op.operation_id, owner, 1, "user").state,
+    commerce.confirm(f.op.operation_id, owner, rev(f.op.operation_id), "user").state,
     "cancelled",
   );
   const f2 = await fixture();
@@ -321,7 +283,7 @@ test("changed revisions, standing permissions, expired quotes and cancelled prop
   op.terms.expires = 0;
   store.put("operation", op.operation_id, op, op.owner);
   assert.equal(
-    commerce.confirm(op.operation_id, op.owner, 1, "user").state,
+    commerce.confirm(op.operation_id, op.owner, rev(op.operation_id), "user").state,
     "expired",
   );
   assert.equal(
@@ -330,36 +292,67 @@ test("changed revisions, standing permissions, expired quotes and cancelled prop
     0,
   );
 });
-test("idempotent proposals reject changed bodies and foreign photos", async () => {
+test("approval headers accept structured fields and require String identifiers", () => {
+  const expected = { operation_id: "op_123", revision: "rev_123" };
+  for (const header of [
+    'operation_id="op_123", revision="rev_123", extra=("a,b" token)',
+    'operation_id="op_123";note="a,b", revision="rev_123"',
+    'extra=%"caf%c3%a9", operation_id="op_123", revision="rev_123", date=@123, flag',
+  ]) assert.deepEqual(commerce.parseApproval(header), expected, header);
+  for (const header of [
+    undefined,
+    'operation_id="op_123"',
+    'operation_id=op_123, revision="rev_123"',
+    'operation_id="op_123", revision=123',
+    'operation_id="op_123", revision=("rev_123")',
+    'operation_id="op_123", revision=%"rev_123"',
+    'operation_id="op_123", revision="rev_123", extra=("unterminated"',
+    'operation_id="op_123", revision="rev_123",',
+  ]) assert.equal(commerce.parseApproval(header), undefined, String(header));
+});
+test("operations: the same request gets the same operation; an approval covers only its exact request and revision", async () => {
   const f = await fixture();
-  const init = {
+  assert.equal((await proposeVia(f.a, f.proposal)).body.operation.operation_id, f.op.operation_id);
+  // Key order doesn't matter: the request is compared canonically.
+  const reordered = { items: f.proposal.items, address: f.proposal.address, email: f.proposal.email };
+  assert.equal((await proposeVia(f.a, reordered)).body.operation.revision, f.op.revision);
+  const changed = { ...f.proposal, email: "other@example.com" };
+  const other = await proposeVia(f.a, changed);
+  assert.equal(other.status, 403);
+  assert.notEqual(other.body.operation.operation_id, f.op.operation_id);
+  // An approval sent with a different body performs nothing, and never answers with the revision it names.
+  const mismatch = await approveVia(f.a, "/api/orders", changed, f.op);
+  assert.equal(mismatch.status, 403);
+  assert.equal(mismatch.body.error, "approval_required");
+  assert.notEqual(mismatch.body.operation.revision, f.op.revision);
+  assert.equal(store.all("order").filter((o: any) => o.owner === f.a.session.session_id).length, 0);
+  // An unknown revision or an unparseable header is a request without an approval.
+  const stale = await approveVia(f.a, "/api/orders", f.proposal, { ...f.op, revision: "1-stale" });
+  assert.equal(stale.status, 403);
+  assert.equal(stale.body.operation.revision, f.op.revision);
+  const garbage = await f.a.request("/api/orders", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Idempotency-Key": f.key },
+    headers: { "Content-Type": "application/json", "Poppy-Approval": "operation_id=" },
     body: JSON.stringify(f.proposal),
-  };
-  assert.equal(
-    (await f.a.request("/api/orders", init)).body.operation.operation_id,
-    f.op.operation_id,
-  );
-  assert.equal(
-    (
-      await f.a.request("/api/orders", {
-        ...init,
-        body: JSON.stringify({ ...f.proposal, email: "other@example.com" }),
-      })
-    ).status,
-    409,
-  );
-  const other = await makeAgent();
-  assert.equal(
-    (
-      await other.request("/api/orders", {
-        ...init,
-        headers: { ...init.headers, "Idempotency-Key": randomUUID() },
-      })
-    ).status,
-    404,
-  );
+  });
+  assert.equal(garbage.status, 403);
+  // Unknown members are ignored.
+  const extra = await f.a.request("/api/orders", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Poppy-Approval": `operation_id="${f.op.operation_id}";note="a,b", revision="${f.op.revision}", extra=("a,b" token);x=1, flag`,
+    },
+    body: JSON.stringify(f.proposal),
+  });
+  assert.equal(extra.status, 201, JSON.stringify(extra.body));
+  const retry = await approveVia(f.a, "/api/orders", f.proposal, f.op);
+  assert.equal(retry.status, 201);
+  assert.ok(extra.body.id);
+  assert.equal(retry.body.id, extra.body.id);
+  assert.equal(store.all<any>("order").filter((o) => o.operationId === f.op.operation_id).length, 1);
+  const stranger = await makeAgent();
+  assert.equal((await proposeVia(stranger, f.proposal)).status, 404);
 });
 test("unsigned callbacks cannot forge shipment state", async () => {
   const o = store.all<any>("order")[0];
@@ -419,7 +412,7 @@ test("provider contracts preserve approved terms and use stable idempotency keys
   const createCheckout = stripe.checkout.sessions.create;
   const createTax = stripe.tax.calculations.create;
   const f = await fixture();
-  commerce.confirm(f.op.operation_id, f.a.session.session_id, 1, "user");
+  commerce.confirm(f.op.operation_id, f.a.session.session_id, rev(f.op.operation_id), "user");
   await worker.tick();
   const op = commerce.readOperation(f.op.operation_id, f.a.session.session_id);
   const order = store.get("order", op.orderId!);
@@ -548,7 +541,7 @@ test("fulfillment outage stays retryable and does not duplicate confirmation ema
   const { config } = await import("../server/config.js");
   const originalFetch = globalThis.fetch;
   const f = await fixture();
-  commerce.confirm(f.op.operation_id, f.a.session.session_id, 1, "user");
+  commerce.confirm(f.op.operation_id, f.a.session.session_id, rev(f.op.operation_id), "user");
   await worker.tick();
   const op = commerce.readOperation(f.op.operation_id, f.a.session.session_id);
   let o = store.get("order", op.orderId!);
@@ -742,7 +735,7 @@ test("poster catalog, approval, full-size artwork and fulfillment use the larger
     400,
   );
   const response = await send(proposal);
-  assert.equal(response.status, 202, JSON.stringify(response.body));
+  assert.equal(response.status, 403, JSON.stringify(response.body));
   const op = response.body.operation;
   assert.equal(op.terms.subtotal, 2800);
   assert.match(op.summary, /12 × 16 matte print/);
@@ -755,11 +748,7 @@ test("poster catalog, approval, full-size artwork and fulfillment use the larger
   ).metadata();
   assert.equal(meta.width, 4800);
   assert.equal(meta.height, 3600);
-  await f.a.request(`/api/operations/${op.operation_id}/confirm`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ revision: 1, approved_by: "user" }),
-  });
+  commerce.confirm(op.operation_id, store.get("operation", op.operation_id).owner, rev(op.operation_id), "user");
   await worker.tick();
   const persisted = commerce.readOperation(
     op.operation_id,
@@ -861,13 +850,25 @@ test("HTTP compatibility sessions isolate ownership, expire, and cannot downgrad
     });
   assert.equal((await send(b.access_token)).status, 404);
   const own = await send(a.access_token);
-  assert.equal(own.status, 202);
+  assert.equal(own.status, 403);
   const op = (await own.json()).operation;
   assert.equal(op.terms.subtotal, 1200);
   assert.equal(op.terms.orderingMethod, "http-compatibility");
-  assert.equal(op.confirmation, null);
+  // Compatibility agents use Operations v2 too: the same request with Poppy-Approval.
+  const approved = await fetch(origin + "/api/orders", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${a.access_token}`,
+      "Content-Type": "application/json",
+      "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}"`,
+    },
+    body: JSON.stringify(proposal),
+  });
+  assert.equal(approved.status, 201);
+  // A Personal Agent's access token never works as a compatibility token or without the Session header.
   const native = await makeAgent();
-  assert.equal((await send(native.session.access_token)).status, 401);
+  const nativeToken = (await login(native)).access_token;
+  assert.equal((await send(nativeToken)).status, 400);
   assert.equal(
     (
       await fetch(origin + "/api/orders", {
@@ -879,7 +880,7 @@ test("HTTP compatibility sessions isolate ownership, expire, and cannot downgrad
         body: JSON.stringify(proposal),
       })
     ).status,
-    401,
+    400,
   );
   const hash = store.hash(a.access_token);
   store.put("compat-token", hash, {
@@ -925,7 +926,7 @@ test("sample poppies work with native and compatibility sessions and remain priv
       method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
       body: JSON.stringify({ email: "test@example.com", address, items: [{ photoId: r.body.id, quantity: 5, fit: "contain" }] }),
     });
-    assert.equal(proposal.status, 202, JSON.stringify(proposal.body));
+    assert.equal(proposal.status, 403, JSON.stringify(proposal.body));
     assert.ok(proposal.body.operation);
   }
   const invalid = await a.request("/api/photos/samples", {
@@ -933,7 +934,8 @@ test("sample poppies work with native and compatibility sessions and remain priv
   });
   assert.equal(invalid.status, 400);
   const denied = await fetch(origin + "/api/photos/samples", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"color":"red"}' });
-  assert.equal(denied.status, 401);
+  assert.equal(denied.status, 400);
+  assert.equal((await denied.json()).error, "invalid_session");
   const { config } = await import("../server/config.js");
   const previous = config.compatibility;
   try {
@@ -954,9 +956,10 @@ test("native-only mode rejects existing HTTP tokens while native ordering contin
     const guest = await (await fetch(origin + "/api/agent-sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
     const native = await fixture();
     config.compatibility = false;
-    for (const path of ["/api/photos", "/api/photos/samples", "/api/orders", `/api/operations/${native.op.operation_id}/confirm`]) {
+    for (const path of ["/api/photos", "/api/photos/samples", "/api/orders"]) {
       const r = await fetch(origin + path, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${guest.access_token}` }, body: "{}" });
-      assert.equal(r.status, 401, path);
+      assert.equal(r.status, 400, path);
+      assert.equal((await r.json()).error, "invalid_session", path);
     }
     assert.equal((await fetch(origin + "/api/compat/openapi.json")).status, 404);
     assert.match(await (await fetch(origin + "/api/compat/instructions")).text(), /disabled/);
@@ -964,8 +967,8 @@ test("native-only mode rejects existing HTTP tokens while native ordering contin
     const discovery = await (await fetch(origin + "/.well-known/poppy.json")).json();
     assert.match(discovery.apis[0].description, /HTTP compatibility ordering is disabled/);
     for (const path of ["/api/config", "/api/catalog"]) assert.equal((await (await fetch(origin + path)).json()).httpOrderingEnabled, false);
-    const confirmed = await native.a.request(`/api/operations/${native.op.operation_id}/confirm`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: 1, approved_by: "user" }) });
-    assert.equal(confirmed.status, 200, JSON.stringify(confirmed.body));
+    const confirmed = await approveVia(native.a, "/api/orders", native.proposal, native.op);
+    assert.equal(confirmed.status, 201, JSON.stringify(confirmed.body));
     config.compatibility = true;
     assert.equal((await fetch(origin + "/api/compat/openapi.json")).status, 200);
     assert.equal((await (await fetch(origin + "/api/config")).json()).httpOrderingEnabled, true);
@@ -980,15 +983,16 @@ test("discovery stays native while compatibility is documented separately", asyn
   const native = await (await fetch(origin + "/openapi.json")).json();
   assert.equal(native.paths["/api/agent-sessions"], undefined);
   assert.equal(native.components.securitySchemes.AgentGuest, undefined);
-  assert.doesNotMatch(native.info.description, /\/api\/agent-sessions|Bearer/);
-  assert.deepEqual(native.paths["/api/photos"].post.security, [{ DPoP: [] }]);
-  assert.deepEqual(native.paths["/api/photos/samples"].post.security, [{ DPoP: [] }]);
-  assert.equal(native.components.securitySchemes.DPoP.scheme, "DPoP");
-  for (const path of ["/api/account", "/api/account/orders"]) {
-    assert.deepEqual(native.paths[path].get.security, [
-      { DPoP: ["poppy:read"] },
-    ]);
-  }
+  assert.doesNotMatch(native.info.description, /\/api\/agent-sessions|Bearer guest|DPoP/);
+  const either = [{ PoppySession: [] }, { PoppySession: [], PoppyAccount: [] }];
+  assert.deepEqual(native.paths["/api/photos"].post.security, either);
+  assert.deepEqual(native.paths["/api/photos/samples"].post.security, either);
+  assert.deepEqual(native.components.securitySchemes.PoppySession, { ...native.components.securitySchemes.PoppySession, type: "apiKey", in: "header", name: "Poppy-Session" });
+  assert.equal(native.components.securitySchemes.PoppyAccount.scheme, "bearer");
+  assert.deepEqual(native.paths["/api/account"].get.security, [{ PoppySession: [], PoppyAccount: [] }]);
+  assert.deepEqual(native.paths["/api/account/orders"].get.security, [
+    { PoppySession: [], PoppyAccount: ["orders:read"] },
+  ]);
   // DPA validates required operation parameters before its transport signs the request.
   // Upload must be callable with only the photo, without a model-supplied proof.
   assert.deepEqual(native.paths["/api/photos"].post.parameters, []);
@@ -996,25 +1000,23 @@ test("discovery stays native while compatibility is documented separately", asyn
     for (const operation of Object.values(path) as any[]) {
       for (const parameter of operation.parameters ?? []) {
         assert.ok(
-          !["dpop", "authorization"].includes(parameter.name.toLowerCase()),
+          !["dpop", "authorization", "poppy-session"].includes(parameter.name.toLowerCase()),
         );
       }
     }
   }
-  assert.ok(
-    native.paths["/api/orders"].post.parameters.some(
-      (p: any) => p.name === "Idempotency-Key" && p.required,
-    ),
-  );
-  assert.match(
-    native.info.description,
-    /No user account or interactive sign-in is needed/,
-  );
+  // Operations v2: the approval header is optional and documented; no Idempotency-Key.
+  const orderParams = native.paths["/api/orders"].post.parameters;
+  assert.ok(orderParams.some((p: any) => p.name === "Poppy-Approval" && !p.required));
+  assert.ok(!orderParams.some((p: any) => p.name === "Idempotency-Key"));
+  assert.equal(native.paths["/api/orders"].post.responses["403"].content["application/json"].schema.$ref, "#/components/schemas/ApprovalRequired");
+  assert.equal(native.paths["/api/operations/{id}/confirm"], undefined);
+  assert.match(native.info.description, /No user account is needed to order as a guest/);
   const compat = await (
     await fetch(origin + "/api/compat/openapi.json")
   ).json();
   assert.ok(compat.paths["/api/agent-sessions"]);
-  assert.equal(compat.components.securitySchemes.DPoP, undefined);
+  assert.equal(compat.components.securitySchemes.PoppySession, undefined);
   assert.deepEqual(compat.paths["/api/photos/samples"].post.security, [{ AgentGuest: [] }]);
   assert.deepEqual(compat.paths["/api/photos"].post.security, [
     { AgentGuest: [] },
@@ -1043,30 +1045,18 @@ test("discovery stays native while compatibility is documented separately", asyn
   }
 });
 
-async function oauth(
-  a: Awaited<ReturnType<typeof makeAgent>>,
-  body: Record<string, string>,
-  route = "/oauth/token",
-) {
+/** A token or revocation request with the client assertion. */
+async function oauth(a: Agent, body: Record<string, string>, route = "/oauth/token") {
+  const { session_id: _ignored, ...fields } = body;
   const r = await fetch(origin + route, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      DPoP: await a.proof("POST", origin + route),
-    },
-    body: new URLSearchParams({
-      ...body,
-      client_id: clientId,
-      client_assertion_type:
-        "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-      client_assertion: await a.assertion(clientId, origin),
-    }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ ...fields, ...(await agentSigner.clientAuth()) }),
   });
-  return {
-    status: r.status,
-    body: route === "/oauth/revoke" ? await r.text() : await r.json(),
-  };
+  const parsed = route === "/oauth/revoke" ? await r.text() : await r.json();
+  return { status: r.status, body: parsed };
 }
+const mediatedGrant = "https://personalagentprotocol.org/grant/mediated-sign-in";
 const postJson = (body: unknown): RequestInit => ({
   method: "POST",
   headers: { "Content-Type": "application/json" },
@@ -1078,67 +1068,44 @@ function otpFor(challenge: string) {
     .text.match(/code is (\d{6})/)[1];
 }
 async function login(
-  a: Awaited<ReturnType<typeof makeAgent>>,
+  a: Agent,
   email = `${randomUUID()}@example.com`,
-  scope = "poppy:read poppy:write",
+  scope = "orders:read orders:write",
 ) {
-  const started = await a.request(
-    "/api/poppy/sign-in",
-    postJson({ scope, credentials: { email } }),
-  );
-  assert.equal(started.status, 200, JSON.stringify(started.body));
-  assert.equal(started.body.status, "code_required");
+  const started = await oauth(a, { grant_type: mediatedGrant, scope, email });
+  assert.equal(started.status, 400, JSON.stringify(started.body));
+  assert.equal(started.body.error, "code_required");
   const code = otpFor(started.body.sign_in_id);
   assert.ok(!JSON.stringify(started.body).includes(code));
-  const done = await a.request(
-    `/api/poppy/sign-in/${started.body.sign_in_id}`,
-    postJson({ code }),
-  );
-  assert.equal(done.body.status, "complete", JSON.stringify(done.body));
-  assert.equal(done.body.signed_in, true);
-  assert.equal(done.body.session_id, a.session.session_id);
-  return { ...done.body, challenge: started.body.sign_in_id, code };
+  const done = await oauth(a, { grant_type: mediatedGrant, sign_in_id: started.body.sign_in_id, one_time_code: code });
+  assert.equal(done.status, 200, JSON.stringify(done.body));
+  assert.equal(done.body.token_type, "Bearer");
+  assert.ok(done.body.refresh_token);
+  return { ...done.body, session_id: a.session.session_id, challenge: started.body.sign_in_id, code };
 }
 
-test("email OTP signs in; token snapshots, account history, scopes, refresh and immediate revocation", async () => {
+test("mediated sign-in grant; signed-in requests by access token; history, scopes, refresh and immediate revocation", async () => {
   const f = await fixture(),
-    a = f.a,
-    oldToken = a.session.access_token;
-  assert.equal(
-    (await a.request("/api/account/orders")).body.error,
-    "sign_in_required",
-  );
+    a = f.a;
+  const signedOut = await a.request("/api/account/orders");
+  assert.equal(signedOut.status, 401);
+  assert.equal(signedOut.body.error, undefined);
+  assert.equal(signedOut.headers.get("www-authenticate"), 'Bearer scope="orders:read"');
   const signed = await login(a);
-  // Merely signing in elsewhere in the session must not upgrade an old token.
-  assert.equal(
-    (await a.request("/api/account/orders")).body.error,
-    "sign_in_required",
-  );
+  assert.equal(signed.scope, "orders:read orders:write");
+  for (const field of ["session_id", "signed_in", "refresh_token_expires_in"]) assert.equal((signed as any)[field === "session_id" ? "_" : field], undefined);
+  // Sign-in doesn't touch the Session: still signed out until a request carries the token.
+  assert.equal((await a.request("/api/account/orders")).status, 401);
   a.session.access_token = signed.access_token;
   assert.equal((await a.request("/api/account/orders")).body.orders.length, 0);
-  assert.equal(
-    (
-      await a.request(
-        `/api/poppy/sign-in/${signed.challenge}`,
-        postJson({ code: signed.code }),
-      )
-    ).body.status,
-    "failed",
-  );
-  const proposed = await a.request("/api/orders", {
-    ...postJson(f.proposal),
-    headers: {
-      "Content-Type": "application/json",
-      "Idempotency-Key": randomUUID(),
-    },
-  });
-  assert.equal(proposed.status, 202);
-  const confirmed = await a.request(
-    `/api/operations/${proposed.body.operation.operation_id}/confirm`,
-    postJson({ revision: 1, approved_by: "user" }),
-  );
-  assert.equal(confirmed.status, 200);
-  const orderId = confirmed.body.orderId;
+  // The code is one-time.
+  const reused = await oauth(a, { grant_type: mediatedGrant, sign_in_id: signed.challenge, one_time_code: signed.code });
+  assert.equal(reused.body.error, "invalid_grant");
+  const proposed = await proposeVia(a, f.proposal);
+  assert.equal(proposed.status, 403);
+  const confirmed = await approveVia(a, "/api/orders", f.proposal, proposed.body.operation);
+  assert.equal(confirmed.status, 201, JSON.stringify(confirmed.body));
+  const orderId = confirmed.body.id;
   const list = await a.request("/api/account/orders");
   assert.equal(list.body.orders.length, 1);
   assert.equal(list.body.orders[0].id, orderId);
@@ -1146,178 +1113,103 @@ test("email OTP signs in; token snapshots, account history, scopes, refresh and 
   const other = await makeAgent();
   const otherSigned = await login(other);
   other.session.access_token = otherSigned.access_token;
-  assert.equal(
-    (await other.request("/api/account/orders")).body.orders.length,
-    0,
-  );
+  assert.equal((await other.request("/api/account/orders")).body.orders.length, 0);
   assert.equal((await other.request(`/api/orders/${orderId}`)).status, 404);
-  const badSession = await oauth(other, {
-    grant_type: "refresh_token",
-    refresh_token: signed.refresh_token,
-    session_id: other.session.session_id,
-  });
-  assert.equal(badSession.body.error, "invalid_session");
-  const narrowed = await oauth(a, {
-    grant_type: "refresh_token",
-    refresh_token: signed.refresh_token,
-    scope: "poppy:read",
-  });
-  assert.equal(narrowed.body.signed_in, true);
-  assert.notEqual(narrowed.body.session_id, a.session.session_id);
+  const narrowed = await oauth(a, { grant_type: "refresh_token", refresh_token: signed.refresh_token, scope: "orders:read" });
+  assert.equal(narrowed.body.scope, "orders:read");
+  assert.equal(narrowed.body.refresh_token, undefined);
   a.session.access_token = narrowed.body.access_token;
   assert.equal((await a.request(`/api/orders/${orderId}`)).status, 200);
   assert.equal((await a.request("/api/account/orders")).body.orders.length, 1);
-  assert.equal(
-    (await a.request("/api/orders", postJson({}))).body.error,
-    "insufficient_scope",
-  );
-  const excessive = await oauth(a, {
-    grant_type: "refresh_token",
-    refresh_token: signed.refresh_token,
-    scope: "admin",
-  });
-  assert.equal(excessive.body.error, "invalid_scope");
-  assert.equal(
-    (await oauth(a, { token: signed.refresh_token }, "/oauth/revoke")).status,
-    200,
-  );
-  assert.equal(
-    (await a.request("/api/account/orders")).body.error,
-    "sign_in_required",
-  );
-  a.session.access_token = signed.access_token;
-  assert.equal(
-    (await a.request(`/api/orders/${orderId}`)).body.error,
-    "sign_in_required",
-  );
-  assert.equal(
-    (await a.request(`/api/operations/${proposed.body.operation.operation_id}`))
-      .body.error,
-    "sign_in_required",
-  );
-  assert.equal(
-    (
-      await oauth(a, {
-        grant_type: "refresh_token",
-        refresh_token: signed.refresh_token,
-      })
-    ).body.error,
-    "invalid_grant",
-  );
-  a.session.access_token = oldToken;
-  const guest = await a.token(a.session.session_id);
-  assert.equal(guest.signed_in, false);
+  const noWrite = await proposeVia(a, f.proposal);
+  assert.equal(noWrite.status, 403);
+  assert.equal(noWrite.body.error, "insufficient_scope");
+  assert.equal(noWrite.headers.get("www-authenticate"), 'Bearer error="insufficient_scope", scope="orders:write"');
+  assert.equal((await oauth(a, { grant_type: "refresh_token", refresh_token: signed.refresh_token, scope: "admin" })).body.error, "invalid_scope");
+  assert.equal((await oauth(a, { token: signed.refresh_token, token_type_hint: "refresh_token" }, "/oauth/revoke")).status, 200);
+  // Revocation invalidates every access token from that sign-in at once.
+  for (const token of [narrowed.body.access_token, signed.access_token]) {
+    a.session.access_token = token;
+    const r = await a.request(`/api/orders/${orderId}`);
+    assert.equal(r.status, 401);
+    assert.equal(r.body.error, "invalid_token");
+  }
+  assert.equal((await oauth(a, { grant_type: "refresh_token", refresh_token: signed.refresh_token })).body.error, "invalid_grant");
+  // The Session continues signed out.
+  a.session.access_token = undefined;
+  assert.equal((await a.request("/api/catalog")).status, 200);
+  assert.equal((await a.request(`/api/orders/${orderId}`)).status, 401);
 });
 
-test("OTP isolation, wrong-code limits, expiration, account mismatch and no token escalation", async () => {
-  const a = await makeAgent(),
-    b = await makeAgent();
-  const started = await a.request(
-    "/api/poppy/sign-in",
-    postJson({
-      scope: "poppy:read",
-      credentials: { email: `${randomUUID()}@example.com` },
-    }),
-  );
-  const route = `/api/poppy/sign-in/${started.body.sign_in_id}`;
-  assert.equal(
-    (
-      await b.request(
-        route,
-        postJson({ code: otpFor(started.body.sign_in_id) }),
-      )
-    ).status,
-    404,
-  );
-  const right = otpFor(started.body.sign_in_id),
+test("mediated sign-in: client isolation, wrong-code limits, expiry, one account per Session and no scope escalation", async () => {
+  const a = await makeAgent();
+  const start = (scope = "orders:read", email = `${randomUUID()}@example.com`) =>
+    oauth(a, { grant_type: mediatedGrant, scope, email });
+  const started = await start();
+  assert.equal(started.body.error, "code_required");
+  assert.equal(typeof started.body.expires_in, "number");
+  const id = started.body.sign_in_id;
+  // Only the client that started a sign-in can finish it.
+  const c0 = store.get("signin-code", id);
+  store.put("signin-code", "sgn_foreign", { ...c0, id: "sgn_foreign", owner: "mediated:https://other.example/agent.json" }, c0.owner);
+  assert.equal((await oauth(a, { grant_type: mediatedGrant, sign_in_id: "sgn_foreign", one_time_code: otpFor(id) })).body.error, "invalid_grant");
+  assert.equal((await oauth(a, { grant_type: mediatedGrant, sign_in_id: "sgn_unknown", one_time_code: "123456" })).body.error, "invalid_grant");
+  // The second step carries only the code.
+  assert.equal((await oauth(a, { grant_type: mediatedGrant, sign_in_id: id, one_time_code: otpFor(id), scope: "orders:read" })).body.error, "invalid_request");
+  const right = otpFor(id),
     wrong = right === "000000" ? "111111" : "000000";
   for (let n = 0; n < 5; n++)
     assert.equal(
-      (await a.request(route, postJson({ code: wrong }))).body.status,
-      n === 4 ? "failed" : "code_required",
+      (await oauth(a, { grant_type: mediatedGrant, sign_in_id: id, one_time_code: wrong })).body.error,
+      n === 4 ? "invalid_grant" : "code_required",
     );
-  assert.equal(
-    (await a.request(route, postJson({ code: right }))).body.status,
-    "failed",
-  );
-  const expired = await a.request(
-    "/api/poppy/sign-in",
-    postJson({
-      scope: "poppy:read",
-      credentials: { email: `${randomUUID()}@example.com` },
-    }),
-  );
+  assert.equal((await oauth(a, { grant_type: mediatedGrant, sign_in_id: id, one_time_code: right })).body.error, "invalid_grant");
+  const expired = await start();
   const c = store.get("signin-code", expired.body.sign_in_id);
-  store.put("signin-code", c.id, { ...c, expires: 0 }, a.session.session_id);
-  assert.equal(
-    (
-      await a.request(
-        `/api/poppy/sign-in/${c.id}`,
-        postJson({ code: otpFor(c.id) }),
-      )
-    ).body.status,
-    "expired",
-  );
-  const signed = await login(a, `${randomUUID()}@example.com`, "poppy:read");
+  store.put("signin-code", c.id, { ...c, expires: 0 }, c.owner);
+  assert.equal((await oauth(a, { grant_type: mediatedGrant, sign_in_id: c.id, one_time_code: otpFor(c.id) })).body.error, "expired_token");
+  // Scopes: missing, unknown and non-mediated scopes are invalid_scope.
+  assert.equal((await oauth(a, { grant_type: mediatedGrant, email: "x@example.com" })).body.error, "invalid_scope");
+  assert.equal((await start("addresses")).body.error, "invalid_scope");
+  assert.equal((await start("poppy:read")).body.error, "invalid_scope");
+  const signed = await login(a, `${randomUUID()}@example.com`, "orders:read");
   a.session.access_token = signed.access_token;
+  assert.equal((await a.request("/api/account")).status, 200);
   assert.equal(
-    (
-      await oauth(a, {
-        grant_type: "refresh_token",
-        refresh_token: signed.refresh_token,
-        scope: "poppy:read poppy:write",
-      })
-    ).body.error,
+    (await oauth(a, { grant_type: "refresh_token", refresh_token: signed.refresh_token, scope: "orders:read orders:write" })).body.error,
     "invalid_scope",
   );
-  // A different account is refused before any code is sent (spec 4.4).
-  const mismatch = await a.request(
-    "/api/poppy/sign-in",
-    postJson({
-      scope: "poppy:read",
-      credentials: { email: `${randomUUID()}@example.com` },
-    }),
-  );
-  assert.equal(mismatch.status, 400);
-  assert.equal(mismatch.body.error, "account_mismatch");
-  assert.equal(mismatch.body.sign_in_id, undefined);
-  // Account-token expiry also removes account access from unexpired session tokens.
-  const grantId = store.hash(signed.refresh_token),
+  // A second account in the same Session is refused (§5.4 MAY); a new Session works.
+  const second = await login(a, `${randomUUID()}@example.com`, "orders:read");
+  a.session.access_token = second.access_token;
+  const mixed = await a.request("/api/account");
+  assert.equal(mixed.status, 400);
+  assert.equal(mixed.body.error, "invalid_session");
+  await a.token();
+  assert.equal((await a.request("/api/account")).status, 200);
+  // Refresh token expiry also removes account access from unexpired access tokens.
+  const grantId = store.hash(second.refresh_token),
     grant = store.get("account-token", grantId);
   store.put("account-token", grantId, { ...grant, expires: 0 });
-  assert.equal(
-    (await a.request("/api/account")).body.error,
-    "sign_in_required",
-  );
-  assert.equal(
-    (
-      await oauth(a, {
-        grant_type: "refresh_token",
-        refresh_token: signed.refresh_token,
-      })
-    ).body.error,
-    "invalid_grant",
-  );
+  assert.equal((await a.request("/api/account")).body.error, "invalid_token");
+  assert.equal((await oauth(a, { grant_type: "refresh_token", refresh_token: second.refresh_token })).body.error, "invalid_grant");
 });
 
-test("discovery advertises direct and mediated account access; compatibility cannot sign in", async () => {
+test("discovery offers Direct and Device by grant type and Mediated as an extension grant; compatibility tokens can't sign in", async () => {
   const d = await (await fetch(origin + "/.well-known/poppy.json")).json();
-  assert.deepEqual(d.auth.direct.scopes, ["poppy:read", "poppy:write"]);
-  assert.equal(d.auth.mediated.endpoint, origin + "/api/poppy/sign-in");
-  const guest = await (
-    await fetch(origin + "/api/agent-sessions", postJson({}))
-  ).json();
+  const m = await (await fetch(origin + "/.well-known/oauth-authorization-server")).json();
+  assert.equal(d.auth.direct, undefined);
+  assert.equal(d.auth.mediated, undefined);
+  assert.ok(m.grant_types_supported.includes("authorization_code"));
+  assert.ok(m.grant_types_supported.includes(mediatedGrant));
+  assert.deepEqual(d.extensions["mediated-sign-in"].fields, [{ name: "email", label: "Email", secret: false }]);
+  // The old Mediated endpoint is gone.
+  const guest = await (await fetch(origin + "/api/agent-sessions", postJson({}))).json();
   const r = await fetch(origin + "/api/poppy/sign-in", {
-    ...postJson({
-      scope: "poppy:read",
-      credentials: { email: "test@example.com" },
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${guest.access_token}`,
-    },
+    ...postJson({ scope: "orders:read", credentials: { email: "test@example.com" } }),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${guest.access_token}` },
   });
-  assert.equal(r.status, 403);
+  assert.equal(r.status, 404);
 });
 
 test("direct sign-in requires cookie/CSRF, email OTP, explicit consent, exact callback and single-use PKCE code", async () => {
@@ -1328,7 +1220,7 @@ test("direct sign-in requires cookie/CSRF, email OTP, explicit consent, exact ca
     response_type: "code",
     client_id: clientId,
     redirect_uri: origin + "/api/demo/callback",
-    scope: "poppy:read poppy:write",
+    scope: "orders:read orders:write",
     state,
     code_challenge: store.hash(verifier),
     code_challenge_method: "S256",
@@ -1376,7 +1268,7 @@ test("direct sign-in requires cookie/CSRF, email OTP, explicit consent, exact ca
     (
       await browser("/oauth/authorize/approve", {
         decision: "approve",
-        scopes: "poppy:read",
+        scopes: "orders:read",
       })
     ).status,
     403,
@@ -1392,7 +1284,7 @@ test("direct sign-in requires cookie/CSRF, email OTP, explicit consent, exact ca
   assert.match(await verified.text(), /Allow access/);
   const approval = await browser("/oauth/authorize/approve", {
     decision: "approve",
-    scopes: "poppy:read",
+    scopes: "orders:read",
   });
   assert.equal(approval.status, 303);
   const callback = new URL(approval.headers.get("location")!);
@@ -1403,28 +1295,27 @@ test("direct sign-in requires cookie/CSRF, email OTP, explicit consent, exact ca
     code: callback.searchParams.get("code")!,
     redirect_uri: origin + "/api/demo/callback",
     code_verifier: verifier,
-    session_id: a.session.session_id,
   };
   assert.equal(
     (await oauth(a, { ...fields, code_verifier: "wrong" })).body.error,
     "invalid_grant",
   );
   const token = await oauth(a, fields);
-  assert.equal(token.body.signed_in, true);
-  assert.equal(token.body.scope, "poppy:read");
+  assert.ok(token.body.refresh_token);
+  assert.equal(token.body.scope, "orders:read");
   a.session.access_token = token.body.access_token;
   assert.equal((await a.request("/api/account")).status, 200);
   // A replayed code fails and revokes what it issued (RFC 6749 §4.1.2).
   assert.equal((await oauth(a, fields)).body.error, "invalid_grant");
   assert.equal(
     (await a.request("/api/account")).body.error,
-    "sign_in_required",
+    "invalid_token",
   );
   assert.equal(
     (
       await browser("/oauth/authorize/approve", {
         decision: "approve",
-        scopes: "poppy:read",
+        scopes: "orders:read",
       })
     ).status,
     403,
@@ -1486,7 +1377,7 @@ test("OTP email delivery failures and per-email rate limits fail closed", async 
     config.demo = false;
     globalThis.fetch = async () => new Response("Unavailable", { status: 503 });
     await assert.rejects(
-      () => startCode(a.session.session_id, email, ["poppy:read"], clientId),
+      () => startCode(a.session.session_id, email, ["orders:read"], clientId),
       (e: any) => e.code === "email_unavailable",
     );
   } finally {
@@ -1496,30 +1387,12 @@ test("OTP email delivery failures and per-email rate limits fail closed", async 
   const failed = store.all<any>("signin-code", a.session.session_id)[0];
   assert.equal(failed.used, true);
   assert.equal(store.get("demo-signin-email", failed.id), undefined);
-  for (let n = 0; n < 4; n++) {
-    const b = await makeAgent();
-    assert.equal(
-      (
-        await b.request(
-          "/api/poppy/sign-in",
-          postJson({ scope: "poppy:read", credentials: { email } }),
-        )
-      ).status,
-      200,
-    );
-  }
-  const b = await makeAgent();
-  assert.equal(
-    (
-      await b.request(
-        "/api/poppy/sign-in",
-        postJson({ scope: "poppy:read", credentials: { email } }),
-      )
-    ).status,
-    429,
-  );
+  for (let n = 0; n < 4; n++)
+    assert.equal((await oauth(a, { grant_type: mediatedGrant, scope: "orders:read", email })).body.error, "code_required");
+  const limited = await oauth(a, { grant_type: mediatedGrant, scope: "orders:read", email });
+  assert.equal(limited.status, 429);
+  assert.equal(limited.body.error, undefined);
 });
-
 test("normal deployments do not advertise or expose agent sandbox controls", async () => {
   const schema = await (await fetch(origin + "/openapi.json")).json();
   assert.equal(schema.paths["/api/sandbox/orders/{id}/pay"], undefined);
@@ -1533,7 +1406,7 @@ test("normal deployments do not advertise or expose agent sandbox controls", asy
   assert.ok(schema.paths["/api/sandbox/sign-in/{id}/email"]);
   assert.equal(
     (await fetch(origin + "/api/sandbox/sign-in/test/email")).status,
-    401,
+    400,
   );
 });
 
@@ -1541,20 +1414,20 @@ test("private coupons discount before approval, reserve once, and free orders fu
   const { generateCoupons } = await import("../server/coupons.js");
   const [code] = generateCoupons(1, 100, 10000);
   const f = await fixture();
-  const submit = () => f.a.request("/api/orders", {
-    method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
-    body: JSON.stringify({ ...f.proposal, couponCode: code.toUpperCase() }),
+  const submit = (quantity = 2) => f.a.request("/api/orders", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...f.proposal, items: [{ ...f.proposal.items[0], quantity }], couponCode: code.toUpperCase() }),
   });
-  const first = await submit(), second = await submit();
-  assert.equal(first.status, 202);
-  assert.equal(second.status, 202);
+  const first = await submit(), second = await submit(3);
+  assert.equal(first.status, 403);
+  assert.equal(second.status, 403);
   const op = first.body.operation;
   assert.equal(op.terms.total, 0);
   assert.equal(op.terms.tax, 0);
   assert.equal(op.terms.discount, op.terms.subtotal + op.terms.shipping);
   assert.match(op.summary, /free checkout/);
-  const confirmed = commerce.confirm(op.operation_id, f.a.session.session_id, 1, "user");
-  assert.throws(() => commerce.confirm(second.body.operation.operation_id, f.a.session.session_id, 1, "user"), /already been used/);
+  const confirmed = commerce.confirm(op.operation_id, f.a.session.session_id, rev(op.operation_id), "user");
+  assert.throws(() => commerce.confirm(second.body.operation.operation_id, f.a.session.session_id, rev(second.body.operation.operation_id), "user"), /already been used/);
   assert.equal((await submit()).status, 422);
   const order = store.get("order", confirmed.orderId!);
   order.checkoutId = "cs_free_contract";
@@ -1582,7 +1455,7 @@ test("percentage coupons recalculate tax on discounted prints and shipping", asy
 
 test("free Stripe checkout has zero line items and no tax charge", async () => {
   const f = await fixture();
-  const confirmed = commerce.confirm(f.op.operation_id, f.a.session.session_id, 1, "user");
+  const confirmed = commerce.confirm(f.op.operation_id, f.a.session.session_id, rev(f.op.operation_id), "user");
   const sample = store.get("order", confirmed.orderId!);
   const { config } = await import("../server/config.js");
   const { stripe, checkout } = await import("../server/providers.js");
@@ -1657,7 +1530,7 @@ test("mixed products share pricing, checkout and fulfillment without losing prod
   assert.equal((await send({ ...proposal, items: [proposal.items[0], { ...proposal.items[1], quantity: 21 }] })).status, 400);
   assert.equal((await send({ ...proposal, items: [{ ...proposal.items[0], quantity: 101 }, proposal.items[1]] })).status, 400);
   const response = await send(proposal);
-  assert.equal(response.status, 202, JSON.stringify(response.body));
+  assert.equal(response.status, 403, JSON.stringify(response.body));
   const op = response.body.operation;
   assert.equal(op.terms.subtotal, 4000);
   assert.equal(op.terms.shipping, 0);
@@ -1665,7 +1538,7 @@ test("mixed products share pricing, checkout and fulfillment without losing prod
   assert.match(op.terms.previews[1].url, /poster-contain/);
   assert.match(op.summary, /5 × 4 × 6 photo prints/);
   assert.match(op.summary, /1 × 12 × 16 matte print/);
-  await commerce.confirm(op.operation_id, f.a.session.session_id, 1, "user");
+  await commerce.confirm(op.operation_id, f.a.session.session_id, rev(op.operation_id), "user");
   await worker.tick();
   const persisted = commerce.readOperation(op.operation_id, f.a.session.session_id);
   const order = store.get("order", persisted.orderId!);
@@ -1741,7 +1614,7 @@ test("mixed products share pricing, checkout and fulfillment without losing prod
 
 test("cost guard blocks supplier increases before checkout and fulfillment while allowing coupon subsidies", async () => {
   const f = await fixture();
-  commerce.confirm(f.op.operation_id, f.a.session.session_id, 1, "user");
+  commerce.confirm(f.op.operation_id, f.a.session.session_id, rev(f.op.operation_id), "user");
   await worker.tick();
   const op = commerce.readOperation(f.op.operation_id, f.a.session.session_id);
   const order = store.get("order", op.orderId!);
@@ -1798,7 +1671,7 @@ test("native Poppy supports square and 8x10 items with correctly sized approved 
     { photoId: f.photo.id, product: "square", quantity: 5, fit: "cover" },
     { photoId: f.photo.id, product: "enlargement", quantity: 1, fit: "contain" },
   ] }) });
-  assert.equal(response.status, 202, JSON.stringify(response.body));
+  assert.equal(response.status, 403, JSON.stringify(response.body));
   const q = response.body.operation.terms;
   assert.equal(q.subtotal, 1900);
   assert.equal(q.shipping, 0);
@@ -1848,10 +1721,7 @@ test("ordering method is server-recorded, survives session cleanup, and labels o
   const { sessionOrderingMethod, quoteOrderingMethod } = await import("../server/ordering-method.js");
   const { emailFor } = await import("../server/email.js");
   assert.equal(sessionOrderingMethod({ ...store.get<import("../server/types.js").Session>("session", f.a.session.session_id)!, compatibility: true }), "http-compatibility");
-  await f.a.request(`/api/operations/${f.op.operation_id}/confirm`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ revision: 1, approved_by: "user" }),
-  });
+  commerce.confirm(f.op.operation_id, store.get("operation", f.op.operation_id).owner, rev(f.op.operation_id), "user");
   await worker.tick();
   const op = commerce.readOperation(f.op.operation_id, f.a.session.session_id);
   const order = store.get("order", op.orderId!);
@@ -1879,7 +1749,7 @@ test("hidden shirt requires options and separates mockup from print artwork", as
     body: JSON.stringify(body),
   });
   const r = await send(proposal);
-  assert.equal(r.status, 202, JSON.stringify(r.body));
+  assert.equal(r.status, 403, JSON.stringify(r.body));
   assert.equal(r.body.operation.terms.subtotal, 4100);
   assert.equal(r.body.operation.terms.shipping, 0);
   assert.match(r.body.operation.summary, /shirt preview is approximate/);
@@ -1897,10 +1767,10 @@ test("hidden shirt requires options and separates mockup from print artwork", as
   const art = await sharp(await fs.readFile(`${temp}/photos/${f.photo.id}-tshirt-contain.png`)).metadata();
   assert.equal(art.width, 4680); assert.equal(art.height, 5790); assert.equal(art.hasAlpha, true);
   const black = await send({ ...proposal, items: [{ ...proposal.items[1], color: "black" }] });
-  assert.equal(black.status, 202);
+  assert.equal(black.status, 403);
   assert.notEqual(black.body.operation.terms.previews[0].url, r.body.operation.terms.previews[1].url);
-  commerce.approveShirtPreviews(r.body.operation.operation_id, f.a.session.session_id, 1, r.body.operation.terms.previews.filter((p: any) => p.product === "tshirt").map((p: any) => p.previewId), "user");
-  await commerce.confirm(r.body.operation.operation_id, f.a.session.session_id, 1, "user");
+  commerce.approveShirtPreviews(r.body.operation.operation_id, f.a.session.session_id, rev(r.body.operation.operation_id), r.body.operation.terms.previews.filter((p: any) => p.product === "tshirt").map((p: any) => p.previewId), "user");
+  await commerce.confirm(r.body.operation.operation_id, f.a.session.session_id, rev(r.body.operation.operation_id), "user");
   await worker.tick();
   const op = commerce.readOperation(r.body.operation.operation_id, f.a.session.session_id);
   const order = store.get("order", op.orderId!);
@@ -1943,7 +1813,9 @@ test("hidden shirt requires options and separates mockup from print artwork", as
 
 test("invalid revocation assertions return invalid_client rather than a retryable server error", async () => {
   const a = await makeAgent();
-  for (const assertion of [await a.assertion(clientId, origin + "/oauth/token"), "malformed"]) {
+  const endpointAudience = await new SignJWT({}).setProtectedHeader({ alg: "ES256", kid: "demo" }).setIssuer(clientId).setSubject(clientId)
+    .setAudience(origin + "/oauth/token").setIssuedAt().setExpirationTime("60s").setJti(randomUUID()).sign(signing);
+  for (const assertion of [endpointAudience, "malformed"]) {
     const r = await fetch(origin + "/oauth/revoke", {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ client_id: clientId, client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", client_assertion: assertion, token: "unknown-account-token" }),
@@ -1967,7 +1839,7 @@ test("mixed shirt sizes use quantity pricing and require every preview approval 
     { product: "tshirt", photoId: f.photo.id, color: "black", size: "xl", quantity: 1, fit: "cover" },
   ];
   const proposed = await f.a.request("/api/orders", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() }, body: JSON.stringify({ ...f.proposal, items }) });
-  assert.equal(proposed.status, 202);
+  assert.equal(proposed.status, 403);
   const op = proposed.body.operation;
   assert.equal(op.terms.subtotal, 6300);
   assert.match(op.summary, /2 × Custom T-shirt · orange · M/);
@@ -1975,22 +1847,24 @@ test("mixed shirt sizes use quantity pricing and require every preview approval 
   const groups = orderProducts(op.terms);
   assert.equal(groups.reduce((n, g) => n + g.subtotal, 0), 6300);
   assert.deepEqual(groups.map(g => [g.quantity, g.attributes]), [[2, { color: "orange", size: "m" }], [1, { color: "black", size: "xl" }]]);
-  const request = (agent: typeof f.a, suffix: string, body: unknown) => agent.request(`/api/operations/${op.operation_id}/${suffix}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const previews = (agent: typeof f.a, body: unknown) => agent.request(`/api/shirt-preview-approvals/${op.operation_id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const orderBody = { ...f.proposal, items };
   const ids = op.terms.previews.map((p: any) => p.previewId);
-  const approval = { revision: 1, approved_by: "user", previewIds: ids };
-  const blocked = await request(f.a, "confirm", { revision: 1, approved_by: "user" });
+  const approval = { revision: op.revision, approved_by: "user", previewIds: ids };
+  // The operation approval alone doesn't place a shirt order: every mockup needs approval first.
+  const blocked = await approveVia(f.a, "/api/orders", orderBody, op);
   assert.equal(blocked.status, 409);
   assert.equal(blocked.body.error, "shirt_preview_approval_required");
   assert.equal(commerce.readOperation(op.operation_id, f.a.session.session_id).orderId, undefined);
-  assert.equal((await request(f.a, "shirt-previews", { ...approval, previewIds: [ids[0]] })).status, 400);
-  assert.equal((await request(f.a, "shirt-previews", { ...approval, previewIds: [ids[0], ids[0]] })).status, 400);
-  assert.equal((await request(f.a, "shirt-previews", { ...approval, revision: 2 })).status, 409);
+  assert.equal((await previews(f.a, { ...approval, previewIds: [ids[0]] })).status, 400);
+  assert.equal((await previews(f.a, { ...approval, previewIds: [ids[0], ids[0]] })).status, 400);
+  assert.equal((await previews(f.a, { ...approval, revision: "1-other" })).status, 409);
   const other = await makeAgent();
-  assert.equal((await request(other, "shirt-previews", approval)).status, 404);
-  assert.equal((await request(f.a, "shirt-previews", approval)).status, 200);
-  assert.equal((await request(f.a, "shirt-previews", approval)).status, 200);
-  const confirmed = await request(f.a, "confirm", { revision: 1, approved_by: "user" });
-  assert.equal(confirmed.status, 200);
+  assert.equal((await previews(other, approval)).status, 404);
+  assert.equal((await previews(f.a, approval)).status, 200);
+  assert.equal((await previews(f.a, approval)).status, 200);
+  const confirmed = await approveVia(f.a, "/api/orders", orderBody, op);
+  assert.equal(confirmed.status, 201, JSON.stringify(confirmed.body));
   const stored = commerce.readOperation(op.operation_id, f.a.session.session_id);
   const order = store.get("order", stored.orderId!);
   const providers = await import("../server/providers.js");
@@ -2009,12 +1883,12 @@ test("mixed shirt sizes use quantity pricing and require every preview approval 
     assert.ok(sent.items.every((i: any) => i.assets[0].printArea === "front" && !i.assets[0].url.includes("preview")));
   } finally { config.demo = true; globalThis.fetch = originalFetch; }
   const changed = await f.a.request("/api/orders", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() }, body: JSON.stringify({ ...f.proposal, items: [{ ...items[0], size: "l" }] }) });
-  assert.equal(changed.status, 202);
-  assert.throws(() => commerce.confirm(changed.body.operation.operation_id, f.a.session.session_id, 1, "user"), /shirt mockup/);
+  assert.equal(changed.status, 403);
+  assert.throws(() => commerce.confirm(changed.body.operation.operation_id, f.a.session.session_id, rev(changed.body.operation.operation_id), "user"), /shirt mockup/);
   const expired = commerce.readOperation(changed.body.operation.operation_id, f.a.session.session_id);
   expired.terms.expires = Date.now() - 1;
   store.put("operation", expired.operation_id, expired, f.a.session.session_id);
-  assert.throws(() => commerce.approveShirtPreviews(expired.operation_id, f.a.session.session_id, 1, expired.terms.previews.map(p => p.previewId!), "user"), /active proposal/);
+  assert.throws(() => commerce.approveShirtPreviews(expired.operation_id, f.a.session.session_id, rev(expired.operation_id), expired.terms.previews.map(p => p.previewId!), "user"), /active proposal/);
 });
 
 
@@ -2031,406 +1905,51 @@ test("success messages distinguish native, HTTP and sandbox without celebrating 
   assert.equal(orderSuccessMessage({ ...order, quote: { ...order.quote, orderingMethod: undefined, owner: "missing-session" } }, false), undefined);
 });
 
-test("0.2 discovery and issuer-only audiences; assertion lifetimes and replays", async () => {
-  const discovery = await (
-    await fetch(origin + "/.well-known/poppy.json")
-  ).json();
-  assert.equal(discovery.protocol_version, "0.2");
-  const a = await makeAgent();
-  const signed = (
-    sub: string,
-    aud: string | string[] = origin,
-    ttl = 300,
-    typ?: string,
-  ) =>
-    new SignJWT({})
-      .setProtectedHeader({
-        alg: "ES256",
-        kid: "demo",
-        ...(typ ? { typ } : {}),
-      })
-      .setIssuer(clientId)
-      .setSubject(sub)
-      .setAudience(aud)
-      .setIssuedAt()
-      .setExpirationTime(Math.floor(Date.now() / 1000) + ttl)
-      .setJti(randomUUID())
-      .sign(signing);
-  const send = async (ca: string, sa: string, proof?: string) => {
-    const r = await fetch(origin + "/oauth/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        DPoP: proof || (await a.proof("POST", origin + "/oauth/token")),
-      },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        client_id: clientId,
-        client_assertion_type:
-          "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-        client_assertion: ca,
-        assertion: sa,
-      }),
-    });
-    return { status: r.status, body: await r.json() };
-  };
-  const ca = await signed(clientId),
-    sa = await signed(randomUUID());
-  assert.equal((await send(ca, sa)).status, 200);
-  assert.equal(
-    (await send(ca, await signed(randomUUID()))).body.error,
-    "invalid_client",
-  );
-  const reused = await send(await signed(clientId), sa);
-  assert.equal(reused.status, 400);
-  assert.equal(reused.body.error, "invalid_grant");
-  for (const aud of [origin + "/oauth/token", origin + "/", [origin]]) {
-    const badClient = await send(
-      await signed(clientId, aud),
-      await signed(randomUUID()),
-    );
-    assert.equal(badClient.status, 401);
-    assert.equal(badClient.body.error, "invalid_client");
-    const badSession = await send(
-      await signed(clientId),
-      await signed(randomUUID(), aud),
-    );
-    assert.equal(badSession.status, 400);
-    assert.equal(badSession.body.error, "invalid_grant");
-  }
-  for (const ttl of [301, -30]) {
-    assert.equal(
-      (
-        await send(
-          await signed(clientId, origin, ttl),
-          await signed(randomUUID()),
-        )
-      ).body.error,
-      "invalid_client",
-    );
-    assert.equal(
-      (
-        await send(
-          await signed(clientId),
-          await signed(randomUUID(), origin, ttl),
-        )
-      ).body.error,
-      "invalid_grant",
-    );
-  }
-  assert.equal(
-    (
-      await send(
-        await signed(clientId, origin, 60, "poppy-browser+jwt"),
-        await signed(randomUUID()),
-      )
-    ).body.error,
-    "invalid_client",
-  );
-  // DPoP still signs the endpoint, never the issuer.
-  const wrongTarget = await send(
-    await signed(clientId),
-    await signed(randomUUID()),
-    await a.proof("POST", origin),
-  );
-  assert.equal(wrongTarget.status, 400);
-  assert.equal(wrongTarget.body.error, "invalid_dpop_proof");
-  const proof = await a.proof("POST", origin + "/oauth/token");
-  assert.equal(
-    (await send(await signed(clientId), await signed(randomUUID()), proof))
-      .status,
-    200,
-  );
-  const replay = await send(
-    await signed(clientId),
-    await signed(randomUUID()),
-    proof,
-  );
-  assert.equal(replay.status, 400);
-  assert.equal(replay.body.error, "invalid_dpop_proof");
-});
 
-test("DPoP header cardinality and private-key rejection, with resource challenges", async () => {
-  const a = await makeAgent();
-  const { request } = await import("node:http");
-  const rawPost = async (proofs: string[]) => {
-    const body = new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      client_id: clientId,
-      client_assertion_type:
-        "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-      client_assertion: await a.assertion(clientId),
-      assertion: await a.assertion(randomUUID()),
-    }).toString();
-    return new Promise<{ status: number; body: any }>((resolve, reject) => {
-      const req = request(
-        origin + "/oauth/token",
-        {
-          method: "POST",
-          headers: [
-            "Host",
-            "localhost:8791",
-            "Content-Type",
-            "application/x-www-form-urlencoded",
-            ...proofs.flatMap((p) => ["DPoP", p]),
-          ],
-        },
-        (res) => {
-          let text = "";
-          res.on("data", (chunk) => (text += chunk));
-          res.on("end", () =>
-            resolve({ status: res.statusCode!, body: JSON.parse(text) }),
-          );
-        },
-      );
-      req.on("error", reject);
-      req.end(body);
-    });
-  };
-  for (const proofs of [
-    [],
-    [
-      await a.proof("POST", origin + "/oauth/token"),
-      await a.proof("POST", origin + "/oauth/token"),
-    ],
-  ]) {
-    const r = await rawPost(proofs);
-    assert.equal(r.status, 400);
-    assert.equal(r.body.error, "invalid_dpop_proof");
-  }
-  const privateJwk = key.private;
-  const privateProof = await new SignJWT({
-    htm: "POST",
-    htu: origin + "/oauth/token",
-  })
-    .setProtectedHeader({ alg: "ES256", typ: "dpop+jwt", jwk: privateJwk })
-    .setIssuedAt()
-    .setJti(randomUUID())
-    .sign(signing);
-  assert.equal(
-    (await rawPost([privateProof])).body.error,
-    "invalid_dpop_proof",
-  );
-  const r = await fetch(origin + "/api/account", {
-    headers: { Authorization: `DPoP ${a.session.access_token}` },
-  });
-  assert.equal(r.status, 401);
-  assert.equal(
-    r.headers.get("www-authenticate"),
-    'DPoP error="invalid_dpop_proof"',
-  );
-  const bearer = await fetch(origin + "/api/account", {
-    headers: { Authorization: `Bearer ${a.session.access_token}` },
-  });
-  assert.equal(bearer.status, 401);
-  // RFC 3986 normalization does not collapse distinct paths or allow a query in htu.
-  assert.ok(
-    await auth.dpop(
-      await a.proof("GET", "https://EXAMPLE.com:443/%7euser"),
-      "GET",
-      "https://example.com/~user",
-    ),
-  );
-  await assert.rejects(
-    auth.dpop(
-      await a.proof("GET", "https://example.com/a?x=1"),
-      "GET",
-      "https://example.com/a",
-    ),
-    /DPoP/,
-  );
-  await assert.rejects(
-    auth.dpop(
-      await a.proof("GET", "https://example.com/a%2Fb"),
-      "GET",
-      "https://example.com/a/b",
-    ),
-    /DPoP/,
-  );
-});
 
-test("0.2 protocol error bodies, extension challenge and revocation without DPoP", async () => {
-  const a = await makeAgent();
-  const session = store.get("session", a.session.session_id);
-  store.put("session", session.id, { ...session, extensions: false });
-  const r = await fetch(origin + "/api/orders", {
-    method: "POST",
-    headers: {
-      Authorization: `DPoP ${a.session.access_token}`,
-      DPoP: await a.proof(
-        "POST",
-        origin + "/api/orders",
-        a.session.access_token,
-      ),
-      "Content-Type": "application/json",
-      "Idempotency-Key": randomUUID(),
-    },
-    body: "{}",
-  });
-  assert.equal(r.status, 403);
-  assert.equal(
-    r.headers.get("www-authenticate"),
-    'DPoP error="extension_required", extension="operations"',
-  );
-  const unknown = await a.request(
-    "/api/poppy/sign-in/unknown",
-    postJson({ code: "000000" }),
-  );
-  assert.equal(unknown.status, 404);
-  assert.equal(unknown.body.error, "sign_in_not_found");
-  const emptyToken = await fetch(origin + "/oauth/token", { method: "POST" });
-  assert.equal(emptyToken.status, 400);
-  assert.equal((await emptyToken.json()).error, "unsupported_grant_type");
-  const emptyRevoke = await fetch(origin + "/oauth/revoke", { method: "POST" });
-  assert.equal(emptyRevoke.status, 401);
-  assert.equal((await emptyRevoke.json()).error, "invalid_client");
-  const ca = await a.assertion(clientId);
-  const revoke = () =>
-    fetch(origin + "/oauth/revoke", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_assertion_type:
-          "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-        client_assertion: ca,
-        token: "unknown",
-      }),
-    });
-  assert.equal((await revoke()).status, 200);
-  assert.equal((await revoke()).status, 401);
-  oauthLimiter.resetKey("127.0.0.1");
-  for (let i = 0; i < 30; i++)
-    await fetch(origin + "/oauth/token", postJson({}));
-  const limited = await fetch(origin + "/oauth/token", postJson({}));
-  assert.equal(limited.status, 429);
-  assert.equal((await limited.json()).error, "rate_limited");
-  assert.ok(Number(limited.headers.get("retry-after")) > 0);
-});
 
-test("account proposals recover across sessions only for the same agent, user and account", async () => {
+test("account operations can be approved from any Session of the same agent, User and account, at most once", async () => {
   const f = await fixture();
-  const signed = await login(f.a);
+  const email = `${randomUUID()}@example.com`;
+  const signed = await login(f.a, email);
   f.a.session.access_token = signed.access_token;
-  const proposal = await f.a.request("/api/orders", {
-    ...postJson(f.proposal),
-    headers: {
-      "Content-Type": "application/json",
-      "Idempotency-Key": randomUUID(),
-    },
-  });
+  const proposal = await proposeVia(f.a, f.proposal);
   const op = proposal.body.operation;
   assert.equal(op.principal, undefined);
-  const path = `/api/operations/${op.operation_id}`;
-  const oldGuest = await f.a.token(); // new signed-out session for the same agent and User ID
-  const originalToken = f.a.session.access_token;
-  f.a.session.access_token = oldGuest.access_token;
-  assert.equal((await f.a.request(path)).body.error, "sign_in_required");
-  const refreshed = await oauth(f.a, {
-    grant_type: "refresh_token",
-    refresh_token: signed.refresh_token,
-  });
-  assert.equal(refreshed.status, 200);
-  assert.notEqual(refreshed.body.session_id, signed.session_id);
-  f.a.session.access_token = refreshed.body.access_token;
-  assert.equal((await f.a.request(path)).status, 200);
-  // Guests cannot recover even through the same agent and user after moving sessions.
-  assert.equal(
-    (await f.a.request(`/api/operations/${f.op.operation_id}`)).body.error,
-    "operation_not_found",
-  );
-  const other = await makeAgent();
-  const account = store.get("session", signed.session_id).accountBinding;
-  // Same account alone is insufficient: identities must match too.
-  const session = store.get("session", other.session.session_id);
-  const { signIn } = await import("../server/accounts.js");
-  const record = store.get("token", store.hash(other.session.access_token));
-  const otherSigned = signIn(
-    session,
-    account,
-    ["poppy:read", "poppy:write"],
-    record.thumb,
-  );
-  other.session.access_token = otherSigned.access_token;
-  assert.equal((await other.request(path)).body.error, "operation_not_found");
-  const recovered = store.get("session", refreshed.body.session_id);
-  assert.throws(
-    () =>
-      commerce.authorizedOperation(op.operation_id, {
-        ...recovered,
-        clientId: "https://other.example/client.json",
-        accountId: account,
-        scopes: ["poppy:read"],
-      }),
-    (e: any) => e.code === "operation_not_found",
-  );
-  assert.throws(
-    () =>
-      commerce.authorizedOperation(op.operation_id, {
-        ...recovered,
-        accountId: "other-account",
-        scopes: ["poppy:read"],
-      }),
-    (e: any) => e.code === "operation_not_found",
-  );
-  const readOnly = await oauth(f.a, {
-    grant_type: "refresh_token",
-    refresh_token: signed.refresh_token,
-    scope: "poppy:read",
-  });
+  // A new Session of the same User, signed out: a challenge for the account.
+  await f.a.token();
+  f.a.session.access_token = undefined;
+  const challenged = await approveVia(f.a, "/api/orders", f.proposal, op);
+  assert.equal(challenged.status, 401);
+  assert.equal(challenged.headers.get("www-authenticate"), 'Bearer scope="orders:write"');
+  // The same User's other Session, signed in to the account (a refreshed token): it can approve.
+  const readOnly = await oauth(f.a, { grant_type: "refresh_token", refresh_token: signed.refresh_token, scope: "orders:read" });
   f.a.session.access_token = readOnly.body.access_token;
-  assert.equal((await f.a.request(path)).status, 200);
-  assert.equal(
-    (
-      await f.a.request(
-        path + "/confirm",
-        postJson({ revision: 1, approved_by: "user" }),
-      )
-    ).body.error,
-    "insufficient_scope",
-  );
+  assert.equal((await approveVia(f.a, "/api/orders", f.proposal, op)).body.error, "insufficient_scope");
+  // A different User of the same agent, signed in to the same account, can't.
+  const other = await makeAgent();
+  other.session.access_token = (await login(other, email)).access_token;
+  const foreign = await approveVia(other, "/api/orders", f.proposal, op);
+  assert.notEqual(foreign.status, 201);
+  assert.equal(store.get("operation", op.operation_id).state, "proposed");
+  const refreshed = await oauth(f.a, { grant_type: "refresh_token", refresh_token: signed.refresh_token });
   f.a.session.access_token = refreshed.body.access_token;
-  const confirmed = await f.a.request(
-    path + "/confirm",
-    postJson({ revision: 1, approved_by: "user" }),
-  );
-  assert.equal(confirmed.status, 200);
-  f.a.session.access_token = originalToken;
-  const repeated = await f.a.request(
-    path + "/confirm",
-    postJson({ revision: 1, approved_by: "user" }),
-  );
-  assert.equal(repeated.body.orderId, confirmed.body.orderId);
-  assert.equal(
-    store.get("order", confirmed.body.orderId).owner,
-    signed.session_id,
-  );
-  const cancellable = await f.a.request("/api/orders", {
-    ...postJson(f.proposal),
-    headers: {
-      "Content-Type": "application/json",
-      "Idempotency-Key": randomUUID(),
-    },
-  });
-  f.a.session.access_token = refreshed.body.access_token;
-  assert.equal(
-    (
-      await f.a.request(
-        `/api/operations/${cancellable.body.operation.operation_id}/cancel`,
-        postJson({}),
-      )
-    ).body.state,
-    "cancelled",
-  );
-  // Disconnect immediately blocks both sessions; it does not cancel accepted work.
+  const confirmed = await approveVia(f.a, "/api/orders", f.proposal, op);
+  assert.equal(confirmed.status, 201, JSON.stringify(confirmed.body));
+  // Retried from the original Session: the same order (at most once).
+  await f.a.token();
+  f.a.session.access_token = signed.access_token;
+  const repeated = await approveVia(f.a, "/api/orders", f.proposal, op);
+  assert.equal(repeated.body.id, confirmed.body.id);
+  assert.equal(store.all("order").filter((o: any) => o.operationId === op.operation_id).length, 1);
+  assert.equal(store.get("order", confirmed.body.id).owner, signed.session_id);
+  // Guest operations stay with their Session.
+  const guest = await approveVia(f.a, "/api/orders", f.proposal, f.op);
+  assert.notEqual(guest.status, 201);
+  // Signing out doesn't cancel accepted work.
   await oauth(f.a, { token: signed.refresh_token }, "/oauth/revoke");
-  assert.equal((await f.a.request(path)).body.error, "sign_in_required");
-  f.a.session.access_token = refreshed.body.access_token;
-  assert.equal(
-    (await f.a.request(path + "/cancel", postJson({}))).body.error,
-    "sign_in_required",
-  );
-  assert.notEqual(store.get("operation", op.operation_id).state, "cancelled");
+  assert.equal((await approveVia(f.a, "/api/orders", f.proposal, op)).body.error, "invalid_token");
+  assert.equal(store.get("operation", op.operation_id).state, "succeeded");
 });
 
 test("batch upload supports native and HTTP sessions with per-file failures and private labels", async () => {

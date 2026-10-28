@@ -11,7 +11,7 @@ Discover `/.well-known/poppy.json` on that origin. Use native Poppy 0.2 with an 
 | Component | Responsibility |
 | --- | --- |
 | Worker + static assets | React site, HTTP transport, streaming private media |
-| SQLite Durable Object | Sessions, DPoP replay checks, accounts, proposals, orders, idempotency, job leases and durable outbox |
+| SQLite Durable Object | Sessions, Session JWT replay checks, accounts, proposals, orders, idempotency, job leases and durable outbox |
 | Private R2 bucket | Normalized originals, print derivatives and shirt previews; signed access through the Worker |
 | Queue + alarms + cron | Recoverable job delivery, retries and periodic reconciliation |
 | Private media container | The same Sharp pipeline as Node; no internet access; bounded image size and concurrency |
@@ -34,7 +34,7 @@ npm run check
 npm run test:cloudflare
 ```
 
-The Workers test uses a disposable local Durable Object/R2 namespace on port 8899. It checks native authentication, DPoP replay, signed media expiry and ownership, concurrent proposal/confirmation idempotency, approval enforcement, a mixed shirt/print order, simulated payment/fulfillment/shipment, captured emails, account history, renewal and revocation. It does not send real email.
+The Workers test uses a disposable local Durable Object/R2 namespace on port 8899. It checks native authentication (Session header), replay, signed media expiry and ownership, concurrent proposals and approvals (Operations v2, at most once), approval enforcement, a mixed shirt/print order, simulated payment/fulfillment/shipment, captured emails, account history, renewal and revocation. It does not send real email.
 
 For interactive development, build first and install a unique local secret in ignored `.dev.vars`:
 

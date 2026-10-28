@@ -48,7 +48,7 @@ const same = (a: SavedAddress["address"], b: SavedAddress["address"]) =>
   JSON.stringify(a) === JSON.stringify(b);
 
 export function saveAddress(session: Session, body: unknown) {
-  const accountId = requireAccount(session, "poppy:write");
+  const accountId = requireAccount(session, "addresses");
   const input = savedAddressInput.parse(body);
   return db.transaction(() => {
     const existing = savedAddresses(accountId);
@@ -84,7 +84,7 @@ function setDefault(accountId: string, existing: SavedAddress[], addressId: stri
       put("account-address", a.id, { ...a, default: false }, accountId);
 }
 export function makeDefault(session: Session, addressId: string) {
-  const accountId = requireAccount(session, "poppy:write");
+  const accountId = requireAccount(session, "addresses");
   return db.transaction(() => {
     const target = owned(accountId, addressId);
     setDefault(accountId, savedAddresses(accountId), target.id);
@@ -94,7 +94,7 @@ export function makeDefault(session: Session, addressId: string) {
   })();
 }
 export function deleteAddress(session: Session, addressId: string) {
-  const accountId = requireAccount(session, "poppy:write");
+  const accountId = requireAccount(session, "addresses");
   db.transaction(() => {
     const target = owned(accountId, addressId);
     remove("account-address", target.id);
@@ -115,16 +115,12 @@ export function resolveAccountDefaults(body: unknown, session: Session) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return body;
   const b = { ...(body as Record<string, unknown>) };
   if (!session.accountId) {
-    if ("addressId" in b)
-      throw new HttpError(
-        403,
-        "sign_in_required",
-        "Saved addresses need a signed-in session with poppy:write.",
-        { scope: "poppy:write" },
-      );
+    if ("addressId" in b) requireAccount(session, ["orders:write", "addresses"]);
     return body;
   }
-  const accountId = requireAccount(session, "poppy:write");
+  const accountId = requireAccount(session, "orders:write");
+  // Using a saved address reads the user's address book.
+  if ("addressId" in b || b.address === undefined) requireAccount(session, "addresses");
   if ("addressId" in b) {
     if (b.address !== undefined)
       throw new HttpError(400, "invalid_request", "Send address or addressId, not both.");

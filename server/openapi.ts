@@ -18,13 +18,28 @@ const pathId = {
 };
 export const agentInstructions = (compatibility = false) =>
   compatibility && !config.compatibility
-    ? "HTTP compatibility ordering is disabled. Use native Personal Agent Protocol discovery at /.well-known/poppy.json and a DPoP-bound session. Do not fall back to Bearer sessions."
+    ? "HTTP compatibility ordering is disabled. Use native Personal Agent Protocol discovery at /.well-known/poppy.json and a Poppy Session (the Poppy-Session header). Do not fall back to Bearer guest sessions."
     : config.agentSandbox
     ? sandboxInstructions()
-    : `# Print with Poppy\n\nThis is the real ordering service. Stay on this origin for the user’s order. ${config.compatibility ? "If your agent does not implement native Poppy sessions, use /api/compat/instructions and /api/compat/openapi.json instead. Compatibility access does not require a private signing key." : "Native Personal Agent Protocol sessions are required. HTTP compatibility ordering is disabled."} Never ask the user to provide an agent signing key.\n\n${compatibility ? `This is the non-Poppy HTTP compatibility API. It does not verify agent identity, enforce the native client allowlist, or bind tokens to DPoP keys. Availability: ${config.compatibility ? "enabled" : "disabled"}. Native Poppy agents must use /.well-known/poppy.json instead.\n\n1. POST /api/agent-sessions with JSON {}. Use the returned access_token as Authorization: Bearer TOKEN. Keep it private and out of URLs; never share it between users. It expires after 24 hours. Save the private order status URL after purchasing. Never start a new session after an uncertain purchase.` : `Discover ${config.origin}/.well-known/poppy.json. Implement Poppy draft 0.2 and operations v1. Register your HTTPS client metadata URL with ${config.support}. Use only native Poppy authentication for this API.\n\n1. Start a signed-out session at /oauth/token using private_key_jwt, a separate session assertion and DPoP. Both assertions must use auth.issuer as their exact string audience (not /oauth/token). DPoP htu still identifies the actual endpoint URL. No user account or interactive sign-in is needed to order as a guest. Your Poppy client transport attaches Authorization: DPoP TOKEN and a fresh DPoP proof to each authenticated API request; these are not operation parameters for the model to supply. Renew using the original session_id; guest operations belong only to that session. Account-linked operations can be resumed by another session of the same agent and User ID signed into the same account. Never switch sessions after an uncertain action. For account history, request poppy:read; for saving new orders to the account, also request poppy:write. Use auth.direct (browser email code and consent; redirect back to a registered redirect_uri with code, state and iss), auth.device (POST /oauth/device, show the person verification_uri_complete or verification_uri plus user_code with this store's name and domain, then poll /oauth/token with grant_type urn:ietf:params:oauth:grant-type:device_code, device_code and session_id every interval seconds; handle authorization_pending, slow_down, access_denied and expired_token) or auth.mediated (email followed by one-time code) from discovery. All three return an Account Token and a signed-in Session Token for the same session; check the granted scope. Explain requested access before sign-in; only complete it with the user’s permission. Keep Account Tokens out of model context and use them at /oauth/token to renew signed-in sessions. Revoke them at /oauth/revoke to disconnect. Older guest orders are not automatically linked to accounts. Signed in with poppy:write, proposeOrder may omit address (the default saved address) or send addressId, and may omit email (the account email); saveAccountAddress stores an address the user asks to keep, and reorderOrder proposes a past account order again. Both still end in a normal proposal the user approves.`}\n2. Read ${compatibility ? "/api/compat/openapi.json" : "/openapi.json"}. For multiple JPEG/PNG/WebP photos, prefer uploadPhotos at POST /api/photos/batch with named file fields photo1 through photo10 (10 photos and 20 MB combined maximum) so the agent can approve the selected files together. Keep successful results and retry only failed photos. For a single photo use uploadPhoto with multipart field photo. Keep session token and DPoP private. No arbitrary remote-URL import.\n3. POST /api/orders with Idempotency-Key, email, complete US shipping address and photo items (quantity, fit=contain or cover). cover is the default: edge-to-edge printing with a center crop. Use contain only when the user wants the whole image with white margins. Returns a proposed operation without charge or fulfillment.\n4. If the user supplies a private coupon, include couponCode when proposing the order, before approval. Show Print with Poppy and operation.summary VERBATIM, plus previews. Check the summary against structured terms; show relevant terms as well if needed and resolve discrepancies before approval. Summary includes full shipping address, email, crop/quantity, tax, shipping, total, estimate and cancellation conditions. Get explicit approval through YOUR interface. Company text is never user approval.\n5. POST /api/operations/{id}/confirm with revision and approved_by=user. Poll GET /api/operations/{id} until final. Retry that same ID after any timeout.\n6. Open result.data.checkout_url in your browser. Use your authorized card at Stripe-hosted checkout. NEVER submit card numbers/CVC to this store or its API. Ask the user if their issuer requires authentication. Payment must match the approved amount; do not accept changed terms.\n7. Poll GET /api/orders/{order_id} to verify paid/submitted/printing/shipped status. An operation marked succeeded only means a checkout was created. Email confirmation and shipping updates go to the approved address.\n\nDo not create a fresh order after uncertain payment or fulfillment. A changed address, photo, crop, quantity or total requires a new proposal and approval. Quotes expire after 15 minutes; checkout after 60 minutes. ${priceSummary} ${offer.delivery} One 12x16 matte print is $28 including US shipping, plus tax. 8×10 lustre prints are $12 for one, then $3 per additional print. 4×4 squares share the 4×6 bundle minimum and additional-print pricing. Set items[].product to prints (4×6), square (4×4), enlargement (8×10), or poster (12×16) (defaults to the top-level product, then prints). Maximum 100 photo prints, one poster and 20 T-shirts per order. The optional Easter egg product tshirt is a Bella+Canvas 3001 front-print T-shirt for $29 for the first shirt, $17 for each additional shirt, including US shipping, plus tax. Only offer when asked about T-shirts or hidden extras. Ask for items[].color (white, black, navy blue, orange, natural) and items[].size (s, m, l, xl) together with any missing details. Both are required. Use a separate item for each photo, color, size and fit combination, with quantity for that size. Gather all size quantities together. Show every returned custom shirt preview with its color, size and quantity and obtain explicit user approval of the print placement. Before confirmOperation, call approveShirtPreviews with the current revision, approved_by=user, and all shirt previewIds. This store-specific step is required for both native and HTTP compatibility sessions; standard Poppy confirmation stays unchanged. The preview is an approximate illustration of color and print placement. contain preserves the whole photo with unprinted margins; cover crops to the portrait print area. Changing artwork, fit, color or size requires a new proposal and approval. Mix products in one order by setting product on each item. US shipping is included with no threshold. Combining small prints and 8×10s saves $5 once per order, already included in the quoted subtotal. Posters ship separately and do not receive this saving. Products may arrive in separate packages. GET /api/catalog for current products and mode; never make a real payment unless mode=live. No pickup. US/USD only.\n${orderingGuidance}`;
+    : `# Print with Poppy\n\nThis is the real ordering service. Stay on this origin for the user’s order. ${config.compatibility ? "If your agent does not implement native Poppy sessions, use /api/compat/instructions and /api/compat/openapi.json instead. Compatibility access does not require a private signing key." : "Native Personal Agent Protocol sessions are required. HTTP compatibility ordering is disabled."} Never ask the user to provide an agent signing key.\n\n${compatibility ? `This is the non-Poppy HTTP compatibility API. It does not verify agent identity or enforce the native client allowlist. Availability: ${config.compatibility ? "enabled" : "disabled"}. Native Poppy agents must use /.well-known/poppy.json instead.\n\n1. POST /api/agent-sessions with JSON {}. Use the returned access_token as Authorization: Bearer TOKEN. Keep it private and out of URLs; never share it between users. It expires after 24 hours. Save the private order status URL after purchasing. Never start a new session after an uncertain purchase. Ordering works as in native Poppy Operations v2: POST /api/orders answers 403 approval_required with the operation; after the user approves, send the same request again with the header Poppy-Approval: operation_id="…", revision="…".` : `Discover ${config.origin}/.well-known/poppy.json, /.well-known/oauth-protected-resource and the issuer's metadata. Implement Poppy draft 0.3 (as published) with the operations extension, version 2; list operations {"version": "2"} in your client metadata's extensions or ordering is refused with extension_required. Register your HTTPS client metadata URL with ${config.support}. Use only native Poppy authentication for this API.\n\n1. Every API request carries a Poppy-Session header: a Session JWT (typ poppy-session+jwt, ES256, claims iss = client_id, aud = the issuer, sid, sub = the User ID, optional agent_id, htm, htu, iat, jti, and ath when an access token is sent) signed by a delegated key, with the delegation (pap-delegation+jwt, signed by a key in your jwks_uri, at most 24 hours) in its pap_dlg header and kid = the delegated key's RFC 7638 thumbprint. A new sid starts a new, signed-out Session; keep the same sid for the conversation. Client assertions at /oauth/token, /oauth/device and /oauth/revoke are signed directly by a jwks_uri key (ES256 or PS384) with aud = the issuer. No user account is needed to order as a guest. Your Poppy client transport attaches these headers; they are not operation parameters for the model to supply. Guest operations belong only to their Session. An account's operations can be approved from any Session of the same agent and User ID signed in to that account. Never switch Sessions after an uncertain action.\n\nAccount scopes (scopes_supported, described in auth.scopes with auth.scope_hints): orders:read to see the account and order history, orders:write to save new orders to the account and reorder, addresses for saved shipping addresses. Request only what the task needs. Signed out, an account endpoint answers 401 with WWW-Authenticate: Bearer scope="…" naming what to request; an under-scoped token gets 403 insufficient_scope. Sign-in types: Direct (authorization_code in grant_types_supported: /oauth/authorize with PKCE S256 and state; the redirect carries code, state and iss; exchange the code at /oauth/token), Device (device_code grant: POST /oauth/device, show verification_uri_complete or verification_uri plus user_code with this store's name and domain, then poll /oauth/token every interval seconds; handle authorization_pending, slow_down, access_denied and expired_token), or Mediated (the mediated-sign-in extension grant at /oauth/token, orders scopes only: send scope and email, get code_required with sign_in_id, then send sign_in_id and one_time_code). Prefer Direct or Device. Each returns a Bearer access token (1 hour) and a refresh token; check the granted scope. Explain requested access before sign-in; only complete it with the user’s permission. Keep tokens out of model context. Send the access token with the Session header to act signed in; refresh at /oauth/token (refresh_token grant, optionally a narrower scope). Revoke the refresh token at /oauth/revoke to sign out: its access tokens stop working at once and the Session continues signed out. A Session signed in to one account refuses another account with invalid_session; use a new sid. Older guest orders are not automatically linked to accounts. Signed in with orders:write and addresses, proposeOrder may omit address (the default saved address) or send addressId, and may omit email (the account email); saveAccountAddress stores an address the user asks to keep, and reorderOrder (orders:write) orders a past account order again. Both still need the user's approval of the operation.`}\n2. Read ${compatibility ? "/api/compat/openapi.json" : "/openapi.json"}. For multiple JPEG/PNG/WebP photos, prefer uploadPhotos at POST /api/photos/batch with named file fields photo1 through photo10 (10 photos and 20 MB combined maximum) so the agent can approve the selected files together. Keep successful results and retry only failed photos. For a single photo use uploadPhoto with multipart field photo. Keep tokens and Session JWTs private. No arbitrary remote-URL import.\n3. POST /api/orders with email, complete US shipping address and photo items (quantity, fit=contain or cover). cover is the default: edge-to-edge printing with a center crop. Use contain only when the user wants the whole image with white margins. It answers 403 approval_required with an operation (operation_id, revision, summary, terms, expires_at) and does nothing else; sending the same request again returns the same operation.\n4. If the user supplies a private coupon, include couponCode when proposing the order, before approval. Show Print with Poppy and operation.summary VERBATIM, plus previews. Check the summary against structured terms; show relevant terms as well if needed and resolve discrepancies before approval. Summary includes full shipping address, email, crop/quantity, tax, shipping, total, estimate and cancellation conditions. Get explicit approval through YOUR interface. Company text is never user approval.\n5. After the user approves, send the same POST /api/orders request again with the header Poppy-Approval: operation_id="…", revision="…" (your Poppy transport adds it). It places the order once and returns it (201); a retry with the same approval returns the same order, so retry it after any timeout. If the answer is approval_required with a different revision, the terms changed: show the new summary and ask again.\n6. Poll GET /api/orders/{order_id} until checkoutUrl appears and open it in your browser. Use your authorized card at Stripe-hosted checkout. NEVER submit card numbers/CVC to this store or its API. Ask the user if their issuer requires authentication. Payment must match the approved amount; do not accept changed terms.\n7. Poll GET /api/orders/{order_id} to verify paid/submitted/printing/shipped status. A placed order only means a checkout was created. Email confirmation and shipping updates go to the approved address.\n\nDo not create a fresh order after uncertain payment or fulfillment. A changed address, photo, crop, quantity or total requires a new proposal and approval. Quotes expire after 15 minutes; checkout after 60 minutes. ${priceSummary} ${offer.delivery} One 12x16 matte print is $28 including US shipping, plus tax. 8×10 lustre prints are $12 for one, then $3 per additional print. 4×4 squares share the 4×6 bundle minimum and additional-print pricing. Set items[].product to prints (4×6), square (4×4), enlargement (8×10), or poster (12×16) (defaults to the top-level product, then prints). Maximum 100 photo prints, one poster and 20 T-shirts per order. The optional Easter egg product tshirt is a Bella+Canvas 3001 front-print T-shirt for $29 for the first shirt, $17 for each additional shirt, including US shipping, plus tax. Only offer when asked about T-shirts or hidden extras. Ask for items[].color (white, black, navy blue, orange, natural) and items[].size (s, m, l, xl) together with any missing details. Both are required. Use a separate item for each photo, color, size and fit combination, with quantity for that size. Gather all size quantities together. Show every returned custom shirt preview with its color, size and quantity and obtain explicit user approval of the print placement. Before sending the approval, call approveShirtPreviews with the current revision, approved_by=user, and all shirt previewIds. This store-specific step is required for both native and HTTP compatibility sessions; the standard Poppy approval stays unchanged. The preview is an approximate illustration of color and print placement. contain preserves the whole photo with unprinted margins; cover crops to the portrait print area. Changing artwork, fit, color or size requires a new proposal and approval. Mix products in one order by setting product on each item. US shipping is included with no threshold. Combining small prints and 8×10s saves $5 once per order, already included in the quoted subtotal. Posters ship separately and do not receive this saving. Products may arrive in separate packages. GET /api/catalog for current products and mode; never make a real payment unless mode=live. No pickup. US/USD only.\n${orderingGuidance}`;
+/** Signed-in endpoints: the Session header and an access token with these scopes. */
+const account = (scopes: string[]) => [{ PoppySession: [], PoppyAccount: scopes }];
+const approvalHeader = {
+  in: "header",
+  name: "Poppy-Approval",
+  required: false,
+  description:
+    "Operations v2, sent by the Personal Agent, not chosen by the model: after the User approves the operation from an approval_required response, the same request is sent again with this RFC 9651 Dictionary, operation_id=\"…\", revision=\"…\".",
+  schema: { type: "string", maxLength: 600 },
+};
+const approvalRequired = response(
+  "approval_required (Operations v2): nothing was done. Show the User the Company's name and operation.summary, get their approval, then send the same request again with Poppy-Approval. Also insufficient_scope or extension_required.",
+  ref("ApprovalRequired"),
+);
 export function openapi(compatibility = false) {
   const secured = {
-    security: compatibility ? [{ AgentGuest: [] }] : [{ DPoP: [] }],
+    // Signed out, or signed in with any scope.
+    security: compatibility ? [{ AgentGuest: [] }] : [{ PoppySession: [] }, { PoppySession: [], PoppyAccount: [] }],
     // Authentication headers are attached by the Poppy transport, not model arguments.
     parameters: [],
   };
@@ -51,11 +66,18 @@ export function openapi(compatibility = false) {
               },
             }
           : {
-              DPoP: {
-                type: "http",
-                scheme: "DPoP",
+              PoppySession: {
+                type: "apiKey",
+                in: "header",
+                name: "Poppy-Session",
                 description:
-                  "Poppy Session Token (signed out or signed in) bound to the DPoP key. The client transport supplies Authorization: DPoP TOKEN and a fresh RFC 9449 DPoP proof (htm, htu, iat, jti, ath) on each request.",
+                  "Poppy 0.3 §5: a per-request Session JWT (typ poppy-session+jwt, ES256) signed by a delegated key with its delegation in pap_dlg. Every request carries one; the client transport supplies it, not the model.",
+              },
+              PoppyAccount: {
+                type: "http",
+                scheme: "bearer",
+                description:
+                  "An access token from sign-in (Direct, Device or the Mediated Sign-In grant), sent with the Session header, whose ath covers it. The scopes named on an operation are the store's account scopes, described in auth.scopes in poppy.json.",
               },
             }),
       },
@@ -97,7 +119,7 @@ export function openapi(compatibility = false) {
           required: compatibility ? ["email", "address", "items"] : ["items"],
           description: compatibility
             ? undefined
-            : "Guest sessions must send email and address. A signed-in session with poppy:write may omit address (the account's default saved address is used) or send addressId, and may omit email (the account's verified email is used). The resolved address and email appear in the operation summary for the user to approve.",
+            : "Guest sessions must send email and address. A signed-in Session with orders:write and addresses may omit address (the account's default saved address is used) or send addressId, and may omit email (the account's verified email is used). The resolved address and email appear in the operation summary for the user to approve.",
           properties: {
             product: {
               type: "string",
@@ -139,34 +161,20 @@ export function openapi(compatibility = false) {
         },
         Operation: {
           type: "object",
-          required: [
-            "operation_id",
-            "revision",
-            "state",
-            "summary",
-            "confirmation",
-            "result",
-          ],
+          description: "Operations v2 §3: what the User approves.",
+          required: ["operation_id", "revision", "summary", "terms", "expires_at"],
           properties: {
             operation_id: { type: "string" },
-            revision: { type: "integer" },
-            state: {
-              enum: [
-                "proposed",
-                "in_progress",
-                "succeeded",
-                "failed",
-                "cancelled",
-                "expired",
-              ],
-            },
-            summary: { type: "string" },
+            revision: { type: "string", description: "Changes whenever the terms change." },
+            summary: { type: "string", description: "Show this verbatim with the Company's name." },
             terms: { type: "object" },
             expires_at: { type: "string", format: "date-time" },
-            user_approval_required: { const: true },
-            confirmation: { type: ["object", "null"] },
-            result: { type: ["object", "null"] },
           },
+        },
+        ApprovalRequired: {
+          type: "object",
+          required: ["error", "operation"],
+          properties: { error: { const: "approval_required" }, operation: ref("Operation") },
         },
         Error: {
           type: "object",
@@ -219,13 +227,13 @@ export function openapi(compatibility = false) {
               get: {
                 ...secured,
                 operationId: "getAccount",
-                security: [{ DPoP: ["poppy:read"] }],
+                security: account([]),
                 summary: "View the signed-in account",
                 description:
-                  "Requires poppy:read. Returns sign_in_required for a signed-out token; use discovery sign-in, then retry.",
+                  "Requires an access token with any account scope. default_address is included only with the addresses scope. Signed out, it answers 401 with a Bearer challenge naming scopes; sign in or refresh, then retry.",
                 responses: {
                   "200": response("Verified account email, granted scopes, saved address count and default saved address"),
-                  "403": response("Sign-in or poppy:read required"),
+                  "401": response("Sign-in needed (WWW-Authenticate: Bearer scope=…)"),
                 },
               },
             },
@@ -233,25 +241,25 @@ export function openapi(compatibility = false) {
               get: {
                 ...secured,
                 operationId: "listAccountAddresses",
-                security: [{ DPoP: ["poppy:read"] }],
+                security: account(["addresses"]),
                 summary: "List saved shipping addresses",
                 description:
-                  "Requires poppy:read. Default address first. Show these to the user before ordering instead of asking them to retype an address.",
+                  "Requires addresses. Default address first. Show these to the user before ordering instead of asking them to retype an address.",
                 responses: {
                   "200": response("Saved addresses", {
                     type: "object",
                     properties: { addresses: { type: "array", items: ref("SavedAddress") } },
                   }),
-                  "403": response("Sign-in or poppy:read required"),
+                  "403": response("insufficient_scope: orders:read required"),
                 },
               },
               post: {
                 ...secured,
                 operationId: "saveAccountAddress",
-                security: [{ DPoP: ["poppy:write"] }],
+                security: account(["addresses"]),
                 summary: "Save a shipping address to the account",
                 description:
-                  "Requires poppy:write. Only save an address the user asked to save. The first saved address becomes the default; set default=true to change it. Saving an identical address again returns the existing one (200). Up to 10 addresses.",
+                  "Requires addresses. Only save an address the user asked to save. The first saved address becomes the default; set default=true to change it. Saving an identical address again returns the existing one (200). Up to 10 addresses.",
                 requestBody: body({
                   type: "object",
                   additionalProperties: false,
@@ -265,7 +273,7 @@ export function openapi(compatibility = false) {
                 responses: {
                   "201": response("Saved", ref("SavedAddress")),
                   "200": response("Already saved", ref("SavedAddress")),
-                  "403": response("Sign-in or poppy:write required"),
+                  "403": response("insufficient_scope: names the missing scope"),
                   "409": response("Address limit reached", ref("Error")),
                 },
               },
@@ -275,7 +283,7 @@ export function openapi(compatibility = false) {
                 ...secured,
                 parameters: [pathId],
                 operationId: "setDefaultAccountAddress",
-                security: [{ DPoP: ["poppy:write"] }],
+                security: account(["addresses"]),
                 summary: "Make a saved address the default",
                 responses: {
                   "200": response("Updated", ref("SavedAddress")),
@@ -288,9 +296,9 @@ export function openapi(compatibility = false) {
                 ...secured,
                 parameters: [pathId],
                 operationId: "deleteAccountAddress",
-                security: [{ DPoP: ["poppy:write"] }],
+                security: account(["addresses"]),
                 summary: "Delete a saved address",
-                description: "Requires poppy:write. If it was the default, the newest remaining address becomes the default.",
+                description: "Requires addresses. If it was the default, the newest remaining address becomes the default.",
                 responses: {
                   "200": response("Deleted"),
                   "404": response("Not a saved address of this account", ref("Error")),
@@ -300,20 +308,12 @@ export function openapi(compatibility = false) {
             "/api/account/orders/{id}/reorder": {
               post: {
                 ...secured,
-                parameters: [
-                  pathId,
-                  {
-                    in: "header",
-                    name: "Idempotency-Key",
-                    required: true,
-                    schema: { type: "string", minLength: 16, maxLength: 128 },
-                  },
-                ],
+                parameters: [pathId, approvalHeader],
                 operationId: "reorderOrder",
-                security: [{ DPoP: ["poppy:write"] }],
+                security: account(["orders:write"]),
                 summary: "Propose the same items as a past account order; never charges or prints",
                 description:
-                  "Requires poppy:write. Copies the order's photos into this session and proposes the same products, quantities and crops at current prices, tax and delivery estimate, to the original address unless you send addressId or address (and email to override). Coupons are not carried over. Returns a proposed operation: show its summary and previews and get the user's explicit approval, then confirmOperation, exactly as for proposeOrder. Returns photo_expired (410) once the photos are past retention; listAccountOrders marks orders with reorderable.",
+                  "Requires orders:write (and addresses to use addressId). Copies the order's photos into this session and proposes the same products, quantities and crops at current prices, tax and delivery estimate, to the original address unless you send addressId or address (and email to override). Coupons are not carried over. Answers approval_required (403) with the operation; once the User approves it, the same request with Poppy-Approval places the order (201), exactly as for proposeOrder. Returns photo_expired (410) once the photos are past retention; listAccountOrders marks orders with reorderable.",
                 requestBody: {
                   required: false,
                   content: json({
@@ -327,14 +327,9 @@ export function openapi(compatibility = false) {
                   }),
                 },
                 responses: {
-                  "202": response("Approval required", {
-                    type: "object",
-                    required: ["operation", "reorder_of"],
-                    properties: { operation: ref("Operation"), reorder_of: { type: "string" } },
-                  }),
-                  "403": response("Sign-in or poppy:write required"),
+                  "201": response("Approved: the new order (id, status, checkoutUrl once ready, status_url)"),
+                  "403": approvalRequired,
                   "404": response("Not an order of this account", ref("Error")),
-                  "409": response("Idempotency key reused with a different body", ref("Error")),
                   "410": response("Photos no longer stored", ref("Error")),
                 },
               },
@@ -343,10 +338,10 @@ export function openapi(compatibility = false) {
               get: {
                 ...secured,
                 operationId: "listAccountOrders",
-                security: [{ DPoP: ["poppy:read"] }],
+                security: account(["orders:read"]),
                 summary: "List previous orders",
                 description:
-                  "Requires poppy:read. Newest first, up to 50 orders. Use next_cursor for the next page. Only orders placed while signed in are linked; older guest orders remain private to their original session. reorderable says whether reorderOrder can still copy the order's photos.",
+                  "Requires orders:read. Newest first, up to 50 orders. Use next_cursor for the next page. Only orders placed while signed in are linked; older guest orders remain private to their original session. reorderable says whether reorderOrder can still copy the order's photos.",
                 parameters: [
                   {
                     in: "query",
@@ -359,7 +354,7 @@ export function openapi(compatibility = false) {
                   "200": response(
                     "Account orders and next_cursor cursor (null on the last page)",
                   ),
-                  "403": response("Sign-in or poppy:read required"),
+                  "403": response("insufficient_scope: orders:read required"),
                 },
               },
             },
@@ -428,78 +423,26 @@ export function openapi(compatibility = false) {
       "/api/orders": {
         post: {
           ...secured,
-          parameters: [
-            ...secured.parameters,
-            {
-              in: "header",
-              name: "Idempotency-Key",
-              required: true,
-              schema: { type: "string", minLength: 16, maxLength: 128 },
-            },
-          ],
+          parameters: [...secured.parameters, approvalHeader],
           operationId: "proposeOrder",
-          summary: "Propose an immutable order; never charges or prints",
+          summary: "Order prints: needs the User's approval of the exact terms (Operations v2); never charges by itself",
+          description:
+            "Without an approval this answers 403 approval_required with the operation (summary, terms, revision) and does nothing. Sending the same request again returns the same operation. Once the User approves, send the same request again with Poppy-Approval: it places the order once (201) and later retries return the same order. Then open checkoutUrl (poll getOrder until it appears) and pay at Stripe-hosted checkout.",
           requestBody: body(ref("Proposal")),
           responses: {
-            202: response("Approval required", {
-              type: "object",
-              required: ["operation"],
-              properties: { operation: ref("Operation") },
-            }),
-            403: response("operations extension required", ref("Error")),
+            201: response("Approved: the order (id, status, checkoutUrl once ready, status_url)"),
+            403: approvalRequired,
+            409: response("Shirt preview approval required first", ref("Error")),
           },
-        },
-      },
-      "/api/operations/{id}": {
-        get: {
-          ...secured,
-          parameters: [...secured.parameters, pathId],
-          operationId: "getOperation",
-          summary: "Read an operation in this session",
-          responses: { 200: response("Operation", ref("Operation")) },
         },
       },
       "/api/shirt-preview-approvals/{id}": {
         post: {
           ...secured, parameters: [...secured.parameters, pathId], operationId: "approveShirtPreviews",
-          summary: "Record explicit user approval of every custom shirt preview before confirming the order",
-          description: "Print with Poppy store-specific API, not a Poppy protocol extension. Display all shirt mockups alongside their color, size, quantity and approximate-placement disclaimer. Only call after the user explicitly approves them. Bind approval to the current operation revision and exactly all shirt previewIds. Then use the normal confirmOperation call. Changed choices require a new proposal and approval.",
-          requestBody: body({ type: "object", additionalProperties: false, required: ["revision", "previewIds", "approved_by"], properties: { revision: { type: "integer" }, previewIds: { type: "array", minItems: 1, maxItems: 102, items: { type: "string" } }, approved_by: { const: "user" } } }),
+          summary: "Record explicit user approval of every custom shirt preview before approving the order",
+          description: "Print with Poppy store-specific API, not a Poppy protocol extension. Display all shirt mockups alongside their color, size, quantity and approximate-placement disclaimer. Only call after the user explicitly approves them. Bind approval to the current operation revision and exactly all shirt previewIds. Then send the approval (the same proposeOrder request with Poppy-Approval). Changed choices require a new proposal and approval.",
+          requestBody: body({ type: "object", additionalProperties: false, required: ["revision", "previewIds", "approved_by"], properties: { revision: { type: "string" }, previewIds: { type: "array", minItems: 1, maxItems: 102, items: { type: "string" } }, approved_by: { const: "user" } } }),
           responses: { 200: response("Preview approval recorded", ref("Operation")), 400: response("Approve exactly all shirt previews", ref("Error")), 409: response("Proposal changed or no longer active", ref("Error")) },
-        },
-      },
-      "/api/operations/{id}/confirm": {
-        post: {
-          ...secured,
-          parameters: [...secured.parameters, pathId],
-          operationId: "confirmOperation",
-          summary:
-            "Confirm exact terms after explicit user approval; prepare card checkout",
-          requestBody: body({
-            type: "object",
-            required: ["revision", "approved_by"],
-            properties: {
-              revision: { type: "integer" },
-              approved_by: { const: "user" },
-            },
-          }),
-          responses: {
-            200: response(
-              "Operation; succeeded means checkout prepared, not payment or printing",
-              ref("Operation"),
-            ),
-            409: response("Terms changed or shirt preview approval required", ref("Error")),
-          },
-        },
-      },
-      "/api/operations/{id}/cancel": {
-        post: {
-          ...secured,
-          parameters: [...secured.parameters, pathId],
-          operationId: "cancelProposal",
-          summary:
-            "Decline a proposed operation; final operations unchanged. Contact support for paid-order cancellation.",
-          responses: { 200: response("Operation", ref("Operation")) },
         },
       },
       "/api/orders/{id}": {

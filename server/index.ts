@@ -9,6 +9,7 @@ import fs from "node:fs";
 import { ZodError } from "zod";
 import { config } from "./config.js";
 import { get, HttpError } from "./store.js";
+import { errorResponse } from "./http-errors.js";
 import { paid } from "./commerce.js";
 import { stripe, stripeCheckoutComplete } from "./providers.js";
 import { tick, housekeeping } from "./worker.js";
@@ -37,21 +38,15 @@ export const limiter = rateLimit({
   limit: 180,
   standardHeaders: "draft-8",
   legacyHeaders: false,
-  message: {
-    error: "rate_limited",
-    error_description:
-      "Too many requests. Retry after the Retry-After interval.",
-  },
+  // §5.6: a plain 429 with Retry-After.
+  message: { message: "Too many requests. Retry after the Retry-After interval." },
 });
 app.use("/api", limiter);
 export const oauthLimiter = rateLimit({
   windowMs: 60000,
   limit: 30,
-  message: {
-    error: "rate_limited",
-    error_description:
-      "Too many requests. Retry after the Retry-After interval.",
-  },
+  // §5.6: a plain 429 with Retry-After.
+  message: { message: "Too many requests. Retry after the Retry-After interval." },
 });
 app.use("/oauth", oauthLimiter);
 app.use("/device", oauthLimiter);
@@ -170,25 +165,8 @@ app.use(
       return;
     }
     if (e instanceof HttpError) {
-      if (
-        e.status === 401 ||
-        [
-          "sign_in_required",
-          "insufficient_scope",
-          "extension_required",
-        ].includes(e.code)
-      )
-        res.set(
-          "WWW-Authenticate",
-          `DPoP error="${e.code}"${e.extra.scope ? `, scope="${e.extra.scope}"` : ""}${e.extra.extension ? `, extension="${e.extra.extension}"` : ""}`,
-        );
-      if (e.status === 429) res.set("Retry-After", "3600");
-      res.status(e.status).json({
-        error: e.code,
-        error_description: e.message,
-        message: e.message,
-        ...e.extra,
-      });
+      const { status, headers, body } = errorResponse(e);
+      res.set(headers).status(status).json(body);
       return;
     }
     console.error(

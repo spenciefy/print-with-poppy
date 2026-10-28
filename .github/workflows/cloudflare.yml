@@ -78,7 +78,8 @@ jobs:
             assert(response.ok, `${path}: HTTP ${response.status}`);
             if (path.endsWith('poppy.json')) {
               const manifest = await response.json();
-              assert.equal(manifest.protocol_version, '0.2');
+              assert.equal(manifest.protocol_version, '0.3');
+              assert.equal(manifest.extensions?.operations?.version, '2');
             }
           }
           const response = await fetch(origin + '/api/config');

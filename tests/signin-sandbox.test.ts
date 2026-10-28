@@ -36,9 +36,18 @@ const h = await signInHarness(origin, store);
 
 test("sandbox advertises device and mediated (not direct); device sign-in completes with the captured-code helper", async () => {
   const d = await (await fetch(origin + "/.well-known/poppy.json")).json();
+  // 0.3: the sandbox offers Device (device_code grant) and Mediated, not Direct.
+  const m = await (await fetch(origin + "/.well-known/oauth-authorization-server")).json();
+  assert.equal(d.protocol_version, "0.3");
   assert.equal(d.auth.direct, undefined);
-  assert.deepEqual(d.auth.device.scopes, ["poppy:read", "poppy:write"]);
-  assert.ok(d.auth.mediated);
+  assert.ok(m.grant_types_supported.includes("urn:ietf:params:oauth:grant-type:device_code"));
+  assert.ok(!m.grant_types_supported.includes("authorization_code"));
+  assert.equal(m.authorization_endpoint, undefined);
+  assert.equal((await fetch(origin + "/oauth/authorize?client_id=x")).status, 404);
+  assert.equal(d.auth.mediated, undefined);
+  assert.equal(d.extensions["mediated-sign-in"].version, "1");
+  assert.ok(m.grant_types_supported.includes(h.mediatedGrant));
+  assert.equal(d.extensions.operations.version, "2");
   const openapi = await (await fetch(origin + "/openapi.json")).json();
   assert.ok(openapi.paths["/api/sandbox/device-sign-in/email"]);
   assert.ok(openapi.paths["/api/sandbox/orders/{id}/pay"]);
@@ -66,12 +75,20 @@ test("sandbox advertises device and mediated (not direct); device sign-in comple
   assert.equal(h.code(emailed.html), otp);
   await b.post("/device/verify", { code: otp });
   const form = new URLSearchParams({ decision: "approve" });
-  form.append("scopes", "poppy:read");
-  form.append("scopes", "poppy:write");
+  form.append("scopes", "orders:read");
+  form.append("scopes", "orders:write");
+  form.append("scopes", "addresses");
   const done = await b.post("/device/approve", form);
   assert.match(done.html, /You’re connected/);
   const tokens = await a.poll(started.body.device_code);
   assert.equal(tokens.status, 200, JSON.stringify(tokens.body));
-  assert.equal(tokens.body.signed_in, true);
-  assert.equal(tokens.body.scope, "poppy:read poppy:write");
+  assert.ok(tokens.body.refresh_token);
+  assert.equal(tokens.body.scope, "orders:read orders:write addresses");
+  a.session.access_token = tokens.body.access_token;
+  assert.equal((await a.request("/api/account")).status, 200);
+  // Mediated Sign-In with the sandbox code reader, in another Session of the same agent.
+  const c = await h.makeAgent();
+  const mediated = await h.mediated(c, `${randomUUID()}@example.net`);
+  assert.equal(mediated.scope, "orders:read orders:write");
+  assert.equal((await c.request("/api/account")).status, 200);
 });

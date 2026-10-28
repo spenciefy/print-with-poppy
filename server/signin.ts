@@ -1,13 +1,14 @@
 import type { Express, Request, Response } from "express";
-import type { Session } from "./types.js";
 import { z } from "zod";
 import { config } from "./config.js";
-import { authenticate, client } from "./auth.js";
+import { authenticate, client, redirectMatches, directSignIn } from "./auth.js";
 import {
   scopes,
+  mediatedScopes,
+  requireSignedIn,
   startCode,
   verifyCode,
-  signIn,
+
   requireAccount,
   history,
 } from "./accounts.js";
@@ -35,76 +36,20 @@ export function accountRoutes(app: Express) {
     res.set("Referrer-Policy", "same-origin");
     next();
   });
-  app.post("/api/poppy/sign-in", async (req, res) => {
-    const session = await authenticate(req);
-    if (session.compatibility || session.demo || !session.proofThumb)
-      throw new HttpError(
-        403,
-        "native_session_required",
-        "Use a native Poppy session to sign in.",
-      );
-    // Missing, unknown or unavailable scopes are invalid_scope (spec 4.4, 4.7).
-    const requested = scopes(req.body?.scope);
-    const b = z
-      .object({
-        scope: z.string(),
-        credentials: z.object({ email: z.email().max(254) }).strict(),
-      })
-      .strict()
-      .parse(req.body);
-    // A Session can only ever be signed in to one account: refuse early, before
-    // sending a code, when these credentials are for another account (spec 4.4).
-    const bound = get<Session>("session", session.id)?.accountBinding;
-    if (bound) {
-      const existing = get(
-        "account-email",
-        hash(b.credentials.email.trim().toLowerCase()),
-      );
-      if (existing?.id !== bound)
-        throw new HttpError(
-          400,
-          "account_mismatch",
-          "This session was signed in to a different account. Start a new session.",
-        );
-    }
-    res.json(
-      await startCode(session.id, b.credentials.email, requested, session.clientId),
-    );
-  });
-  app.post("/api/poppy/sign-in/:id", async (req, res) => {
-    const session = await authenticate(req);
-    if (session.compatibility || session.demo || !session.proofThumb)
-      throw new HttpError(
-        403,
-        "native_session_required",
-        "Use a native Poppy session to sign in.",
-      );
-    const b = z
-      .object({ code: z.string().max(32) })
-      .strict()
-      .parse(req.body);
-    const result = verifyCode(session.id, String(req.params.id), b.code);
-    if (result.status !== "verified") {
-      res.json(result);
-      return;
-    }
-    res.json({
-      status: "complete",
-      ...signIn(session, result.accountId, result.scopes, session.proofThumb),
-    });
-  });
   app.get("/api/account", async (req, res) => {
     const session = await authenticate(req);
-    const accountId = requireAccount(session);
+    const accountId = requireSignedIn(session);
     const account = get("account", accountId);
     const addresses = savedAddresses(accountId);
     res.json({
       email: account.email,
       scope: session.scopes!.join(" "),
       saved_addresses: addresses.length,
-      default_address: addresses.find((a) => a.default)
-        ? addressView(addresses.find((a) => a.default)!)
-        : null,
+      // The default address is shown only with the addresses scope.
+      default_address:
+        session.scopes!.includes("addresses") && addresses.find((a) => a.default)
+          ? addressView(addresses.find((a) => a.default)!)
+          : null,
     });
   });
   app.get("/api/account/orders", async (req, res) => {
@@ -118,13 +63,15 @@ export function accountRoutes(app: Express) {
       orders: result.rows.map((o) => ({
         ...orderView(o),
         checkoutUrl: undefined,
-        // reorderOrder (poppy:write) proposes the same items again, for approval.
+        // reorderOrder (orders:write) proposes the same items again, for approval.
         reorderable: photosAvailable(o.quote.items.map((i) => i.photoId)),
       })),
       next_cursor: result.next,
     });
   });
   app.get("/oauth/authorize", async (req, res) => {
+    if (!directSignIn())
+      throw new HttpError(404, "not_found", "Direct Sign-In isn't offered here.");
     const q = req.query as Record<string, unknown>;
     // Until client_id and redirect_uri are verified, errors are shown here and
     // never redirected (RFC 6749 §4.1.2.1). Repeated parameters arrive as arrays.
@@ -135,7 +82,7 @@ export function accountRoutes(app: Express) {
         "client_id and redirect_uri are required, once each.",
       );
     const c = await client(q.client_id);
-    if (!c.metadata.redirect_uris?.includes(q.redirect_uri))
+    if (!redirectMatches(c.metadata.redirect_uris, q.redirect_uri))
       throw new HttpError(
         400,
         "invalid_request",
@@ -166,7 +113,7 @@ export function accountRoutes(app: Express) {
     try {
       requested = scopes(q.scope);
     } catch {
-      return fail("invalid_scope", "Request poppy:read and/or poppy:write.");
+      return fail("invalid_scope", "Request scopes from scopes_supported.");
     }
     const { name, logo } = agentIdentity(q.client_id, c.metadata);
     const browser = id("browser"),
@@ -247,7 +194,7 @@ export function accountRoutes(app: Express) {
   app.post("/oauth/authorize/approve", (req, res) => {
     const flow = browserFlow(req);
     if (!flow.accountId)
-      throw new HttpError(403, "sign_in_required", "Verify your email first.");
+      throw new HttpError(403, "invalid_request", "Verify your email first.");
     const destination = new URL(flow.redirectUri!);
     destination.searchParams.set("state", flow.state!);
     destination.searchParams.set("iss", config.origin);
