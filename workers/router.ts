@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { setCookie, deleteCookie } from "hono/cookie";
 import type { Express, RequestHandler } from "express";
 import { HttpError } from "../server/errors.js";
+import { errorResponse } from "../server/http-errors.js";
 import { ZodError } from "zod";
 // Thin transport adapter: shared route handlers still own validation and authorization.
 export function router() {
@@ -152,28 +153,9 @@ export function router() {
         400,
       );
     if (e instanceof HttpError) {
-      if (
-        e.status === 401 ||
-        [
-          "sign_in_required",
-          "insufficient_scope",
-          "extension_required",
-        ].includes(e.code)
-      )
-        c.header(
-          "WWW-Authenticate",
-          `DPoP error="${e.code}"${e.extra.scope ? `, scope="${e.extra.scope}"` : ""}${e.extra.extension ? `, extension="${e.extra.extension}"` : ""}`,
-        );
-      if (e.status === 429) c.header("Retry-After", "3600");
-      return c.json(
-        {
-          error: e.code,
-          error_description: e.message,
-          message: e.message,
-          ...e.extra,
-        },
-        e.status as any,
-      );
+      const { status, headers, body } = errorResponse(e);
+      for (const [k, v] of Object.entries(headers)) c.header(k, v);
+      return c.json(body, status as any);
     }
     console.error("Request failed", c.req.method, c.req.path, e.name);
     return c.json(

@@ -12,7 +12,7 @@
   <a href="https://printwithpoppy.com">Visit the store</a> ·
   <a href="https://printwithpoppy.com/demo">Play the demo</a> ·
   <a href="https://printwithpoppy.com/docs">API reference</a> ·
-  <a href="https://personalagentprotocol.org/docs/0.2/spec">Poppy protocol</a>
+  <a href="https://personalagentprotocol.org/docs/spec">Poppy protocol</a>
 </p>
 
 [![Print with Poppy homepage showing small prints, large prints, a poster, and personal-agent instructions](docs/images/homepage.png)](https://printwithpoppy.com)
@@ -21,7 +21,7 @@ A real photo-printing store and an open-source example of **[Personal Agent Prot
 
 ## How it works
 
-1. **Discover.** The agent reads [`poppy.json`](https://printwithpoppy.com/.well-known/poppy.json), authenticates with a signed assertion and DPoP, and follows the OpenAPI reference.
+1. **Discover.** The agent reads [`poppy.json`](https://printwithpoppy.com/.well-known/poppy.json), sends a signed Session header (`Poppy-Session`) with every request, and follows the OpenAPI reference.
 2. **Prepare.** It uploads your photos, selects prints or a poster, and requests an order proposal.
 3. **Approve.** You review the photos, crops, delivery address, email and complete price. The agent confirms that exact revision through Poppy Operations.
 4. **Print and deliver.** Stripe Checkout handles payment, Prodigi fulfills the order, and Resend sends confirmation and shipping updates when available.
@@ -38,15 +38,15 @@ No photos ready? Ask your agent for the yellow, orange or red poppy artwork. Bot
 
 ### Protocol version
 
-This implementation targets **Poppy draft 0.2** and Operations v1. Client and Session assertions must name the exact `auth.issuer` in `aud`; 0.1 assertions addressed to `/oauth/token` or `/oauth/revoke` are rejected. DPoP proofs still name the actual request URL. Agents must explicitly support 0.2; do not silently fall back to the HTTP guest API after a native failure.
+This branch targets the published **Poppy draft 0.3**, Operations v2 and Mediated Sign-In v1. Every API request carries a `Poppy-Session` header: a Session JWT signed by a delegated key (`pap_dlg`), keyed by `client_id` + `sid`. Client assertions are signed directly by a `jwks_uri` key with the issuer as `aud`. Account access is plain OAuth (Bearer access tokens and refresh tokens). Ordering answers `approval_required` until the same request comes back with `Poppy-Approval`. Sign-in types come from the issuer metadata's `grant_types_supported`, and the store defines its own scopes (`orders:read`, `orders:write`, `addresses`). Agents must explicitly support 0.3; do not silently fall back to the HTTP guest API after a native failure.
 
-See [the 0.2 upgrade guide](docs/POPPY-0.2.md) for the changes, validation and staged rollout plan. Deploy to the isolated sandbox and verify your agent there before upgrading a live store. This code change alone does not establish that a deployed agent supports 0.2.
+See [the 0.3 notes](docs/POPPY-0.3.md) (and the earlier [0.2 upgrade guide](docs/POPPY-0.2.md)) for the changes, validation and staged rollout plan. Deploy to the isolated sandbox and verify your agent there before upgrading a live store. This code change alone does not establish that a deployed agent supports 0.3.
 
 ### Ordering method and native Poppy verification
 
 Orders record `quote.orderingMethod` on the server when proposed. The order response also returns `orderingMethod`. After verified payment, successful order states include `successMessage` for the agent to say once alongside the verified status and exact private order link. Pending, attention, cancelled and unknown-method orders omit it. Sandbox messages explicitly identify simulated payment and fulfillment. HTTP use does not establish that an agent lacks native support. The private order page and confirmation email show its readable label:
 
-- `native-poppy`: authenticated Poppy client with a DPoP-bound session, signed out or signed in.
+- `native-poppy`: a verified Poppy client (Session header), signed out or signed in.
 - `http-compatibility`: the separate Bearer-token HTTP API; not Personal Agent Protocol and not a verified agent identity.
 - `visual-demo`: the local scripted demo identity.
 
@@ -94,7 +94,7 @@ npm run check
 npm run test:e2e
 ```
 
-The reference client in `scripts/agent.ts` does discovery, issuer verification, signed client/session assertions, DPoP, upload, proposal, approval, demo payment and shipment, and checks both captured emails. Without `--approve-demo`, it stops at the approval summary. Its local identity is deliberately available only in demo mode; real agents publish and manage their own keys.
+The reference client in `scripts/agent.ts` does discovery, issuer verification, client assertions, Session JWTs, upload, proposal, approval (Operations v2), demo payment and shipment, and checks both captured emails. Without `--approve-demo`, it stops at the approval summary. Its local identity is deliberately available only in demo mode; real agents publish and manage their own keys.
 
 Automated integration tests exercise the real Express API and temporary SQLite database. Provider-contract tests intercept requests: they validate payloads and error handling but do **not** prove real provider acceptance. A passing local test suite does not verify a deployment’s credentials, payment capture, provider acceptance or email delivery. Verify those separately for your own installation.
 
@@ -109,7 +109,7 @@ Automated integration tests exercise the real Express API and temporary SQLite d
 7. Start with `APP_MODE=sandbox`. Prodigi sandbox never prints; Stripe test mode never charges. The startup checks reject test/live Stripe key mismatches and incomplete provider configuration. Use separate keys and storage for live.
 8. Validate one sandbox order, email delivery and the webhook lifecycle. Then switch to live credentials, order a physical sample with explicit purchase authorization, and check print/crop/color quality and delivered price before inviting customers.
 
-Poppy operations v1 is required for ordering. Guest sessions need no customer login. Optional customer accounts support all three native Poppy sign-in types: direct (email OTP, consent and PKCE), device (link and code opened on any device, then email OTP and consent) and mediated (email, then OTP). Signed-in customers get saved shipping addresses and reorders, both through normal proposals and approval. Account tokens support refresh and immediate revocation. MCP, company-chatbot and browser-session capabilities are not advertised. See [Customer accounts](docs/ACCOUNTS.md) and [Sign-in types](docs/SIGN-IN.md) for the flows and security boundaries. An approved operation succeeds when checkout has been prepared; payment and fulfillment are separate order states.
+Poppy operations v2 is required for ordering. Guest sessions need no customer login. Optional customer accounts support all three native Poppy sign-in types: direct (email OTP, consent and PKCE), device (link and code opened on any device, then email OTP and consent) and mediated (email, then OTP). Signed-in customers get saved shipping addresses and reorders, both through normal approval. Refresh tokens support refresh and immediate revocation. MCP, company-chatbot and browser-session capabilities are not advertised. See [Customer accounts](docs/ACCOUNTS.md) and [Sign-in types](docs/SIGN-IN.md) for the flows and security boundaries. An approved order means checkout is being prepared; payment and fulfillment are separate order states.
 
 The card stays at **Stripe-hosted Checkout**. An agent with an authorized card may complete the page. Issuer authentication can require the user. No raw-card or direct-charge endpoint exists.
 
@@ -161,7 +161,7 @@ Frontend + Poppy API → SQLite order/approval + durable jobs
 
 ## Files
 
-- `server/auth.ts`: Poppy assertions, sessions, DPoP/replay protection.
+- `server/auth.ts`: client assertions, the Session header, token issuance and replay protection.
 - `server/commerce.ts`: proposals, exact approval and payment transition.
 - `server/providers.ts`: Prodigi, Stripe and Resend adapters.
 - `server/worker.ts`: durable fulfillment, email, tax, reconciliation and retention jobs.
@@ -177,7 +177,7 @@ Brand and sample artwork use abstract orange, red and yellow poppies. The homepa
 
 ## Native Poppy and compatibility access
 
-`/.well-known/poppy.json` discovers `/openapi.json`, which documents native DPoP authentication only. `/agent.txt` also contains native-only instructions. Native client metadata URLs must appear in `AGENT_CLIENT_IDS`. Renew with the original session ID to retain access to pending operations.
+`/.well-known/poppy.json` discovers `/openapi.json`, which documents native Poppy authentication (Session header plus Bearer access tokens) only. `/agent.txt` also contains native-only instructions. Native client metadata URLs must appear in `AGENT_CLIENT_IDS`. Renew with the original session ID to retain access to pending operations.
 
 For agents without native Poppy support, `/api/compat/instructions` and `/api/compat/openapi.json` document the separate HTTP compatibility path. It uses unverified Bearer sessions and does **not** enforce the native identity allowlist or DPoP binding. `ALLOW_COMPAT_AGENT_SESSIONS=false` disables it in every mode; when unset it defaults on only in demo mode. Existing compatibility tokens remain supported when enabled.
 
@@ -187,7 +187,7 @@ Set `ALLOW_COMPAT_AGENT_SESSIONS=false` in the target service's environment and 
 
 With the flag off, new guest sessions and requests using existing guest tokens are rejected, including uploads, samples, order proposals and confirmations. `/api/config` and `/api/catalog` expose `httpOrderingEnabled: false`; the website prompt and discovery stop recommending compatibility, and its OpenAPI endpoint returns 404. Native sessions remain available. Disabling compatibility does not cancel existing paid orders or remove their private status pages.
 
-For a native-only test, verify the flag via `/api/config`, use a registered agent's client identity and DPoP session, add photos, approve a proposal, and complete the sandbox payment/shipping flow. Check that the final order reports `orderingMethod: "native-poppy"`. A successful HTTP request alone does not prove Poppy authentication. The hosted agent sandbox already requires compatibility to be disabled; leave production enabled while non-Poppy agents still need it.
+For a native-only test, verify the flag via `/api/config`, use a registered agent's client identity and Session header, add photos, approve a proposal, and complete the sandbox payment/shipping flow. Check that the final order reports `orderingMethod: "native-poppy"`. A successful HTTP request alone does not prove Poppy authentication. The hosted agent sandbox already requires compatibility to be disabled; leave production enabled while non-Poppy agents still need it.
 
 Malformed JSON bodies return `400 invalid_request`; oversized JSON bodies return `413 request_too_large`. Correct the request rather than retrying it unchanged.
 
@@ -203,6 +203,6 @@ Each result identifies its input field and returns either the stored photo (incl
 
 ### Optional account connection
 
-Native agents should offer email-code sign-in once before the first order, reuse an existing authorized connection, and let customers continue as guests. Orders placed while signed in are saved to that account; older guest orders are not automatically attached. Read access uses `poppy:read`; saving new orders also requires `poppy:write`.
+Native agents should offer email-code sign-in once before the first order, reuse an existing authorized connection, and let customers continue as guests. Orders placed while signed in are saved to that account; older guest orders are not automatically attached. Read access uses `orders:read`; saving new orders also requires `orders:write`; saved addresses use `addresses`.
 
-Poppy supports browser email OTP (direct), device sign-in from a link and code, and mediated email OTP in an agent’s secure sign-in card. DPoP binds the session token to the agent’s key in either flow; customers do not handle keys or proofs. PDA currently prefers browser sign-in when both methods are advertised. Choosing inline OTP by default requires an agent-side change, not a weaker authentication mode. HTTP compatibility sessions remain guest-only.
+Poppy supports browser email OTP (direct), device sign-in from a link and code, and mediated email OTP in an agent’s secure sign-in card. Customers never handle keys, tokens or Session JWTs. PDA currently prefers browser sign-in when both methods are advertised. Choosing inline OTP by default requires an agent-side change, not a weaker authentication mode. HTTP compatibility sessions remain guest-only.

@@ -17,16 +17,16 @@ export const sandboxInstructions = () => `# Print with Poppy — Agent Sandbox
 ${sandboxDescription}
 
 Origin: ${config.origin}. Test guide: ${config.origin}/sandbox. Read /api/config and require environment=agent-sandbox before simulating anything.
-1. Register your HTTPS client metadata URL with hello@printwithpoppy.com (DPA is already registered). Discover /.well-known/poppy.json and /openapi.json on this origin. Start a native signed-out Poppy session with client/session assertions and DPoP. Keep the same session for the whole order; do not use compatibility sessions.
+1. Register your HTTPS client metadata URL with hello@printwithpoppy.com (DPA is already registered). Discover /.well-known/poppy.json (protocol 0.3) and /openapi.json on this origin. Send a Poppy-Session header on every request (a Session JWT signed by a delegated key, pap_dlg; a new sid starts a signed-out Session). Keep the same sid for the whole order; do not use compatibility sessions. Client assertions at the token, device and revocation endpoints are signed directly by your jwks_uri key. List operations version 2 in your client metadata.
 2. Read getCatalog. Offer the bundled yellow, orange and red poppies through addSamplePhoto, or upload the user’s JPEG/PNG/WebP images with uploadPhotos (1–10 named file fields photo1 through photo10, 20 MB combined, one approval for the selected batch); use uploadPhoto (multipart field photo) for a single image. Use only synthetic recipient details and US addresses for test quotes.
 ${orderingGuidance}
-3. Call proposeOrder with a JSON object, an Idempotency-Key, email, address, items and optional product. Show the returned summary and obtain explicit approval through your interface. For T-shirts, use separate items for each photo/color/size/fit combination, with quantity for each size (20 shirts maximum). The first shirt is $29 and each additional shirt $17 including US shipping, plus tax. Show every shirt mockup alongside color, size and quantity; explain placement is approximate. Obtain explicit user approval of the previews, then call approveShirtPreviews with revision, approved_by=user and exactly all shirt previewIds before confirmation. Confirm the operation through the Operations extension with the approved revision; poll until succeeded. This means checkout is prepared, not paid.
-4. Call simulatePayment with result.data.order_id. No card details, Stripe visit or real payment. Poll getOrder until printing.
+3. Call proposeOrder with a JSON object: email, address, items and optional product. It answers 403 approval_required with the operation; show its summary and obtain explicit approval through your interface. For T-shirts, use separate items for each photo/color/size/fit combination, with quantity for each size (20 shirts maximum). The first shirt is $29 and each additional shirt $17 including US shipping, plus tax. Show every shirt mockup alongside color, size and quantity; explain placement is approximate. Obtain explicit user approval of the previews, then call approveShirtPreviews with the revision, approved_by=user and exactly all shirt previewIds before approving. Approve through the Operations extension: send the same proposeOrder request again with Poppy-Approval (operation_id and revision); it returns the order (201). This means checkout is being prepared, not paid.
+4. Call simulatePayment with the order id. No card details, Stripe visit or real payment. Poll getOrder until printing.
 5. Call simulateShipment with the same order ID, then poll getOrder and getSandboxEmails until shipped and two captured emails are available. Carrier and tracking are simulated. Order emails reach only the order email address when delivery is enabled; otherwise they are captured only. Payment/shipment simulation is safe to repeat on the same order.
-6. Optional account flow: use mediated sign-in with a unique synthetic @example.com, @example.org or @example.net email and requested scopes. Use getSandboxSignInEmail with the returned challenge id to retrieve your session's captured code, complete the challenge, and exchange the account token for a signed-in session token. Place a new order while signed in, then read listAccountOrders. This simulates email ownership, not real identity verification. Device sign-in (auth.device) also works: start it at /oauth/device, show the person the verification link and code, and poll /oauth/token with the device_code grant and your session_id. The verification page shows the captured code to the person for synthetic accounts; an automated test can read it with getSandboxDeviceSignInEmail. Then use saved addresses (saveAccountAddress, or omit address on proposeOrder to use the default) and reorderOrder, which proposes a new operation that still needs approval. Browser direct sign-in is not advertised in the sandbox.
+6. Optional account flow: prefer Device Sign-In (the device_code grant in the issuer metadata): start it at /oauth/device, show the person the verification link and code, and poll /oauth/token with the device_code grant. The Mediated Sign-In extension grant (orders:read and orders:write only) also works with a unique synthetic @example.com, @example.org or @example.net email: its code_required answer carries sign_in_id; getSandboxSignInEmail returns the captured code for sign-ins your agent started. Send the access token with the Session header, place a new order while signed in, then read listAccountOrders; revoke the refresh token to sign out. This simulates email ownership, not real identity verification. The verification page shows the captured code to the person for synthetic accounts; an automated test can read it with getSandboxDeviceSignInEmail. Then use saved addresses (addresses scope: saveAccountAddress, or omit address on proposeOrder to use the default) and reorderOrder, which answers approval_required with a new operation that still needs approval. Direct Sign-In isn't offered in the sandbox.
 The /demo route is a scripted visual walkthrough, not this API test environment. Production at https://printwithpoppy.com is live. Never send sandbox tokens or test calls there. Test data may be reset.
 `;
-const security = [{ DPoP: [] }];
+const security = [{ PoppySession: [] }, { PoppySession: [], PoppyAccount: [] }];
 const parameter = [
   { in: "path", name: "id", required: true, schema: { type: "string" } },
 ];
@@ -74,7 +74,7 @@ export const signInHelperPaths = {
   "/api/sandbox/sign-in/{id}/email": {
     get: action(
       "getSandboxSignInEmail",
-      "Demo/Agent Sandbox only: read the captured OTP email for a mediated sign-in challenge created by this exact session. Synthetic @example.com/.org/.net accounts only; this does not verify ownership of a real email address. No email is sent.",
+      "Demo/Agent Sandbox only: read the captured one-time-code email for a Mediated Sign-In (the sign_in_id from code_required) started by this Personal Agent. Synthetic @example.com/.org/.net accounts only; this does not verify ownership of a real email address. No email is sent.",
     ),
   },
   "/api/sandbox/device-sign-in/email": {
@@ -82,7 +82,7 @@ export const signInHelperPaths = {
       security,
       operationId: "getSandboxDeviceSignInEmail",
       summary:
-        "Demo/Agent Sandbox only: read the captured OTP email for a pending Device Sign-In after the person entered a synthetic email on the verification page. Send the device_code from /oauth/device; only the agent that started the sign-in (and the Session that polled it, once it has) can read it. No email is sent. Real stores email the code to the person.",
+        "Demo/Agent Sandbox only: read the captured OTP email for a pending Device Sign-In after the person entered a synthetic email on the verification page. Send the device_code from /oauth/device; only the Personal Agent that started the sign-in can read it. No email is sent. Real stores email the code to the person.",
       requestBody: {
         required: true,
         content: {
@@ -110,7 +110,8 @@ function signInHelperRoutes(app: Express) {
     const challenge = get("signin-code", String(req.params.id));
     if (
       !challenge ||
-      challenge.owner !== session.id ||
+      // Mediated sign-ins belong to the client that started them (extension §4).
+      challenge.owner !== `mediated:${session.clientId}` ||
       challenge.used ||
       challenge.expires <= Date.now() ||
       !syntheticEmail(challenge.email)
@@ -118,7 +119,7 @@ function signInHelperRoutes(app: Express) {
       throw new HttpError(
         404,
         "not_found",
-        "Active sign-in challenge for a synthetic account not found in this session.",
+        "Active Mediated Sign-In for a synthetic account not found for this Personal Agent.",
       );
     const email = get("demo-signin-email", challenge.id);
     res.json({ simulated: true, delivered: false, email });
@@ -139,14 +140,12 @@ export function sandboxRoutes(app: Express) {
   async function owned(req: Request, write = false) {
     const session = await authenticate(req);
     const order = requireRecord<Order>("order", String(req.params.id));
-    if (order.owner !== session.id)
+    // Account orders belong to the account; guest orders to their Session.
+    if (order.accountId) {
+      if (requireAccount(session, write ? "orders:write" : "orders:read") !== order.accountId)
+        throw new HttpError(404, "not_found", "Order not found.");
+    } else if (order.owner !== session.id)
       throw new HttpError(404, "not_found", "Order not found in this session.");
-    if (
-      order.accountId &&
-      requireAccount(session, write ? "poppy:write" : "poppy:read") !==
-        order.accountId
-    )
-      throw new HttpError(404, "not_found", "Order not found.");
     return order;
   }
   app.post("/api/sandbox/orders/:id/pay", async (req, res) => {
@@ -225,7 +224,7 @@ export function sandboxRoutes(app: Express) {
         client_id: `${config.origin}/api/sandbox/reference-agent.json`,
         jwks_uri: `${config.origin}/api/sandbox/reference-jwks.json`,
         token_endpoint_auth_method: "private_key_jwt",
-        extensions: { operations: { version: "1" } },
+        extensions: { operations: { version: "2" } },
       }),
     );
     app.get("/api/sandbox/reference-jwks.json", (_req, res) =>
@@ -236,7 +235,7 @@ export function sandboxRoutes(app: Express) {
     res
       .type("html")
       .send(
-        `<!doctype html><html lang="en"><meta name="viewport" content="width=device-width"><title>Print with Poppy — Agent Sandbox</title><style>body{font:18px/1.6 system-ui;background:#faf6ee;color:#30291f;max-width:780px;margin:64px auto;padding:0 24px}a{color:#b84008}code{font-size:.9em}li{margin:12px 0}</style><h1>Print with Poppy · Agent Sandbox</h1><p>${sandboxDescription}</p><p><a href="/.well-known/poppy.json">poppy.json</a> · <a href="/docs">API reference</a> · <a href="/openapi.json">OpenAPI JSON</a> · <a href="https://github.com/spenciefy/print-with-poppy/blob/main/docs/SANDBOX.md">Testing guide</a></p><ol><li>Register your HTTPS client metadata URL via hello@printwithpoppy.com. DPA is preconfigured.</li><li>Discover this origin and open a signed-out Poppy session using your own signing key and DPoP.</li><li>Upload sample photos, call <code>proposeOrder</code>, show the terms and obtain approval, then confirm through the Operations extension.</li><li>Wait until checkout is ready. Call <code>simulatePayment</code> with the order ID. No card is needed.</li><li>Poll <code>getOrder</code> until printing, call <code>simulateShipment</code>, then read <code>getSandboxEmails</code>.</li><li>Optional account test: use mediated sign-in and read the code through <code>getSandboxSignInEmail</code>, or device sign-in (<code>/oauth/device</code>; the verification page shows the captured code for synthetic accounts, and <code>getSandboxDeviceSignInEmail</code> returns it to a test agent). Complete sign-in, renew the session token, read order history, save an address and reorder. This only simulates email verification.</li></ol><p>Keep the same session throughout. Test records may be reset. The <a href="/demo">visual walkthrough</a> does not call these APIs. The <a href="https://printwithpoppy.com">production store</a> makes real purchases.</p></html>`,
+        `<!doctype html><html lang="en"><meta name="viewport" content="width=device-width"><title>Print with Poppy — Agent Sandbox</title><style>body{font:18px/1.6 system-ui;background:#faf6ee;color:#30291f;max-width:780px;margin:64px auto;padding:0 24px}a{color:#b84008}code{font-size:.9em}li{margin:12px 0}</style><h1>Print with Poppy · Agent Sandbox</h1><p>${sandboxDescription}</p><p><a href="/.well-known/poppy.json">poppy.json</a> · <a href="/docs">API reference</a> · <a href="/openapi.json">OpenAPI JSON</a> · <a href="https://github.com/spenciefy/print-with-poppy/blob/main/docs/SANDBOX.md">Testing guide</a></p><ol><li>Register your HTTPS client metadata URL via hello@printwithpoppy.com. DPA is preconfigured.</li><li>Discover this origin and open a signed-out Poppy Session (Poppy-Session header) using your own signing key and delegated keys.</li><li>Upload sample photos, call <code>proposeOrder</code>, show the terms and obtain approval, then send the same request again with Poppy-Approval (Operations v2).</li><li>Wait until checkout is ready. Call <code>simulatePayment</code> with the order ID. No card is needed.</li><li>Poll <code>getOrder</code> until printing, call <code>simulateShipment</code>, then read <code>getSandboxEmails</code>.</li><li>Optional account test: use mediated sign-in and read the code through <code>getSandboxSignInEmail</code>, or device sign-in (<code>/oauth/device</code>; the verification page shows the captured code for synthetic accounts, and <code>getSandboxDeviceSignInEmail</code> returns it to a test agent). Complete sign-in, refresh the access token, read order history, save an address and reorder. This only simulates email verification.</li></ol><p>Keep the same sid throughout. Test records may be reset. The <a href="/demo">visual walkthrough</a> does not call these APIs. The <a href="https://printwithpoppy.com">production store</a> makes real purchases.</p></html>`,
       ),
   );
 }

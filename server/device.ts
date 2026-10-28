@@ -1,4 +1,4 @@
-// Device Sign-In (Poppy 0.2 §4.6): the OAuth 2.0 device authorization grant
+// Device Sign-In (Poppy 0.3 §4.3): the OAuth 2.0 device authorization grant
 // (RFC 8628). The agent shows the customer a link and a short code; the customer
 // opens it on any device, signs in with an emailed code, and approves access.
 import { randomInt } from "node:crypto";
@@ -9,14 +9,13 @@ import { authenticateClient, authenticate } from "./auth.js";
 import {
   accountScopes,
   scopes,
-  signIn,
+  issueTokens,
   startCode,
   verifyCode,
   throttle,
   syntheticEmail,
 } from "./accounts.js";
 import { db, get, put, id, hash, sign, HttpError } from "./store.js";
-import type { Session } from "./types.js";
 import {
   agentIdentity,
   agentCard,
@@ -48,7 +47,6 @@ export interface DeviceGrant {
   expires: number;
   interval: number;
   lastPoll?: number;
-  sessionId?: string; // The Session that first polled; only it can redeem the code.
   challengeId?: string; // Latest email-code challenge from the verification page.
   accountId?: string;
   granted?: string[];
@@ -122,10 +120,10 @@ type PollOutcome = { error: HttpError } | { result: any };
 
 /**
  * Token endpoint, grant_type=urn:ietf:params:oauth:grant-type:device_code.
- * Client authentication and the DPoP proof are already verified by issueToken.
+ * Client authentication is already verified by issueToken.
  */
-export function pollDevice(b: any, thumb: string) {
-  // Poll bookkeeping (interval, session binding, one-time use) must persist even
+export function pollDevice(b: any) {
+  // Poll bookkeeping (interval, one-time use) must persist even
   // when the answer is an error, so errors are returned rather than thrown here.
   const outcome: PollOutcome = db.transaction((): PollOutcome => {
     const grantId = hash(typeof b.device_code === "string" ? b.device_code : "");
@@ -136,31 +134,6 @@ export function pollDevice(b: any, thumb: string) {
       return {
         error: oauthError("invalid_grant", "This device code was already used."),
       };
-    const session =
-      typeof b.session_id === "string"
-        ? get<Session>("session", b.session_id)
-        : undefined;
-    if (
-      !session ||
-      session.clientId !== b.client_id ||
-      session.compatibility ||
-      session.demo
-    )
-      return {
-        error: oauthError(
-          "invalid_session",
-          "An existing native Poppy session of this agent is required.",
-        ),
-      };
-    // Bind the sign-in to the first Session that polls for it.
-    if (g.sessionId && g.sessionId !== session.id)
-      return {
-        error: oauthError(
-          "invalid_grant",
-          "This device code belongs to another session.",
-        ),
-      };
-    g.sessionId = session.id;
     const now = Date.now();
     const save = () => put("device-grant", grantId, g);
     if (g.expires <= now) {
@@ -210,14 +183,7 @@ export function pollDevice(b: any, thumb: string) {
     } catch (e) {
       return { error: e as HttpError };
     }
-    if (session.accountBinding && session.accountBinding !== g.accountId)
-      return {
-        error: oauthError(
-          "account_mismatch",
-          "Start a new session to use a different account.",
-        ),
-      };
-    return { result: signIn(session, g.accountId!, granted, thumb) };
+    return { result: issueTokens(g.clientId, g.accountId!, granted) };
   })();
   if ("error" in outcome) throw outcome.error;
   return outcome.result;
@@ -235,7 +201,6 @@ export async function deviceSignInEmail(req: Request) {
   if (
     !g ||
     g.clientId !== session.clientId ||
-    (g.sessionId && g.sessionId !== session.id) ||
     g.status !== "pending" ||
     g.expires <= Date.now() ||
     !challenge ||
@@ -404,7 +369,7 @@ export function deviceRoutes(app: Express) {
   app.post(`${base}/approve`, (req, res) => {
     const flow = loadFlow(req, "device", cookieName);
     if (!flow.accountId)
-      throw new HttpError(403, "sign_in_required", "Verify your email first.");
+      throw new HttpError(403, "invalid_request", "Verify your email first.");
     const decision = req.body.decision;
     let selected: string[] = [];
     if (decision === "approve") {

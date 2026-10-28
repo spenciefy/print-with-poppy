@@ -57,17 +57,18 @@ export const proposalSchema = z
   });
 export type Proposal = z.infer<typeof proposalSchema>;
 export interface Session {
-  id: string;
+  id: string; // Internal; agents name a native Session by client_id + sid.
+  sid?: string; // `sid` from the agent's Session JWTs (native Sessions).
+  agentId?: string; // Optional `agent_id` from the Session JWT; fixed for the Session.
+  ended?: boolean;
   clientId: string;
   userId: string;
   extensions: boolean;
   demo?: boolean;
   compatibility?: boolean;
   accountBinding?: string; // Immutable once this session has signed in.
-  grantId?: string;
   accountId?: string; // Effective token account; never inferred from session state.
   scopes?: string[];
-  proofThumb?: string;
   created: number;
 }
 export interface Photo {
@@ -113,10 +114,12 @@ export interface Quote extends Proposal {
   }[];
 }
 export interface Operation {
-  owner: string;
+  owner: string; // The Session that proposed it; owns its photos and order.
   principal?: { clientId: string; userId: string };
   operation_id: string;
-  revision: number;
+  /** Operations v2: an opaque string that changes whenever summary, terms or expires_at change. */
+  revision: string;
+  /** Internal: proposed until approved, then in_progress → succeeded (checkout ready) or failed. */
   state:
     | "proposed"
     | "in_progress"
@@ -127,10 +130,11 @@ export interface Operation {
   summary: string;
   terms: Quote;
   expires_at: string;
-  user_approval_required: true;
-  shirtPreviewApproval?: { revision: number; previewIds: string[]; approved_by: "user"; approved_at: string };
+  /** Hash of the principal, method, path and canonical body this revision answers. */
+  request?: string;
+  shirtPreviewApproval?: { revision: string; previewIds: string[]; approved_by: "user"; approved_at: string };
   confirmation: null | {
-    revision: number;
+    revision: string;
     approved_by: "user";
     confirmed_at: string;
   };

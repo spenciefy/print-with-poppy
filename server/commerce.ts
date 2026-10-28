@@ -5,6 +5,7 @@ import { productOf, mediaVariant, previewVariant, itemProduct, orderProducts, or
 import { config } from "./config.js";
 import {
   db,
+  hash,
   id,
   get,
   put,
@@ -26,51 +27,64 @@ import {
 } from "./types.js";
 import { requireAccount } from "./accounts.js";
 import { resolveAccountDefaults } from "./addresses.js";
-export async function propose(body: unknown, session: Session, key: string) {
-  if (session.accountId) requireAccount(session, "poppy:write");
+/** Operations v2 (§2): used only when the Personal Agent lists `operations` version "2". */
+export function requireOperations(session: Session) {
   if (!session.extensions)
     throw new HttpError(
       403,
       "extension_required",
-      "This store requires the operations extension.",
+      "Ordering here needs the operations extension, version 2: list it in your client metadata.",
       { extension: "operations" },
     );
-  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(key))
-    throw new HttpError(
-      400,
-      "idempotency_key_required",
-      "Supply a unique Idempotency-Key of 16–128 letters, digits, underscores or hyphens.",
-    );
-  const p = proposalSchema.parse(resolveAccountDefaults(body, session));
-  const requestKey = `${session.id}:${key}`;
-  const existing = get("proposal_key", requestKey);
-  if (existing) {
-    const previous = requireRecord<Operation>(
-      "operation",
-      existing.operationId,
-      session.id,
-    );
-    if (
-      previous.terms.accountId &&
-      requireAccount(session, "poppy:write") !== previous.terms.accountId
-    )
-      throw new HttpError(
-        403,
-        "sign_in_required",
-        "Sign in to the account that proposed this order.",
-      );
-    if (existing.request !== JSON.stringify(p))
-      throw new HttpError(
-        409,
-        "idempotency_conflict",
-        "Use the same request body when retrying.",
-      );
-    return requireRecord<Operation>(
-      "operation",
-      existing.operationId,
-      session.id,
-    );
+}
+/** Who can approve an operation (Operations §3): its Session, or for a signed-in one, the account. */
+function principalKey(session: Session) {
+  return session.accountId
+    ? `account:${session.clientId}:${session.userId}:${session.accountId}`
+    : `session:${session.id}`;
+}
+/** JSON with sorted keys, so the same request always has the same fingerprint. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object")
+    return `{${Object.keys(value as object)
+      .sort()
+      .filter((k) => (value as any)[k] !== undefined)
+      .map((k) => `${JSON.stringify(k)}:${canonical((value as any)[k])}`)
+      .join(",")}}`;
+  return JSON.stringify(value ?? null);
+}
+/** A fingerprint of who asked for what: principal, method, path and canonical body. */
+export function requestFingerprint(session: Session, method: string, path: string, body: unknown) {
+  return hash(`${principalKey(session)}\n${method}\n${path}\n${canonical(body ?? {})}`);
+}
+/** RFC 9651 Dictionary: `operation_id="…", revision="…"`; anything else is ignored. */
+export function parseApproval(header: string | undefined) {
+  if (!header) return undefined;
+  const members: Record<string, string> = {};
+  const re = /\s*([a-z*][a-z0-9_.*-]*)(?:=("(?:[^"\\]|\\["\\])*"|[^,;]*))?((?:\s*;[^,]*)?)\s*(?:,|$)/gy;
+  let match: RegExpExecArray | null;
+  let consumed = 0;
+  while (consumed < header.length && (match = re.exec(header))) {
+    if (match[0] === "") break;
+    consumed = re.lastIndex;
+    const value = match[2];
+    if (value?.startsWith('"')) members[match[1]] = value.slice(1, -1).replace(/\\(["\\])/g, "$1");
   }
+  if (consumed !== header.length) return undefined; // Unparseable: ignore the field.
+  const { operation_id, revision } = members;
+  return typeof operation_id === "string" && typeof revision === "string" ? { operation_id, revision } : undefined;
+}
+const newRevision = (expires: number) => `${Math.floor(expires / 1000)}-${id("r").slice(2)}`;
+
+/** Quote a proposal and store it as an operation awaiting approval. */
+export async function propose(
+  body: unknown,
+  session: Session,
+  request: string,
+  operationId = id("op"),
+) {
+  const p = proposalSchema.parse(resolveAccountDefaults(body, session));
   const photos = p.items.map((i) => ownedPhoto(i.photoId, session.id));
   const groups = orderProducts(p);
   for (const [n, item] of p.items.entries()) {
@@ -108,46 +122,107 @@ export async function propose(body: unknown, session: Session, key: string) {
   const op: Operation = {
     owner: session.id,
     principal: { clientId: session.clientId, userId: session.userId },
-    operation_id: id("op"),
-    revision: 1,
+    operation_id: operationId,
+    revision: newRevision(q.expires),
     state: "proposed",
     summary,
     terms: q,
     expires_at: new Date(q.expires).toISOString(),
-    user_approval_required: true,
+    request,
     confirmation: null,
     result: null,
   };
-  // Recheck after provider I/O so concurrent identical requests share one proposal.
   return db.transaction(() => {
-    const concurrent = get("proposal_key", requestKey);
-    if (concurrent) {
-      if (concurrent.request !== JSON.stringify(p))
-        throw new HttpError(
-          409,
-          "idempotency_conflict",
-          "Idempotency key reused with different terms.",
-        );
-      return requireRecord<Operation>(
-        "operation",
-        concurrent.operationId,
-        session.id,
-      );
-    }
+    // Concurrent identical requests share one operation.
+    const ref = get("operation-request", request);
+    const current = ref && get<Operation>("operation", ref.operationId);
+    if (current && current.operation_id !== operationId && current.state === "proposed" && current.terms.expires > Date.now())
+      return current;
     put("operation", op.operation_id, op, session.id);
-    put("proposal_key", requestKey, {
-      operationId: op.operation_id,
-      request: JSON.stringify(p),
-    });
+    put("operation-request", request, { operationId: op.operation_id });
     return op;
   })();
+}
+
+/** Can this Session approve the operation (Operations §3, check 1)? */
+function canApprove(op: Operation, session: Session) {
+  if (!op.terms.accountId) return op.owner === session.id;
+  const principal = op.principal || get<Session>("session", op.owner);
+  return (
+    !!principal &&
+    principal.clientId === session.clientId &&
+    principal.userId === session.userId &&
+    session.accountId === op.terms.accountId &&
+    !!session.scopes?.includes("orders:write")
+  );
+}
+const performed = (op: Operation) => ["in_progress", "succeeded", "failed"].includes(op.state);
+
+/**
+ * An action that needs the User's approval (Operations v2). Without a valid
+ * approval: 403 `approval_required` with the operation, performing nothing.
+ * With `Poppy-Approval` naming the current revision of the operation for this
+ * exact request: perform it, at most once, and return the order (201).
+ */
+export async function approvalFlow(
+  session: Session,
+  request: { method: string; path: string; body: unknown; approval?: string },
+  build: (previous?: Operation) => Promise<unknown>,
+): Promise<{ status: number; body: any; op: Operation; performedNow?: boolean }> {
+  requireOperations(session);
+  if (session.accountId) requireAccount(session, "orders:write");
+  const fingerprint = requestFingerprint(session, request.method, request.path, request.body);
+  const approval = parseApproval(request.approval);
+  if (approval) {
+    const approved = get<Operation>("operation", approval.operation_id);
+    // An account's operation, from a signed-out Session of the same agent and User: a challenge (§3).
+    if (approved?.terms.accountId && !session.accountId) {
+      const principal = approved.principal || get<Session>("session", approved.owner);
+      if (principal?.clientId === session.clientId && principal?.userId === session.userId)
+        requireAccount(session, "orders:write");
+    }
+    if (approved && canApprove(approved, session)) {
+      const op = readOperation(approved.operation_id, approved.owner);
+      // Already performed: the same answer again, never a second order (§7).
+      if (performed(op)) return { status: 201, body: performedView(op), op };
+      if (
+        op.state === "proposed" &&
+        op.revision === approval.revision &&
+        op.request === fingerprint
+      ) {
+        const done = confirm(op.operation_id, op.owner, op.revision, "user");
+        return { status: 201, body: performedView(done), op: done, performedNow: true };
+      }
+    }
+  }
+  // No valid approval: the current revision for this request, or a new one.
+  const ref = get("operation-request", fingerprint);
+  let pending = ref ? get<Operation>("operation", ref.operationId) : undefined;
+  if (pending) pending = readOperation(pending.operation_id, pending.owner);
+  if (pending?.state === "proposed" && approval?.revision !== pending.revision)
+    return { status: 403, body: approvalRequired(pending), op: pending };
+  const reuse = pending && !performed(pending) ? pending : undefined;
+  const op = await propose(await build(reuse), session, fingerprint, reuse?.operation_id);
+  return { status: 403, body: approvalRequired(op), op };
+}
+export const approvalRequired = (op: Operation) => ({
+  error: "approval_required",
+  error_description:
+    "Not done yet. Show the user the Company's name and this summary, get their approval, then send the same request again with Poppy-Approval: operation_id=\"…\", revision=\"…\".",
+  operation: operationView(op),
+});
+/** What an approved order request returns, the first time and on every retry. */
+export function performedView(op: Operation) {
+  const order = op.orderId ? get<Order>("order", op.orderId) : undefined;
+  if (!order) throw new HttpError(503, "in_progress", "The order is being placed. Retry the same request.");
+  return { ...orderView(order), operation_id: op.operation_id };
 }
 // The HTTP layer always passes the authenticated token's effective account/scopes.
 // Keep the original owner for photos, persistence and downstream idempotency.
 export function authorizedOperation(
   opId: string,
   session: Session,
-  scope = "poppy:read",
+  scope = "orders:read",
 ) {
   const op = get<Operation>("operation", opId);
   const notFound = () =>
@@ -195,23 +270,27 @@ function displayPhotoLabels(quote: Quote) {
   });
   return { ...quote, summary, previews };
 }
+/** The operation object (Operations v2 §3). */
 export function operationView(op: Operation) {
-  const { owner, principal, ...view } = op;
+  const labeled = displayPhotoLabels(op.terms);
   return {
-    ...view,
-    summary: displayPhotoLabels(view.terms).summary,
+    operation_id: op.operation_id,
+    revision: op.revision,
+    summary: labeled.summary,
     terms: {
-      ...displayPhotoLabels(view.terms),
+      ...labeled,
       owner: undefined,
       accountId: undefined,
       couponCode: undefined,
+      taxCalculationId: undefined,
     },
+    expires_at: op.expires_at,
   };
 }
 function requiredShirtPreviews(op: Operation) {
   return op.terms.previews.flatMap((preview, index) => preview.product === "tshirt" ? [preview.previewId || `${op.terms.id}:${index}`] : []);
 }
-export function approveShirtPreviews(opId: string, owner: string, revision: number, previewIds: string[], approvedBy: string) {
+export function approveShirtPreviews(opId: string, owner: string, revision: string, previewIds: string[], approvedBy: string) {
   return db.transaction(() => {
     const op = readOperation(opId, owner);
     if (revision !== op.revision) throw new HttpError(409, "terms_changed", "Show and approve the current proposal and shirt previews.");
@@ -228,7 +307,7 @@ export function approveShirtPreviews(opId: string, owner: string, revision: numb
 export function confirm(
   opId: string,
   owner: string,
-  revision: number,
+  revision: string,
   approvedBy: string,
 ) {
   return db.transaction(() => {
@@ -246,7 +325,7 @@ export function confirm(
     if (op.state !== "proposed") return op;
     const expected = requiredShirtPreviews(op);
     if (expected.length && (op.shirtPreviewApproval?.revision !== revision || expected.some(id => !op.shirtPreviewApproval?.previewIds.includes(id))))
-      throw new HttpError(409, "shirt_preview_approval_required", "Show every shirt mockup with its color, size and quantity. Obtain explicit user approval, call approveShirtPreviews with revision and all shirt previewIds, then confirm this operation.", { previewIds: expected, approvalUrl: `/api/shirt-preview-approvals/${opId}` });
+      throw new HttpError(409, "shirt_preview_approval_required", "Show every shirt mockup with its color, size and quantity. Obtain explicit user approval, call approveShirtPreviews with the revision and all shirt previewIds, then send the approval again.", { previewIds: expected, approvalUrl: `/api/shirt-preview-approvals/${opId}` });
     op.terms.items.forEach((i) => ownedPhoto(i.photoId, owner));
     const order: Order = {
       id: id("ord"),

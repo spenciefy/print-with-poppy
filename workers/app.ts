@@ -3,6 +3,7 @@ import { configuration, withRuntime, type Env } from "./context.js";
 import { media } from "./adapters/media-runtime.js";
 import { samplePhotos } from "../server/sample-photos.js";
 import { sign, equal, HttpError } from "../server/store.js";
+import { errorResponse } from "../server/http-errors.js";
 import { shirtMediaVariants } from "../src/offer.js";
 export { CommerceState } from "./commerce-state.js";
 export { MediaContainer, ProtocolContainer } from "./containers.js";
@@ -208,14 +209,10 @@ export default {
       } catch (e) {
         response =
           e instanceof HttpError
-            ? Response.json(
-                {
-                  error: e.code,
-                  message: e.message,
-                  error_description: e.message,
-                },
-                { status: e.status },
-              )
+            ? (() => {
+                const { status, headers, body } = errorResponse(e);
+                return Response.json(body, { status, headers });
+              })()
             : Response.json(
                 { error: "internal_error", message: "Retry the same request." },
                 { status: 500 },

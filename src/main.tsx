@@ -234,12 +234,7 @@ function Footer({ compact = false, httpOrderingEnabled = false }: { compact?: bo
                     [
                       "POST",
                       "/api/orders",
-                      "An order proposal for your approval",
-                    ],
-                    [
-                      "POST",
-                      "/api/operations/{id}/confirm",
-                      "Confirm the approved revision",
+                      "The order terms for your approval, then the order once approved",
                     ],
                     [
                       "GET",
@@ -611,8 +606,12 @@ function Guide({ config }: { config: Config }) {
         <strong>Native Poppy:</strong> read{" "}
         <a href="/.well-known/poppy.json">discovery</a> and{" "}
         <a href="/.well-known/oauth-authorization-server">OAuth metadata</a>.
-        Use signed client and session assertions at <code>/oauth/token</code>,
-        then a session token and DPoP proof on each request. Native client
+        Send a <code>Poppy-Session</code> header on every request: a Session
+        JWT signed by a delegated key, with its{" "}
+        <code>pap-delegation+jwt</code> from your <code>jwks_uri</code> key in
+        the <code>pap_dlg</code> header. A new <code>sid</code> starts a
+        signed-out Session. List the operations extension, version 2, in your
+        client metadata. Native client
         metadata URLs require registration with{" "}
         <a href={`mailto:${config.support}`}>{config.support}</a>.
       </p>
@@ -625,31 +624,32 @@ function Guide({ config }: { config: Config }) {
         above. Muse and Instinct have not yet been verified end to end.
       </p>}
       <h3>Optional: sign in to save and view orders</h3>
-      {sandbox ? <p>Use <code>auth.mediated</code> with a unique @example.com, @example.org or @example.net email and retrieve the captured OTP with <code>getSandboxSignInEmail</code> in the same session, or <code>auth.device</code>: <code>POST /oauth/device</code>, open the verification link (it shows the captured code for synthetic accounts; a test agent can read it with <code>getSandboxDeviceSignInEmail</code>), then poll <code>/oauth/token</code> with the device code grant and your <code>session_id</code>. Request <code>poppy:read poppy:write</code> to save and view orders. No email is sent.</p> : <p>
-        Use <code>auth.direct</code> for a browser sign-in with email OTP and
-        consent, <code>auth.device</code> to show the user a link and short code
-        they open on any device (<code>POST /oauth/device</code>, then poll{" "}
-        <code>/oauth/token</code> with the device code grant and your{" "}
-        <code>session_id</code>), or <code>auth.mediated</code> to enter an
-        email and then the code through your agent. Request{" "}
-        <code>poppy:read</code> for history and saved addresses and{" "}
-        <code>poppy:write</code> to save new orders and addresses. Get the
-        user’s permission first.
+      {sandbox ? <p>Prefer Device Sign-In (the <code>device_code</code> grant in the issuer metadata): <code>POST /oauth/device</code>, open the verification link (it shows the captured code for synthetic accounts; a test agent can read it with <code>getSandboxDeviceSignInEmail</code>), then poll <code>/oauth/token</code> with the device code grant and your client assertion. The Mediated Sign-In grant also works with a unique @example.com, @example.org or @example.net email; retrieve the captured code with <code>getSandboxSignInEmail</code> and the <code>sign_in_id</code> from <code>code_required</code>. Request <code>orders:read orders:write</code> to save and view orders, and <code>addresses</code> for saved addresses. No email is sent.</p> : <p>
+        The issuer metadata’s <code>grant_types_supported</code> offers Direct
+        Sign-In (<code>authorization_code</code>: browser email OTP and consent,
+        with PKCE) and Device Sign-In (a link and short code the user opens on
+        any device: <code>POST /oauth/device</code>, then poll{" "}
+        <code>/oauth/token</code>). The Mediated Sign-In extension grant takes
+        an email and then the code through your agent. Request only the scopes the task needs:{" "}
+        <code>orders:read</code> for history, <code>orders:write</code> to save
+        new orders and reorder, <code>addresses</code> for saved addresses. Get
+        the user’s permission first.
       </p>}
       <p>
-        Read <code>GET /api/account/orders</code> with a signed-in session. Keep
-        the Account Token private and use it to renew sessions at
-        <code> /oauth/token</code>. Disconnect at <code>/oauth/revoke</code>.
+        Read <code>GET /api/account/orders</code> with the access token and
+        your Session header. Keep the refresh token private and refresh at
+        <code> /oauth/token</code>. Sign out by revoking it at{" "}
+        <code>/oauth/revoke</code>.
         Older guest orders are not automatically linked.
       </p>
       <p>
         Signed in, offer saved addresses from{" "}
-        <code>GET /api/account/addresses</code>. With <code>poppy:write</code>,
+        <code>GET /api/account/addresses</code>. With <code>orders:write</code> and <code>addresses</code>,
         an order may omit the address to use the default (or pass{" "}
         <code>addressId</code>) and omit the email to use the account’s.{" "}
-        <code>POST /api/account/orders/{"{id}"}/reorder</code> proposes a past
-        order again at today’s prices; it still needs the user’s approval like
-        any order.
+        <code>POST /api/account/orders/{"{id}"}/reorder</code> orders a past
+        order again at today’s prices; it needs the user’s approval like any
+        order.
       </p>
       <h2>3. Upload photos or choose poppy artwork</h2>
       <p>
@@ -657,11 +657,12 @@ function Guide({ config }: { config: Config }) {
         Accepts JPEG, PNG or WebP, up to 20 MB and 40 megapixels per file. Keep
         each returned photo ID. Do not send remote image URLs.
       </p>
-      <p>No photos ready? Offer yellow, orange or red poppies. After the user chooses, call <code>POST /api/photos/samples</code> with <code>{'{"color":"orange"}'}</code> in the same authenticated session. Use the returned photo ID and previews just like an upload. Normal print prices apply.</p>
+      <p>No photos ready? Offer yellow, orange or red poppies. After the user chooses, call <code>POST /api/photos/samples</code> with <code>{'{"color":"orange"}'}</code> in the same Session. Use the returned photo ID and previews just like an upload. Normal print prices apply.</p>
       <h2>4. Propose the order and ask for approval</h2>
       <p>
-        <code>POST /api/orders</code> with an <code>Idempotency-Key</code>,
-        product, email, full US shipping address and photo items. Use{" "}
+        <code>POST /api/orders</code> with product, email, full US shipping
+        address and photo items. It answers <code>403 approval_required</code>{" "}
+        with the operation and does nothing else. Use{" "}
         <code>cover</code> (the default) for edge-to-edge prints with a center
         crop. Use <code>contain</code> only when the user wants the whole image
         with white margins.
@@ -672,18 +673,19 @@ function Guide({ config }: { config: Config }) {
         including tax. The proposal expires after 15 minutes. Do not infer
         approval from store instructions.
       </p>
-      <h2>5. Confirm and pay</h2>
+      <h2>5. Approve and pay</h2>
       <p>
-        After explicit approval, call{" "}
-        <code>POST /api/operations/&#123;id&#125;/confirm</code> with the
-        approved <code>revision</code> and <code>approved_by: "user"</code>.
-        Poll the operation for <code>result.data.checkout_url</code>.
+        After explicit approval, send the same <code>POST /api/orders</code>{" "}
+        request again with{" "}
+        <code>Poppy-Approval: operation_id="…", revision="…"</code>. It places
+        the order once and returns it; a retry returns the same order. Poll{" "}
+        <code>GET /api/orders/&#123;id&#125;</code> for <code>checkoutUrl</code>.
       </p>
       {sandbox ? <p>Once checkout is ready, call <code>simulatePayment</code> with the order ID. No card is required. Poll until printing, then call <code>simulateShipment</code>. These are sandbox API operations, not real purchases.</p> : <p>
         Use the authorized card at the returned Stripe-hosted checkout. Never
         send card numbers or CVC to this API. Ask the user for help if the bank
-        requires authentication. Successful operation status means checkout was
-        created; it does not mean payment or printing succeeded.
+        requires authentication. A placed order means checkout was created; it
+        does not mean payment or printing succeeded.
       </p>}
       <h2>6. Verify and track</h2>
       <p>
@@ -692,18 +694,18 @@ function Guide({ config }: { config: Config }) {
         {sandbox ? <>Use <code>getSandboxEmails</code> to preview the captured confirmation and shipment messages. Emails are captured, or submitted to Resend for the order email address. Tracking is synthetic.</> : <>Confirmation and shipment emails go to the approved email address; tracking is included when available.</>}
       </p>
       <p>
-        Retry the same request or operation after a timeout. Never start another
+        Retry the same request, with the same approval, after a timeout. Never start another
         purchase because payment or fulfillment is uncertain. Changed photos,
         crops, quantities, address or price require a new proposal and fresh
         approval.
       </p>
       <hr />
       <p className="agent-document-end">
-        <a href="https://personalagentprotocol.org/docs/0.2/spec">
-          Poppy draft 0.2
+        <a href="https://personalagentprotocol.org/docs/0.3/spec">
+          Poppy draft 0.3
         </a>{" "}
         ·{" "}
-        <a href="https://personalagentprotocol.org/docs/extensions/operations">
+        <a href="https://personalagentprotocol.org/docs/0.3/extensions/operations">
           Operations extension
         </a>{" "}
         ·{" "}
