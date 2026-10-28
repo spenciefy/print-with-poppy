@@ -327,10 +327,13 @@ function Footer({ compact = false, httpOrderingEnabled = false }: { compact?: bo
           </Faq>
           <Faq title="Can my agent see previous orders?">
             <p>
-              Yes. Ask your agent to sign in with your email. Verify a one-time
-              code and approve access; orders you place while signed in will be
-              saved to your account. You can disconnect through your agent at
-              any time. Guest ordering still works without an account.
+              Yes—if you connect your account. Ordering as a guest is fine, too.
+              If you’d like to save addresses or see previous orders, ask your
+              agent to connect your account. You’ll verify your email and choose
+              what it can access. Orders placed while connected are saved to your
+              account; older guest orders aren’t added automatically. You can
+              disconnect through your agent at any time. Connecting your account
+              doesn’t approve a purchase—you still approve each order.
             </p>
           </Faq>
           <Faq title="When will my prints arrive?">
@@ -624,6 +627,16 @@ function Guide({ config }: { config: Config }) {
         native client allowlist. Native Poppy agents should use the session
         above. Muse and Instinct have not yet been verified end to end.
       </p>}
+      <p>
+        <strong>Agent identity and account access are separate.</strong>{" "}
+        Signed Poppy sessions verify which agent is making each request. OAuth
+        grants access to a customer’s account, limited to the permissions they
+        approve. Poppy 0.3 makes DPoP-bound tokens optional; this store uses
+        standard Bearer access tokens alongside signed session headers. The
+        session signature includes a hash of the access token when one is sent.
+        Native signed-out requests still require a signed session header, but
+        no account access token.
+      </p>
       <h3>Optional: sign in to save and view orders</h3>
       {sandbox ? <p>Use <code>auth.mediated</code> with a unique @example.com, @example.org or @example.net email and retrieve the captured OTP with <code>getSandboxSignInEmail</code> in the same session, or <code>auth.device</code>: <code>POST /oauth/device</code>, open the verification link (it shows the captured code for synthetic accounts; a test agent can read it with <code>getSandboxDeviceSignInEmail</code>), then poll <code>/oauth/token</code> with the device code grant and your <code>session_id</code>. Request <code>poppy:read poppy:write</code> to save and view orders. No email is sent.</p> : <p>
         Use <code>auth.direct</code> for a browser sign-in with email OTP and
