@@ -10,6 +10,7 @@ import { sqlite } from "./sqlite.js";
 import { withDatabase } from "../server/storage-runtime.js";
 import { initializeStore } from "../server/store-schema.js";
 import { registerRoutes } from "../server/routes.js";
+import { errorResponse } from "../server/http-errors.js";
 import { router, pass } from "./router.js";
 import { runJob } from "../server/job-actions.js";
 import { housekeeping } from "../server/retention.js";
@@ -202,26 +203,8 @@ export class CommerceState extends DurableObject<Env> {
   }
   private error(e: unknown) {
     if (e instanceof HttpError) {
-      const headers: Record<string, string> = {};
-      if (e.status === 429) headers["Retry-After"] = "60";
-      if (
-        e.status === 401 ||
-        [
-          "sign_in_required",
-          "insufficient_scope",
-          "extension_required",
-        ].includes(e.code)
-      )
-        headers["WWW-Authenticate"] = `DPoP error="${e.code}"`;
-      return Response.json(
-        {
-          error: e.code,
-          error_description: e.message,
-          message: e.message,
-          ...e.extra,
-        },
-        { status: e.status, headers },
-      );
+      const { status, headers, body } = errorResponse(e);
+      return Response.json(body, { status, headers });
     }
     console.error(
       "Commerce request failed",

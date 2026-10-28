@@ -16,7 +16,38 @@ import { sendMail } from "./providers.js";
 import { escapeHtml } from "./email.js";
 import type { Session, Order } from "./types.js";
 
-export const accountScopes = ["poppy:read", "poppy:write"];
+/**
+ * The store's own account scopes (Poppy 0.3 §4.4). Every scope is listed in
+ * `scopes_supported` and described in `auth.scopes`, with `auth.scope_hints`.
+ * Direct and Device Sign-In can grant all of them; Mediated Sign-In, which is
+ * transitional, grants only `mediatedScopes`.
+ */
+export const scopeCatalog = {
+  "orders:read": {
+    description:
+      "See your Print with Poppy account email, order history, order status and delivery details. Read-only.",
+    hints: { changes: "none", personal_data: true },
+  },
+  "orders:write": {
+    description:
+      "Save new orders to your account and propose reorders of past orders. Each purchase still needs your explicit approval and card payment; approving an order creates a checkout that can't be undone. Doesn't include reading order history (orders:read).",
+    hints: { changes: "irreversible", personal_data: true },
+  },
+  addresses: {
+    description:
+      "See, save, change and delete the shipping addresses saved to your account, and ship an order to one of them.",
+    hints: { changes: "reversible", personal_data: true },
+  },
+} as const;
+export type AccountScope = keyof typeof scopeCatalog;
+export const accountScopes = Object.keys(scopeCatalog) as AccountScope[];
+export const mediatedScopes: AccountScope[] = ["orders:read", "orders:write"];
+export const scopeDescriptions = Object.fromEntries(
+  accountScopes.map((scope) => [scope, scopeCatalog[scope].description]),
+);
+export const scopeHints = Object.fromEntries(
+  accountScopes.map((scope) => [scope, scopeCatalog[scope].hints]),
+);
 /** Synthetic test accounts: the only ones whose captured demo codes are ever shown or returned. */
 export const syntheticEmail = (email: unknown) =>
   typeof email === "string" && /@example\.(com|org|net)$/.test(email);
@@ -32,7 +63,7 @@ export function demoSignInCode(challengeId: string) {
   const message = get("demo-signin-email", challengeId);
   return message?.text?.match(/code is (\d{6})/)?.[1] as string | undefined;
 }
-export function scopes(value: unknown, allowed = accountScopes) {
+export function scopes(value: unknown, allowed: readonly string[] = accountScopes) {
   if (typeof value !== "string" || !value.trim())
     throw new HttpError(
       400,
@@ -48,137 +79,111 @@ export function scopes(value: unknown, allowed = accountScopes) {
     );
   return requested;
 }
-export function requireAccount(session: Session, scope = "poppy:read") {
+/** Signed-out requests that need the account get a 401 challenge with no error code (§7). */
+export const signInChallenge = "sign_in_challenge";
+/**
+ * The signed-in account, if the access token has `scope`. Without an access
+ * token: 401 with `WWW-Authenticate: Bearer scope="…"` and no error code (§7).
+ * With one that lacks the scope: 403 `insufficient_scope`, naming it.
+ */
+export function requireAccount(session: Session, scope: string | string[] = "orders:read") {
+  const needed = Array.isArray(scope) ? scope : [scope];
   if (!session.accountId)
     throw new HttpError(
-      403,
-      "sign_in_required",
-      "Sign in with your email code to access your account.",
+      401,
+      signInChallenge,
+      `This needs the user's account. Send an access token that covers ${needed.join(" ")}: refresh one, or sign in requesting it.`,
+      { scope: needed.join(" ") },
     );
-  if (!session.scopes?.includes(scope))
+  if (needed.some((s) => !session.scopes?.includes(s)))
     throw new HttpError(
       403,
       "insufficient_scope",
-      "Approve the required account access.",
-      { scope },
+      `This needs account access the user hasn't approved: ${needed.join(" ")}. Refresh with a token that covers it, or sign in again requesting it.`,
+      { scope: needed.join(" ") },
     );
   return session.accountId;
 }
+/** Any signed-in request, whatever its scopes. */
+export function requireSignedIn(session: Session) {
+  if (!session.accountId || !session.scopes?.length)
+    throw new HttpError(401, signInChallenge, "This needs the user's account. Send an access token.", {
+      scope: "orders:read",
+    });
+  return session.accountId;
+}
+/** A Session keeps one account; another account's token is refused (§5.4 MAY). */
 export function checkAccount(session: Session, accountId: string) {
   if (session.accountBinding && session.accountBinding !== accountId)
     throw new HttpError(
       400,
-      "account_mismatch",
-      "Start a new session to use a different account.",
+      "invalid_session",
+      "This Session already used a different account. Start a new Session (a new sid) for this one.",
     );
 }
+/** A refresh token's record ("account-token"), if it's still valid. */
 export function activeGrant(grantId?: string) {
   const grant = grantId && get("account-token", grantId);
   return grant && !grant.revoked && grant.expires > Date.now()
     ? grant
     : undefined;
 }
-export function sessionToken(
-  session: Session,
-  thumb: string,
-  grantId?: string,
-  requested?: string[],
-) {
-  const grant = activeGrant(grantId);
+export const accessTokenLifetimeSeconds = 3600;
+export const refreshTokenLifetimeMs = 30 * 86400000;
+/** An access token for a refresh token's grant, with these scopes (all of them by default). */
+function accessToken(grantId: string, grant: any, granted: string[]) {
   const access = id("tok");
-  const granted = grant ? requested || grant.scopes : [];
   put("token", hash(access), {
-    sessionId: session.id,
-    thumb,
-    expires: Date.now() + 3600000,
-    ...(grant ? { grantId, accountId: grant.accountId, scopes: granted } : {}),
+    clientId: grant.clientId,
+    grantId,
+    accountId: grant.accountId,
+    scopes: granted,
+    expires: Date.now() + accessTokenLifetimeSeconds * 1000,
   });
-  return {
-    access_token: access,
-    token_type: "DPoP",
-    expires_in: 3600,
-    scope: granted.join(" "),
-    session_id: session.id,
-    signed_in: !!grant,
-  };
+  return access;
 }
-export function signIn(
-  session: Session,
-  accountId: string,
-  granted: string[],
-  thumb: string,
-) {
+/**
+ * Sign-in (Direct, Device, Mediated): a new refresh token for this client and
+ * account, and an access token, in a plain OAuth token response (§4.7).
+ */
+export function issueTokens(clientId: string, accountId: string, granted: string[]) {
   return db.transaction(() => {
-    // Reload after asynchronous email or assertion verification.
-    session = get<Session>("session", session.id)!;
-    checkAccount(session, accountId);
-    const refresh = id("pat"),
-      grantId = hash(refresh),
-      expires = Date.now() + 30 * 86400000;
-    put(
-      "account-token",
-      grantId,
-      {
-        clientId: session.clientId,
-        userId: session.userId,
-        accountId,
-        scopes: granted,
-        expires,
-      },
+    const refresh = id("prt");
+    const grantId = hash(refresh);
+    const grant = {
+      clientId,
       accountId,
-    );
-    session.accountBinding = accountId;
-    session.grantId = grantId;
-    put("session", session.id, session);
+      scopes: granted,
+      expires: Date.now() + refreshTokenLifetimeMs,
+      created: Date.now(),
+    };
+    put("account-token", grantId, grant, accountId);
     return {
-      ...sessionToken(session, thumb, grantId),
+      access_token: accessToken(grantId, grant, granted),
+      token_type: "Bearer",
+      expires_in: accessTokenLifetimeSeconds,
       refresh_token: refresh,
-      refresh_token_expires_in: Math.floor((expires - Date.now()) / 1000),
+      scope: granted.join(" "),
     };
   })();
 }
-export function refreshAccount(b: any, thumb: string, metadata: any) {
-  return db.transaction(() => {
-    const grantId = hash(
-      typeof b.refresh_token === "string" ? b.refresh_token : "",
+/** grant_type=refresh_token (§4.4): optional narrower `scope`; no new refresh token. */
+export function refreshAccount(b: any) {
+  const grantId = hash(typeof b.refresh_token === "string" ? b.refresh_token : "");
+  const grant = activeGrant(grantId);
+  if (!grant || grant.clientId !== b.client_id)
+    throw new HttpError(
+      400,
+      "invalid_grant",
+      "The refresh token expired or was revoked. Sign in again.",
     );
-    const grant = activeGrant(grantId);
-    if (!grant || grant.clientId !== b.client_id)
-      throw new HttpError(
-        400,
-        "invalid_grant",
-        "Account access expired or was disconnected. Sign in again.",
-      );
-    const granted =
-      b.scope === undefined ? grant.scopes : scopes(b.scope, grant.scopes);
-    let session = b.session_id
-      ? get<Session>("session", b.session_id)
-      : undefined;
-    if (
-      b.session_id &&
-      (!session ||
-        session.clientId !== grant.clientId ||
-        session.userId !== grant.userId)
-    )
-      throw new HttpError(
-        400,
-        "invalid_session",
-        "Session does not belong to this agent and user.",
-      );
-    if (!session)
-      session = {
-        id: id("ses"),
-        clientId: grant.clientId,
-        userId: grant.userId,
-        extensions: metadata.extensions?.operations?.version === "1",
-        created: Date.now(),
-      };
-    checkAccount(session, grant.accountId);
-    session.accountBinding = grant.accountId;
-    session.grantId = grantId;
-    put("session", session.id, session);
-    return sessionToken(session, thumb, grantId, granted);
-  })();
+  const granted = b.scope === undefined ? grant.scopes : scopes(b.scope, grant.scopes);
+  return {
+    access_token: accessToken(grantId, grant, granted),
+    token_type: "Bearer",
+    expires_in: accessTokenLifetimeSeconds,
+    scope: granted.join(" "),
+  };
 }
 export function revokeAccount(token: unknown, clientId: string) {
   if (typeof token !== "string") return;
@@ -187,16 +192,11 @@ export function revokeAccount(token: unknown, clientId: string) {
   if (!grant || grant.clientId !== clientId) return;
   revokeGrant(grantId);
 }
+/** Revoking a refresh token invalidates its access tokens at once (RFC 7009 §2.1). */
 export function revokeGrant(grantId: string) {
   const grant = get("account-token", grantId);
   if (!grant) return;
   put("account-token", grantId, { ...grant, revoked: true }, grant.accountId);
-  for (const session of all<Session>("session")) {
-    if (session.grantId === grantId) {
-      delete session.grantId;
-      put("session", session.id, session);
-    }
-  }
 }
 export function throttle(key: string, limit: number, windowMs: number) {
   const now = Date.now();
@@ -228,7 +228,8 @@ export async function startCode(
       "Agent Sandbox sign-in accepts only synthetic @example.com, @example.org or @example.net accounts. No real email is verified.",
     );
   throttle(`email:${hash(email)}`, 5, 3600000);
-  throttle(`owner:${owner}`, 5, 3600000);
+  // A Mediated Sign-In's owner is the whole client (every User of that agent).
+  throttle(`owner:${owner}`, owner.startsWith("mediated:") ? 100 : 5, 3600000);
   throttle("all", 200, 3600000);
   const code = String(randomInt(0, 1000000)).padStart(6, "0");
   const challengeId = id("sgn");
@@ -245,9 +246,15 @@ export async function startCode(
   };
   // No raw code is stored in live mode or returned by an API.
   put("signin-code", challengeId, challenge, owner);
-  const access = requested.includes("poppy:write")
-    ? "view your orders and save new orders to your account"
-    : "view your orders";
+  const access = requested
+    .map((scope) =>
+      scope === "orders:read"
+        ? "view your orders"
+        : scope === "orders:write"
+          ? "save new orders to your account"
+          : "see and change your saved addresses",
+    )
+    .join(", ");
   const agent = new URL(clientId).hostname;
   const text = `Your Print with Poppy sign-in code is ${code}.\n\n${agent} is requesting permission to ${access}. Only enter this code if you requested this connection. It expires in 10 minutes. This does not approve a purchase.\n\nIf you did not request this, ignore this email.`;
   const message = {
@@ -352,11 +359,11 @@ export function history(session: Session, cursor?: string) {
 }
 export function cleanupSignIns() {
   db.prepare(
-    "DELETE FROM records WHERE kind IN ('signin-code','browser-signin','authorization-code','signin-rate','device-grant','device-user-code') AND json_extract(body, '$.expires') < ?",
+    "DELETE FROM records WHERE kind IN ('signin-code','browser-signin','authorization-code','signin-rate','device-grant','device-user-code','session-sid') AND json_extract(body, '$.expires') < ?",
   ).run(Date.now() - 86400000);
 }
 
-export function exchangeCode(b: any, thumb: string) {
+export function exchangeCode(b: any) {
   // Errors are returned from the transaction, not thrown, so that marking a reused
   // code's grant revoked is committed rather than rolled back.
   const outcome = db.transaction(() => {
@@ -383,40 +390,7 @@ export function exchangeCode(b: any, thumb: string) {
       !equal(hash(b.code_verifier), code.challenge)
     )
       return invalid;
-    const session =
-      typeof b.session_id === "string" && get<Session>("session", b.session_id);
-    if (
-      !session ||
-      session.clientId !== b.client_id ||
-      session.compatibility ||
-      session.demo
-    )
-      return {
-        error: new HttpError(
-          400,
-          "invalid_session",
-          "An existing native Poppy session is required.",
-        ),
-      };
-    let granted: string[];
-    try {
-      granted =
-        b.scope === undefined ? code.scopes : scopes(b.scope, code.scopes);
-    } catch (e) {
-      return { error: e as HttpError };
-    }
-    // Spent either way: a different account issues no tokens (spec 4.4).
-    if (session.accountBinding && session.accountBinding !== code.accountId) {
-      put("authorization-code", codeId, { ...code, used: true });
-      return {
-        error: new HttpError(
-          400,
-          "account_mismatch",
-          "Start a new session to use a different account.",
-        ),
-      };
-    }
-    const result = signIn(session, code.accountId, granted, thumb);
+    const result = issueTokens(code.clientId, code.accountId, code.scopes);
     put("authorization-code", codeId, {
       ...code,
       used: true,

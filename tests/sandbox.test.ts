@@ -2,8 +2,8 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
-import { randomUUID, createHash } from "node:crypto";
-import { generateKeyPair, exportJWK, importJWK, SignJWT } from "jose";
+import { randomUUID } from "node:crypto";
+import { signInHarness } from "./support/signin-harness.js";
 import sharp from "sharp";
 const temp = await fs.mkdtemp(`${os.tmpdir()}/poppy-test-`);
 delete process.env.STRIPE_SECRET_KEY;
@@ -37,77 +37,8 @@ after(async () => {
 });
 const origin = "http://localhost:8797";
 const clientId = origin + "/api/demo/agent.json";
-const key = store.get("demo-key", "identity");
-const signing = await importJWK(key.private, "ES256");
-async function makeAgent(user = randomUUID()) {
-  const pair = await generateKeyPair("ES256", { extractable: true });
-  const jwk = await exportJWK(pair.publicKey);
-  async function proof(method: string, url: string, token?: string) {
-    return new SignJWT({
-      htm: method,
-      htu: url,
-      ...(token
-        ? { ath: createHash("sha256").update(token).digest("base64url") }
-        : {}),
-    })
-      .setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk })
-      .setIssuedAt()
-      .setJti(randomUUID())
-      .sign(pair.privateKey);
-  }
-  async function assertion(
-    subject: string,
-    audience = origin,
-  ) {
-    return new SignJWT({})
-      .setProtectedHeader({ alg: "ES256", kid: "demo" })
-      .setIssuer(clientId)
-      .setSubject(subject)
-      .setAudience(audience)
-      .setIssuedAt()
-      .setExpirationTime("60s")
-      .setJti(randomUUID())
-      .sign(signing);
-  }
-  async function token(sessionId?: string) {
-    const r = await fetch(origin + "/oauth/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        DPoP: await proof("POST", origin + "/oauth/token"),
-      },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        client_id: clientId,
-        client_assertion_type:
-          "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-        client_assertion: await assertion(clientId),
-        assertion: await assertion(user),
-        ...(sessionId ? { session_id: sessionId } : {}),
-      }),
-    });
-    const b = await r.json();
-    assert.equal(r.status, 200, JSON.stringify(b));
-    return b;
-  }
-  const session = await token();
-  async function request(route: string, init: RequestInit = {}) {
-    const r = await fetch(origin + route, {
-      ...init,
-      headers: {
-        Authorization: `DPoP ${session.access_token}`,
-        DPoP: await proof(
-          init.method || "GET",
-          origin + new URL(route, origin).pathname,
-          session.access_token,
-        ),
-        ...init.headers,
-      },
-    });
-    return { status: r.status, body: await r.json() };
-  }
-  return { session, request, proof, token, assertion };
-}
+const h = await signInHarness(origin, store);
+const makeAgent = h.makeAgent;
 
 const address = {
   name: "Sandbox Recipient",
@@ -145,19 +76,9 @@ test("sandbox exposes simulation only with native sessions and approval, isolate
     "sample.jpg",
     a.session.session_id,
   );
-  const proposal = await a.request("/api/orders", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Idempotency-Key": randomUUID(),
-    },
-    body: JSON.stringify({
-      email: "test@example.com",
-      address,
-      items: [{ photoId: photo.id, quantity: 5, fit: "cover" }],
-    }),
-  });
-  assert.equal(proposal.status, 202, JSON.stringify(proposal.body));
+  const body = { email: "test@example.com", address, items: [{ photoId: photo.id, quantity: 5, fit: "cover" }] };
+  const proposal = await a.request("/api/orders", h.postJson(body));
+  assert.equal(proposal.status, 403, JSON.stringify(proposal.body));
   const operation = proposal.body.operation;
   assert.equal(
     (
@@ -167,13 +88,10 @@ test("sandbox exposes simulation only with native sessions and approval, isolate
     ).status,
     404,
   );
-  await a.request(`/api/operations/${operation.operation_id}/confirm`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ revision: operation.revision, approved_by: "user" }),
-  });
+  const placed = await h.approveVia(a, "/api/orders", body, operation);
+  assert.equal(placed.status, 201, JSON.stringify(placed.body));
   await worker.tick();
-  const ready = await a.request(`/api/operations/${operation.operation_id}`);
+  const ready = { body: { result: { data: { order_id: placed.body.id } } } };
   const oid = ready.body.result.data.order_id;
   assert.equal(
     (await b.request(`/api/sandbox/orders/${oid}/pay`, { method: "POST" }))
@@ -183,7 +101,7 @@ test("sandbox exposes simulation only with native sessions and approval, isolate
   assert.equal(
     (await fetch(origin + `/api/sandbox/orders/${oid}/pay`, { method: "POST" }))
       .status,
-    401,
+    400,
   );
   assert.equal(
     (await a.request(`/api/sandbox/orders/${oid}/ship`, { method: "POST" }))
@@ -213,39 +131,25 @@ test("sandbox exposes simulation only with native sessions and approval, isolate
   );
   assert.equal((await a.request(`/api/orders/${oid}`)).body.status, "shipped");
 });
-test("sandbox OTP is restricted to the requesting session and synthetic accounts", async () => {
-  const a = await makeAgent(),
-    b = await makeAgent();
-  const start = (email: string) =>
-    a.request("/api/poppy/sign-in", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        scope: "poppy:read poppy:write",
-        credentials: { email },
-      }),
-    });
+test("sandbox Mediated Sign-In codes are readable only by the client that started them, for synthetic accounts", async () => {
+  const a = await makeAgent();
+  const start = (email: string) => h.tokenRequest({ grant_type: h.mediatedGrant, scope: "orders:read orders:write", email });
   assert.equal((await start("somebody@gmail.com")).status, 400);
   const challenge = await start("sandbox@example.com");
-  assert.equal(challenge.status, 200);
+  assert.equal(challenge.body.error, "code_required");
+  assert.match(challenge.body.sent_to, /Sandbox/);
   const id = challenge.body.sign_in_id;
   const email = await a.request(`/api/sandbox/sign-in/${id}/email`);
   assert.equal(email.status, 200, JSON.stringify(challenge.body));
-  assert.equal(
-    (await b.request(`/api/sandbox/sign-in/${id}/email`)).status,
-    404,
-  );
+  // A sign-in started by another client isn't readable.
+  const c = store.get("signin-code", id);
+  store.put("signin-code", "sgn_other_client", { ...c, id: "sgn_other_client", owner: "mediated:https://other.example/agent.json" }, c.owner);
+  store.put("demo-signin-email", "sgn_other_client", store.get("demo-signin-email", id));
+  assert.equal((await a.request(`/api/sandbox/sign-in/sgn_other_client/email`)).status, 404);
   const code = email.body.email.text.match(/code is (\d{6})/)[1];
-  const verified = await a.request(`/api/poppy/sign-in/${id}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code }),
-  });
+  const verified = await h.tokenRequest({ grant_type: h.mediatedGrant, sign_in_id: id, one_time_code: code });
   assert.equal(verified.status, 200);
-  assert.equal(
-    (await a.request(`/api/sandbox/sign-in/${id}/email`)).status,
-    404,
-  );
+  assert.equal((await a.request(`/api/sandbox/sign-in/${id}/email`)).status, 404);
 });
 
 

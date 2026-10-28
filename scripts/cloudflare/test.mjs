@@ -29,6 +29,7 @@ const child = spawn(
     root + "/state",
     "--var",
     `PUBLIC_URL:${origin}`,
+    ...(process.env.RUNTIME_SKIP_MEDIA === "1" ? ["--enable-containers=false"] : []),
   ],
   { stdio: ["ignore", log.fd, log.fd] },
 );
@@ -78,7 +79,8 @@ try {
     SANDBOX_TEST_EMAIL: "runtime@example.com",
   };
   await run(["tsx", "tests/cloudflare/runtime.ts"], env);
-  await run(
+  // The reference agent orders photos, which needs the media containers.
+  if (process.env.RUNTIME_SKIP_MEDIA !== "1") await run(
     [
       "tsx",
       "scripts/agent.ts",

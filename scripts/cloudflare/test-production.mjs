@@ -118,28 +118,18 @@ try {
     ).status,
     400,
   );
-  assert.equal(
-    (
-      await fetch(origin + "/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "unapproved@example.com" }),
-      })
-    ).status,
-    401,
-    "Any recipient is allowed, but session authentication remains required.",
-  );
-  assert.equal(
-    (
-      await fetch(origin + "/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "spencersyen@gmail.com" }),
-      })
-    ).status,
-    401,
-    "Recipient does not bypass session authentication.",
-  );
+  // Poppy 0.3 §5.3: a missing Session header is 400 invalid_session,
+  // independently of the recipient; it is not an OAuth account challenge.
+  for (const email of ["unapproved@example.com", "spencersyen@gmail.com"]) {
+    const response = await fetch(origin + "/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    assert.equal(response.status, 400, "Recipient does not bypass session authentication.");
+    assert.equal((await response.json()).error, "invalid_session");
+    assert.equal(response.headers.get("www-authenticate"), null);
+  }
   console.log(
     "Production Workers transport passed: raw signed webhooks, environment isolation, simulation disabled, unrestricted recipients and session authentication. No provider requests were made.",
   );

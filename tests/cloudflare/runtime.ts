@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { createHash, randomUUID } from "node:crypto";
-import { exportJWK, generateKeyPair, importJWK, SignJWT } from "jose";
+import { randomUUID } from "node:crypto";
+import { SignJWT } from "jose";
+import { poppyAgent, delegate } from "../../scripts/poppy-delegation.js";
 const origin = process.env.PUBLIC_URL!;
 assert(
   origin && ["localhost", "127.0.0.1"].includes(new URL(origin).hostname),
@@ -12,25 +13,51 @@ assert.equal(config.sandboxEmailDelivery, false, "CI must never send email.");
 const key = JSON.parse(
   await fs.readFile(process.env.AGENT_PRIVATE_JWK_FILE!, "utf8"),
 );
-const identity = await importJWK(key, "ES256"),
-  clientId = origin + "/api/demo/agent.json";
-const digest = (v: string) =>
-  createHash("sha256").update(v).digest("base64url");
-
-// Browser form sign-in must preserve Origin while hiding cross-origin referrers.
-const browserStart = await fetch(
-  origin +
-    "/oauth/authorize?" +
-    new URLSearchParams({
-      response_type: "code",
-      client_id: clientId,
-      redirect_uri: origin + "/api/demo/callback",
-      scope: "poppy:read",
-      state: randomUUID(),
-      code_challenge: digest(randomUUID()),
-      code_challenge_method: "S256",
-    }),
+// A key that signed directly would be refused; this run also checks that below.
+const clientId = origin + "/api/demo/agent.json";
+// Without Docker, the media containers can't run: RUNTIME_SKIP_MEDIA=1 checks
+// everything that doesn't upload or render photos.
+const skipMedia = process.env.RUNTIME_SKIP_MEDIA === "1";
+const runtimeAddress = {
+  name: "Runtime Tester",
+  line1: "123 Main Street",
+  city: "San Francisco",
+  state: "CA",
+  postalCode: "94103",
+  country: "US",
+};
+// The demo agent (0.3): the jwks_uri key signs client assertions and
+// delegations; delegated keys sign the per-request Session JWTs.
+const agent = await poppyAgent(key, clientId, origin);
+const clientAuth = agent.clientAuth;
+const discovery = await (await fetch(origin + "/.well-known/poppy.json")).json();
+assert.equal(discovery.protocol_version, "0.3");
+const metadata = await (
+  await fetch(origin + "/.well-known/oauth-authorization-server")
+).json();
+// The local Worker runs the Agent Sandbox shape: Device and Mediated, no Direct.
+assert.ok(!metadata.grant_types_supported.includes("authorization_code"));
+assert.equal(
+  (await fetch(origin + "/oauth/authorize?client_id=" + encodeURIComponent(clientId))).status,
+  404,
 );
+
+// Browser form sign-in (the Device page) must preserve Origin while hiding cross-origin referrers.
+const formStart = await fetch(origin + "/oauth/device", {
+  method: "POST",
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  body: new URLSearchParams({ scope: "orders:read", ...(await clientAuth()) }),
+});
+assert.equal(formStart.status, 200);
+const formGrant = await formStart.json();
+const browserStart = await fetch(origin + "/device", {
+  method: "POST",
+  headers: {
+    Origin: origin,
+    "Content-Type": "application/x-www-form-urlencoded",
+  },
+  body: new URLSearchParams({ user_code: formGrant.user_code }),
+});
 assert.equal(browserStart.status, 200);
 assert.equal(browserStart.headers.get("referrer-policy"), "same-origin");
 const browserCookie = browserStart.headers.get("set-cookie")!.split(";")[0];
@@ -46,10 +73,10 @@ for (const [requestOrigin, cookie, csrf, status] of [
   ["https://evil.example", browserCookie, browserFields.csrf, 403],
   ["", browserCookie, browserFields.csrf, 403],
   [origin, "", browserFields.csrf, 403],
-  [origin, "poppy_signin=wrong-browser", browserFields.csrf, 403],
+  [origin, "poppy_device=wrong-browser", browserFields.csrf, 403],
   [origin, browserCookie, "wrong-csrf", 403],
 ] as const) {
-  const result = await fetch(origin + "/oauth/authorize/email", {
+  const result = await fetch(origin + "/device/email", {
     method: "POST",
     headers: {
       Origin: requestOrigin,
@@ -67,7 +94,7 @@ assert.equal(
 // The authorized browser must reach the code-entry page after the refused
 // submissions. Demo mode captures the email; the delivery-off check above
 // ensures this test cannot call an email provider.
-const browserEmail = await fetch(origin + "/oauth/authorize/email", {
+const browserEmail = await fetch(origin + "/device/email", {
   method: "POST",
   headers: {
     Origin: origin,
@@ -85,68 +112,25 @@ assert.equal(browserEmail.headers.get("cache-control"), "no-store");
 assert.match(await browserEmail.text(), /Check your email/);
 
 async function client() {
-  const pair = await generateKeyPair("ES256", { extractable: true }),
-    jwk = await exportJWK(pair.publicKey);
-  const proof = (method: string, url: string, token?: string) =>
-    new SignJWT({
-      htm: method,
-      htu: url,
-      ...(token ? { ath: digest(token) } : {}),
-    })
-      .setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk })
-      .setIssuedAt()
-      .setJti(randomUUID())
-      .sign(pair.privateKey);
-  const assertion = (sub: string) =>
-    new SignJWT({})
-      .setProtectedHeader({ alg: "ES256", kid: key.kid })
-      .setIssuer(clientId)
-      .setSubject(sub)
-      .setAudience(origin)
-      .setIssuedAt()
-      .setExpirationTime("60s")
-      .setJti(randomUUID())
-      .sign(identity);
-  const response = await fetch(origin + "/oauth/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      DPoP: await proof("POST", origin + "/oauth/token"),
-    },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      client_id: clientId,
-      client_assertion_type:
-        "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-      client_assertion: await assertion(clientId),
-      assertion: await assertion("test-" + randomUUID()),
-    }),
-  });
-  assert.equal(response.status, 200);
-  const session = await response.json();
-  let token = session.access_token;
+  const session = agent.newSession("test-" + randomUUID());
+  let token: string | undefined;
+  const sessionJwt = (method: string, url: string, t = token) => agent.sessionJwt(session, method, url, t);
   return {
     get token() {
       return token;
     },
-    useToken(value: string) {
+    useToken(value: string | undefined) {
       token = value;
     },
     session,
-    proof,
-    clientAuth: async () => ({
-      client_id: clientId,
-      client_assertion_type:
-        "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-      client_assertion: await assertion(clientId),
-    }),
-    async call(path: string, body?: any, extra: Record<string, string> = {}) {
-      const method = body === undefined ? "GET" : "POST";
+    sessionJwt,
+    clientAuth,
+    async call(path: string, body?: any, extra: Record<string, string> = {}, method = body === undefined ? "GET" : "POST") {
       return fetch(origin + path, {
         method,
         headers: {
-          Authorization: `DPoP ${token}`,
-          DPoP: await proof(method, origin + path, token),
+          "Poppy-Session": await sessionJwt(method, origin + path),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           "Content-Type": "application/json",
           ...extra,
         },
@@ -155,6 +139,7 @@ async function client() {
     },
   };
 }
+const approval = (op: any) => ({ "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}"` });
 assert.equal(
   (
     await fetch(origin + "/api/agent-sessions", {
@@ -167,11 +152,11 @@ assert.equal(
 );
 assert.equal((await fetch(origin + "/api/compat/openapi.json")).status, 404);
 const api = await (await fetch(origin + "/openapi.json")).json();
-assert(
-  api.paths["/api/orders"].post.responses["202"].content[
-    "application/json"
-  ].schema.required.includes("operation"),
+assert.equal(
+  api.paths["/api/orders"].post.responses["403"].content["application/json"].schema.$ref,
+  "#/components/schemas/ApprovalRequired",
 );
+assert(api.components.schemas.ApprovalRequired.required.includes("operation"));
 assert.equal(
   api.paths["/api/shirt-preview-approvals/{id}"].post.operationId,
   "approveShirtPreviews",
@@ -188,10 +173,36 @@ assert.equal(
       body: "{}",
     })
   ).status,
-  401,
+  400,
 );
+// 0.3: client assertions are signed directly by the jwks_uri key; one signed by a delegated key is refused.
+const { importJWK } = await import("jose");
+const delegated = await delegate(key, clientId);
+const rootSigned = await new SignJWT({})
+  .setProtectedHeader({ alg: "ES256", kid: delegated.kid, pap_dlg: delegated.delegation })
+  .setIssuer(clientId)
+  .setSubject(clientId)
+  .setAudience(origin)
+  .setIssuedAt()
+  .setExpirationTime("60s")
+  .setJti(randomUUID())
+  .sign(delegated.key);
+void importJWK;
+const undelegated = await fetch(origin + "/oauth/device", {
+  method: "POST",
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  body: new URLSearchParams({
+    scope: "orders:read",
+    client_id: clientId,
+    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+    client_assertion: rootSigned,
+  }),
+});
+assert.equal(undelegated.status, 401);
+assert.equal((await undelegated.json()).error, "invalid_client");
 const a = await client(),
   b = await client();
+if (!skipMedia) {
 const sample = await a.call("/api/photos/samples", { color: "yellow" });
 assert.equal(sample.status, 201);
 const photo = await sample.json();
@@ -211,10 +222,7 @@ async function batchCall(
     method: "POST",
     body: form,
     headers: signed
-      ? {
-          Authorization: `DPoP ${agent.token}`,
-          DPoP: await agent.proof("POST", url, agent.token),
-        }
+      ? { "Poppy-Session": await agent.sessionJwt("POST", url) }
       : {},
   });
 }
@@ -222,7 +230,7 @@ const batchForm = new FormData();
 batchForm.append("photo3", new Blob([artwork]), "private-name.png");
 batchForm.append("photo1", new Blob([artwork]), "another-private-name.png");
 batchForm.append("photo2", new Blob(["not an image"]), "bad.png");
-assert.equal((await batchCall(a, batchForm, false)).status, 401);
+assert.equal((await batchCall(a, batchForm, false)).status, 400);
 const batchResponse = await batchCall(a, batchForm);
 assert.equal(batchResponse.status, 200);
 const batch = await batchResponse.json();
@@ -244,16 +252,9 @@ for (const r of batch.results.filter((r: any) => r.photo)) {
 const expired = new URL(photo.previews.contain);
 expired.searchParams.set("exp", "1");
 assert.equal((await fetch(expired)).status, 403);
-assert.equal(
-  (
-    await fetch(origin + "/api/orders/nonexistent", {
-      headers: { Authorization: `Bearer ${a.token}` },
-    })
-  ).status,
-  401,
-);
-const p = await a.proof("GET", origin + "/api/orders/nonexistent", a.token);
-const replayHeaders = { Authorization: `DPoP ${a.token}`, DPoP: p };
+assert.equal((await fetch(origin + "/api/orders/nonexistent")).status, 400);
+const p = await a.sessionJwt("GET", origin + "/api/orders/nonexistent");
+const replayHeaders = { "Poppy-Session": p };
 assert.equal(
   (await fetch(origin + "/api/orders/nonexistent", { headers: replayHeaders }))
     .status,
@@ -262,7 +263,7 @@ assert.equal(
 assert.equal(
   (await fetch(origin + "/api/orders/nonexistent", { headers: replayHeaders }))
     .status,
-  401,
+  400,
 );
 const body = {
   email: "runtime@example.com",
@@ -278,13 +279,8 @@ const body = {
     { photoId: photo.id, product: "prints", quantity: 5, fit: "contain" },
   ],
 };
-const idem = randomUUID();
-const proposals = await Promise.all(
-  Array.from({ length: 4 }, () =>
-    a.call("/api/orders", body, { "Idempotency-Key": idem }),
-  ),
-);
-for (const r of proposals) assert.equal(r.status, 202);
+const proposals = await Promise.all(Array.from({ length: 4 }, () => a.call("/api/orders", body)));
+for (const r of proposals) assert.equal(r.status, 403);
 const operations = await Promise.all(proposals.map((r) => r.json()));
 assert.equal(
   new Set(operations.map((r) => r.operation.operation_id)).size,
@@ -292,43 +288,26 @@ assert.equal(
   "Concurrent proposals must converge.",
 );
 const op = operations[0].operation;
-assert.equal(
-  (await b.call(`/api/operations/${op.operation_id}`)).status,
-  404,
-  "Another session must not read the proposal.",
+assert.notEqual(
+  (await b.call("/api/orders", body, approval(op))).status,
+  201,
+  "Another Session can't approve it.",
 );
-assert.equal(
-  (
-    await a.call(`/api/operations/${op.operation_id}/confirm`, {
-      revision: op.revision,
-      approved_by: "agent",
-    })
-  ).status,
-  403,
-);
-const confirmations = await Promise.all(
-  Array.from({ length: 4 }, () =>
-    a.call(`/api/operations/${op.operation_id}/confirm`, {
-      revision: op.revision,
-      approved_by: "user",
-    }),
-  ),
-);
-for (const r of confirmations) assert.equal(r.status, 200);
+const confirmations = await Promise.all(Array.from({ length: 4 }, () => a.call("/api/orders", body, approval(op))));
+for (const r of confirmations) assert.equal(r.status, 201);
 const results = await Promise.all(confirmations.map((r) => r.json()));
-assert.equal(new Set(results.map((r) => r.operation_id)).size, 1);
-const bad = await a.call("/api/orders", JSON.stringify(body), {
-  "Idempotency-Key": randomUUID(),
-});
+assert.equal(new Set(results.map((r) => r.id)).size, 1, "At most once.");
+const bad = await a.call("/api/orders", JSON.stringify(body));
 assert.equal(bad.status, 400);
 
+}
 // Device Sign-In, saved addresses and reorder through the Workers transport.
 const form = { "Content-Type": "application/x-www-form-urlencoded" };
 const d = await client();
 const deviceStart = await fetch(origin + "/oauth/device", {
   method: "POST",
   headers: form,
-  body: new URLSearchParams({ scope: "poppy:read poppy:write", ...(await d.clientAuth()) }),
+  body: new URLSearchParams({ scope: "orders:read orders:write addresses", ...(await d.clientAuth()) }),
 });
 assert.equal(deviceStart.status, 200);
 const deviceGrant = await deviceStart.json();
@@ -337,11 +316,10 @@ const poll = async () =>
   (
     await fetch(origin + "/oauth/token", {
       method: "POST",
-      headers: { ...form, DPoP: await d.proof("POST", origin + "/oauth/token") },
+      headers: form,
       body: new URLSearchParams({
         grant_type: "urn:ietf:params:oauth:grant-type:device_code",
         device_code: deviceGrant.device_code,
-        session_id: d.session.session_id,
         ...(await d.clientAuth()),
       }),
     })
@@ -376,59 +354,48 @@ const emailed = await devicePost("/device/email", { email: `device-${randomUUID(
 const otp = emailed.html.match(/captured code is <strong>(\d{6})<\/strong>/)![1];
 assert.match((await devicePost("/device/verify", { code: otp })).html, /Allow access/);
 const decision = new URLSearchParams({ decision: "approve" });
-decision.append("scopes", "poppy:read");
-decision.append("scopes", "poppy:write");
+decision.append("scopes", "orders:read");
+decision.append("scopes", "orders:write");
+decision.append("scopes", "addresses");
 assert.match((await devicePost("/device/approve", decision)).html, /You’re connected/);
 const deviceTokens = await poll();
-assert.equal(deviceTokens.signed_in, true, JSON.stringify(deviceTokens.error));
-assert.equal(deviceTokens.scope, "poppy:read poppy:write");
+assert.ok(deviceTokens.refresh_token, JSON.stringify(deviceTokens.error));
+assert.equal(deviceTokens.token_type, "Bearer");
+assert.equal(deviceTokens.refresh_token_expires_in, undefined);
+assert.equal(deviceTokens.scope, "orders:read orders:write addresses");
 assert.equal((await poll()).error, "invalid_grant");
 d.useToken(deviceTokens.access_token);
-const saved = await d.call("/api/account/addresses", { address: body.address, label: "Home" });
+const saved = await d.call("/api/account/addresses", { address: runtimeAddress, label: "Home" });
 assert.equal(saved.status, 201);
-const spare = await (await d.call("/api/account/addresses", { address: { ...body.address, line1: "1 Spare Street" } })).json();
-const removed = await fetch(origin + `/api/account/addresses/${spare.id}`, {
-  method: "DELETE",
-  headers: {
-    Authorization: `DPoP ${d.token}`,
-    DPoP: await d.proof("DELETE", origin + `/api/account/addresses/${spare.id}`, d.token),
-  },
-});
+const spare = await (await d.call("/api/account/addresses", { address: { ...runtimeAddress, line1: "1 Spare Street" } })).json();
+const removed = await d.call(`/api/account/addresses/${spare.id}`, undefined, {}, "DELETE");
 assert.equal(removed.status, 200);
+if (!skipMedia) {
 const dPhoto = await (await d.call("/api/photos/samples", { color: "red" })).json();
-const signedProposal = await d.call(
-  "/api/orders",
-  { items: [{ photoId: dPhoto.id, quantity: 2, fit: "contain" }] },
-  { "Idempotency-Key": randomUUID() },
-);
-assert.equal(signedProposal.status, 202);
+const signedBody = { items: [{ photoId: dPhoto.id, quantity: 2, fit: "contain" }] };
+const signedProposal = await d.call("/api/orders", signedBody);
+assert.equal(signedProposal.status, 403);
 const signedOp = (await signedProposal.json()).operation;
 assert.match(signedOp.summary, /123 Main Street/);
-let settled = await (
-  await d.call(`/api/operations/${signedOp.operation_id}/confirm`, { revision: signedOp.revision, approved_by: "user" })
-).json();
-for (let i = 0; i < 40 && settled.state === "in_progress"; i++) {
-  await new Promise((r) => setTimeout(r, 500));
-  settled = await (await d.call(`/api/operations/${signedOp.operation_id}`)).json();
-}
-assert.equal(settled.state, "succeeded");
-const reordered = await d.call(
-  `/api/account/orders/${settled.result.data.order_id}/reorder`,
-  {},
-  { "Idempotency-Key": randomUUID() },
-);
-assert.equal(reordered.status, 202);
+const placed = await d.call("/api/orders", signedBody, approval(signedOp));
+assert.equal(placed.status, 201);
+const placedOrder = await placed.json();
+const reordered = await d.call(`/api/account/orders/${placedOrder.id}/reorder`, {});
+assert.equal(reordered.status, 403);
 const reorderOp = (await reordered.json()).operation;
-assert.equal(reorderOp.state, "proposed");
+assert.equal(reorderOp.expires_at !== undefined, true);
 assert.notEqual(reorderOp.terms.items[0].photoId, dPhoto.id);
 assert.equal((await fetch(reorderOp.terms.previews[0].url)).status, 200);
+}
 const deviceRevoke = await fetch(origin + "/oauth/revoke", {
   method: "POST",
   headers: form,
   body: new URLSearchParams({ token: deviceTokens.refresh_token, ...(await d.clientAuth()) }),
 });
 assert.equal(deviceRevoke.status, 200);
-assert.equal((await d.call("/api/account")).status, 403);
+assert.equal((await d.call("/api/account")).status, 401);
 console.log(
-  "Workers contracts passed: native auth, replay, media privacy, compatibility-off, concurrent proposal/confirmation, approval and ownership, device sign-in, saved addresses, reorder and revocation.",
+  skipMedia
+    ? "Workers contracts passed WITHOUT media containers: published 0.3 discovery, direct client assertions (delegated-key assertion refused), Device page form protections, Session header, device sign-in, saved addresses and revocation. Photo upload, ordering and reorder were skipped."
+    : "Workers contracts passed: Session header, replay, media privacy, compatibility-off, concurrent proposals and approvals (Operations v2, at most once), ownership, direct client assertions, device sign-in, saved addresses, reorder and revocation.",
 );

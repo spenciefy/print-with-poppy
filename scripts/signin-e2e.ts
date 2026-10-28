@@ -1,18 +1,22 @@
 /**
- * Sign-in reference run for a local demo store (APP_MODE=demo, optionally
- * AGENT_SANDBOX=true): drives Direct, Device and Mediated Sign-In with the
- * store's demo agent identity, then renews with the Account Token, reads the
- * account and history, places a signed-in order with the saved address through
- * Operations approval, reorders it, and revokes the Account Token.
+ * Poppy 0.3 reference run for a local demo store (APP_MODE=demo, optionally
+ * AGENT_SANDBOX=true), as the store's demo agent: client assertions signed by
+ * its jwks_uri key, Session JWTs (Poppy-Session) by delegated keys.
  *
- * Prints a redacted transcript: no tokens, codes, device codes or proofs.
- * The "person" steps (verification page, consent) are scripted here only
- * because this is a demo store with synthetic accounts.
+ * Covers discovery, Session header checks, signed-out Sessions, each offered
+ * sign-in type (Direct, Device, Mediated extension grant), refresh, account
+ * reads, saved addresses, ordering and reordering through Operations v2
+ * (approval_required → retry with Poppy-Approval, at most once), revocation and
+ * continuing signed out.
+ *
+ * Prints a redacted transcript: no tokens, codes, device codes, JWTs or proofs.
+ * The "person" steps are scripted only because this is a demo store with
+ * synthetic accounts.
  */
-import { SignJWT, generateKeyPair, exportJWK, importJWK } from "jose";
+import { SignJWT, importJWK } from "jose";
 import { createHash, randomUUID } from "node:crypto";
-import fs from "node:fs/promises";
 import Database from "better-sqlite3";
+import { poppyAgent, delegate, jti } from "./poppy-delegation.js";
 
 const origin = process.env.PUBLIC_URL || "http://localhost:5173";
 const log = (line = "") => console.log(line);
@@ -29,97 +33,86 @@ const json = async (r: Response) => {
     return { raw: text.slice(0, 200) };
   }
 };
-const errorOf = (b: any) => b?.error || b?.raw || "unknown";
+const errorOf = (b: any) => b?.error || b?.raw || "(no error code)";
+const digest = (s: string) => createHash("sha256").update(s).digest("base64url");
+/** §5.6: on 429, wait at least Retry-After and send again (fresh JWTs each time). */
+async function retrying(send: () => Promise<Response>) {
+  for (;;) {
+    const r = await send();
+    if (r.status !== 429) return r;
+    const wait = Math.min(Number(r.headers.get("retry-after")) || 5, 65);
+    log(`  … 429 with Retry-After ${wait}s; waiting, then retrying`);
+    await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+  }
+}
 
-// Discovery (spec §3): version, issuer metadata and the two-way domain check.
+// Discovery (§3): poppy.json → protected resource metadata → issuer metadata.
 const discovery = await json(await fetch(`${origin}/.well-known/poppy.json`));
-if (discovery.protocol_version !== "0.2") fail("Needs Poppy 0.2.");
-const host = new URL(origin).hostname;
-if (discovery.organization.domain.toLowerCase() !== host) fail("organization.domain mismatch");
-const oauth = await json(await fetch(`${discovery.auth.issuer}/.well-known/oauth-authorization-server`));
-if (oauth.issuer !== discovery.auth.issuer || !oauth.poppy_domains.includes(discovery.organization.domain))
-  fail("Issuer discovery mismatch.");
+if (discovery.protocol_version !== "0.3") fail("Needs Poppy 0.3.");
+const domain = discovery.organization.domain;
+if (domain.toLowerCase() !== new URL(origin).hostname) fail("organization.domain mismatch");
+const prm = await json(await fetch(`${origin}/.well-known/oauth-protected-resource`));
+if (prm.resource !== `https://${domain}`) fail("protected resource metadata resource mismatch");
+const issuer: string = discovery.auth?.issuer ?? prm.authorization_servers[0];
+if (!prm.authorization_servers.includes(issuer)) fail("auth.issuer isn't in authorization_servers");
+const oauth = await json(await fetch(`${issuer}/.well-known/oauth-authorization-server`));
+if (oauth.issuer !== issuer) fail("issuer mismatch");
+if (!oauth.protected_resources?.includes(`https://${domain}`)) fail("protected_resources mismatch");
 const cfg = await json(await fetch(`${origin}/api/config`));
 if (cfg.mode !== "demo") fail("This script uses the local demo identity; demo mode only.");
-const types = ["direct", "device", "mediated"].filter((t) => discovery.auth[t]);
-log(`Store: ${discovery.organization.name} (${discovery.organization.domain}), environment ${cfg.environment}`);
-log(`Sign-in types advertised: ${types.map((t) => `${t} [${discovery.auth[t].scopes.join(" ")}]`).join(", ")}`);
-log(`Issuer metadata: device_authorization_endpoint=${oauth.device_authorization_endpoint ? "yes" : "no"}, iss-in-redirect=${oauth.authorization_response_iss_parameter_supported}`);
+const grants: string[] = oauth.grant_types_supported;
+const mediatedGrant = "https://personalagentprotocol.org/grant/mediated-sign-in";
+const offered = {
+  direct: grants.includes("authorization_code"),
+  device: grants.includes("urn:ietf:params:oauth:grant-type:device_code"),
+  mediated: grants.includes(mediatedGrant) && !!discovery.extensions?.["mediated-sign-in"],
+};
+const fullScopes = oauth.scopes_supported.join(" ");
+const mediatedScopes = discovery.extensions?.["mediated-sign-in"]?.scopes.join(" ");
+log(`Store: ${discovery.organization.name} (${domain}), protocol ${discovery.protocol_version}, environment ${cfg.environment}`);
+log(`Issuer ${issuer} from protected resource metadata (resource ${prm.resource}); protected_resources ✓`);
+log(`Sign-in offered: ${Object.entries(offered).filter(([, v]) => v).map(([k]) => k).join(", ")} (grant_types_supported: ${grants.length})`);
+log(`scopes_supported: ${fullScopes}; mediated-sign-in scopes: ${mediatedScopes}; described: ${oauth.scopes_supported.every((s: string) => discovery.auth.scopes?.[s])}; extensions: ${Object.entries(discovery.extensions).map(([k, v]: any) => `${k} v${v.version}`).join(", ")}`);
 
-// Demo agent identity: the store's own demo key, read from its local database.
+// The demo agent's jwks_uri key, from the store's local database.
 const db = new Database(`${process.env.DATA_DIR || ".data"}/poppy.sqlite`, { readonly: true });
 const row = db.prepare("SELECT body FROM records WHERE kind='demo-key' AND id='identity'").get() as any;
 db.close();
 if (!row) fail("Start the demo store once so it creates its demo identity.");
-const privateJwk = JSON.parse(row.body).private;
-const identity = await importJWK(privateJwk, "ES256");
+const rootJwk = JSON.parse(row.body).private;
 const clientId = `${origin}/api/demo/agent.json`;
 const metadata = await json(await fetch(clientId));
-log(`Agent: ${metadata.client_name} (${new URL(clientId).hostname}), redirect_uris ${metadata.redirect_uris.length}`);
-const digest = (s: string) => createHash("sha256").update(s).digest("base64url");
-const assertion = (sub: string) =>
-  new SignJWT({})
-    .setProtectedHeader({ alg: "ES256", kid: privateJwk.kid || "demo" })
-    .setIssuer(clientId)
-    .setSubject(sub)
-    .setAudience(oauth.issuer)
-    .setIssuedAt()
-    .setExpirationTime("60s")
-    .setJti(randomUUID())
-    .sign(identity);
-const clientAuth = async () => ({
-  client_id: clientId,
-  client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-  client_assertion: await assertion(clientId),
-});
+log(`Agent: ${metadata.client_name} (${new URL(clientId).hostname}); extensions ${JSON.stringify(metadata.extensions)}`);
+const agent = await poppyAgent(rootJwk, clientId, issuer);
 const form = { "Content-Type": "application/x-www-form-urlencoded" };
 
-/** One User ID at this store, with its own DPoP key; tokens stay in this object. */
-async function agentFor(userId: string) {
-  const pair = await generateKeyPair("ES256", { extractable: true });
-  const jwk = await exportJWK(pair.publicKey);
-  const proof = (method: string, url: string, token?: string) =>
-    new SignJWT({ htm: method, htu: url.split("?")[0], ...(token ? { ath: digest(token) } : {}) })
-      .setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk })
-      .setIssuedAt()
-      .setJti(randomUUID())
-      .sign(pair.privateKey);
-  const state: { session: any; accountToken?: string } = { session: undefined };
-  async function token(body: Record<string, string>) {
-    const r = await fetch(oauth.token_endpoint, {
-      method: "POST",
-      headers: { ...form, DPoP: await proof("POST", oauth.token_endpoint) },
-      body: new URLSearchParams({ ...body, ...(await clientAuth()) }),
-    });
-    return { status: r.status, body: await json(r) };
-  }
-  async function call(route: string, init: RequestInit = {}) {
-    const url = origin + route;
-    const r = await fetch(url, {
+type S = ReturnType<typeof agent.newSession> & { accessToken?: string; refreshToken?: string };
+/** A request to an API or protocol endpoint, with the Session header (and access token). */
+async function call(s: S, route: string, init: RequestInit & { token?: string | null } = {}) {
+  const url = origin + route;
+  const token = init.token === null ? undefined : (init.token ?? s.accessToken);
+  const r = await retrying(async () =>
+    fetch(url, {
       ...init,
       headers: {
-        Authorization: `DPoP ${state.session.access_token}`,
-        DPoP: await proof(init.method || "GET", url, state.session.access_token),
+        "Poppy-Session": await agent.sessionJwt(s, init.method || "GET", url, token),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(init.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
         ...init.headers,
       },
-    });
-    return { status: r.status, body: await json(r) };
-  }
-  const started = await token({
-    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-    assertion: await assertion(userId),
-  });
-  if (started.status !== 200) fail(`session: ${errorOf(started.body)}`);
-  state.session = started.body;
-  const signedIn = (b: any) => {
-    if (!b.signed_in || !b.refresh_token) fail("sign-in did not return an Account Token");
-    state.accountToken = b.refresh_token; // Account Token: kept out of logs and context.
-    state.session = b;
-  };
-  return { state, token, call, signedIn };
+    }),
+  );
+  return { status: r.status, body: await json(r), auth: r.headers.get("www-authenticate") };
 }
-type Agent = Awaited<ReturnType<typeof agentFor>>;
+/** A token endpoint request with the client assertion. */
+async function token(body: Record<string, string>) {
+  const r = await retrying(async () =>
+    fetch(oauth.token_endpoint, { method: "POST", headers: form, body: new URLSearchParams({ ...body, ...(await agent.clientAuth()) }) }),
+  );
+  const b = await json(r);
+  if (r.status === 200 && ("session_id" in b || "signed_in" in b || "refresh_token_expires_in" in b)) fail("0.3 token responses are plain OAuth");
+  return { status: r.status, body: b };
+}
 
 /** A person's browser: same-origin form posts with the store's sign-in cookie. */
 function browser(cookieName: string) {
@@ -128,12 +121,14 @@ function browser(cookieName: string) {
   return async function post(route: string, values: Record<string, string> | URLSearchParams, method = "POST") {
     const body = new URLSearchParams(fields);
     for (const [k, v] of values instanceof URLSearchParams ? values : Object.entries(values)) body.append(k, v);
-    const r = await fetch(origin + route + (method === "GET" ? `?${body}` : ""), {
-      method,
-      redirect: "manual",
-      headers: { ...(method === "POST" ? { ...form, Origin: origin } : {}), ...(cookie ? { Cookie: cookie } : {}) },
-      ...(method === "POST" ? { body } : {}),
-    });
+    const r = await retrying(() =>
+      fetch(origin + route + (method === "GET" ? `?${body}` : ""), {
+        method,
+        redirect: "manual",
+        headers: { ...(method === "POST" ? { ...form, Origin: origin } : {}), ...(cookie ? { Cookie: cookie } : {}) },
+        ...(method === "POST" ? { body } : {}),
+      }),
+    );
     const set = r.headers.get("set-cookie");
     if (set?.startsWith(`${cookieName}=`) && !cookie) cookie = set.split(";")[0];
     const html = await r.text();
@@ -143,33 +138,13 @@ function browser(cookieName: string) {
   };
 }
 const shownCode = (html: string) => html.match(/captured code is <strong>(\d{6})<\/strong>/)?.[1];
-const allScopes = "poppy:read poppy:write";
-const consent = () => {
+const consent = (scope: string) => {
   const values = new URLSearchParams({ decision: "approve" });
-  for (const s of allScopes.split(" ")) values.append("scopes", s);
+  for (const s of scope.split(" ")) values.append("scopes", s);
   return values;
 };
 
-async function mediatedSignIn(a: Agent, email: string) {
-  const started = await a.call("/api/poppy/sign-in", {
-    method: "POST",
-    body: JSON.stringify({ scope: allScopes, credentials: { email } }),
-  });
-  if (started.body.status !== "code_required") fail(`mediated: ${errorOf(started.body)}`);
-  step("POST auth.mediated.endpoint", `status=code_required, sent_to="${started.body.code.sent_to}"`);
-  const captured = await a.call(`/api/sandbox/sign-in/${started.body.sign_in_id}/email`);
-  const code = captured.body.email?.text.match(/code is (\d{6})/)?.[1] || fail("no captured code");
-  step("getSandboxSignInEmail", "captured code read (redacted)");
-  const done = await a.call(`/api/poppy/sign-in/${started.body.sign_in_id}`, {
-    method: "POST",
-    body: JSON.stringify({ code }),
-  });
-  if (done.body.status !== "complete") fail(`mediated code: ${errorOf(done.body)}`);
-  a.signedIn(done.body);
-  return done.body;
-}
-
-async function directSignIn(a: Agent, email: string) {
+async function directSignIn(s: S, email: string) {
   const verifier = digest(randomUUID()) + digest(randomUUID()).slice(0, 10);
   const state = randomUUID();
   const redirectUri = metadata.redirect_uris[0];
@@ -178,62 +153,45 @@ async function directSignIn(a: Agent, email: string) {
     response_type: "code",
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: allScopes,
+    scope: fullScopes,
     state,
     code_challenge: digest(verifier),
     code_challenge_method: "S256",
   }))
     url.searchParams.set(k, v);
-  step("open authorization_endpoint", "S256 PKCE, random state, registered redirect_uri");
+  step("open authorization_endpoint", "PKCE S256, state, registered redirect_uri");
   const post = browser("poppy_signin");
   const page = await post("/oauth/authorize", Object.fromEntries(url.searchParams), "GET");
   if (!page.html.includes(metadata.client_name)) fail("consent page does not name the agent");
-  step("person: consent page", `shows "${metadata.client_name}" and its host`);
+  step("person: consent page", `shows "${metadata.client_name}", its host and each scope`);
   const emailed = await post("/oauth/authorize/email", { email });
   const code = shownCode(emailed.html) || fail("no captured code on page");
   step("person: email code", "demo page shows the captured code (redacted)");
-  const verified = await post("/oauth/authorize/verify", { code });
-  if (!verified.html.includes("Allow access")) fail("consent step missing");
-  const approved = await post("/oauth/authorize/approve", consent());
+  await post("/oauth/authorize/verify", { code });
+  const approved = await post("/oauth/authorize/approve", consent(fullScopes));
   const callback = new URL(approved.location || fail("no redirect"));
-  if (callback.origin + callback.pathname !== redirectUri) fail("redirect_uri mismatch");
   if (callback.searchParams.get("state") !== state) fail("state mismatch");
-  if (callback.searchParams.get("iss") !== discovery.auth.issuer) fail("iss mismatch (RFC 9207)");
-  step("person: approve", `303 to redirect_uri with code, state ✓, iss ✓`);
-  const exchanged = await a.token({
-    grant_type: "authorization_code",
-    code: callback.searchParams.get("code")!,
-    redirect_uri: redirectUri,
-    code_verifier: verifier,
-    session_id: a.state.session.session_id,
-  });
+  if (callback.searchParams.get("iss") !== issuer) fail("iss mismatch (RFC 9207)");
+  step("person: approves", "303 to redirect_uri with code, state ✓, iss ✓");
+  const exchanged = await token({ grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: redirectUri, code_verifier: verifier });
   if (exchanged.status !== 200) fail(`code exchange: ${errorOf(exchanged.body)}`);
-  a.signedIn(exchanged.body);
   return exchanged.body;
 }
 
-async function deviceSignIn(a: Agent, email: string) {
-  const r = await fetch(oauth.device_authorization_endpoint, {
-    method: "POST",
-    headers: form,
-    body: new URLSearchParams({ scope: allScopes, ...(await clientAuth()) }),
-  });
+async function deviceSignIn(s: S, email: string) {
+  const r = await retrying(async () =>
+    fetch(oauth.device_authorization_endpoint, { method: "POST", headers: form, body: new URLSearchParams({ scope: fullScopes, ...(await agent.clientAuth()) }) }),
+  );
   const grant = await json(r);
   if (r.status !== 200) fail(`device authorization: ${errorOf(grant)}`);
-  // Spec §4.6: the link's host must be the issuer's host or a poppy_domains entry (or a subdomain).
   const linkHost = new URL(grant.verification_uri_complete).hostname.toLowerCase();
-  const allowed = [new URL(oauth.issuer).hostname, ...oauth.poppy_domains].map((d: string) => d.toLowerCase());
+  const allowed = [issuer, ...oauth.protected_resources].map((u: string) => new URL(u).hostname.toLowerCase());
   if (!allowed.some((d) => linkHost === d || linkHost.endsWith(`.${d}`))) fail("verification link on a foreign host");
   step(
     "POST device_authorization_endpoint",
-    `expires_in=${grant.expires_in}, interval=${grant.interval}; link host checked; agent shows "${discovery.organization.name} (${discovery.organization.domain})" + link + user code (redacted)`,
+    `expires_in=${grant.expires_in}, interval=${grant.interval}; link host checked; agent shows "${discovery.organization.name} (${domain})" + link + user code (redacted)`,
   );
-  const poll = () =>
-    a.token({
-      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-      device_code: grant.device_code,
-      session_id: a.state.session.session_id,
-    });
+  const poll = () => token({ grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: grant.device_code });
   let interval = grant.interval;
   const first = await poll();
   step("poll token_endpoint", `${first.status} ${errorOf(first.body)}`);
@@ -241,27 +199,23 @@ async function deviceSignIn(a: Agent, email: string) {
   if (tooFast.body.error === "slow_down") interval = tooFast.body.interval || interval + 5;
   step("poll again immediately", `${tooFast.status} ${errorOf(tooFast.body)} → interval ${interval}s`);
   const post = browser("poppy_device");
-  const opened = await fetch(grant.verification_uri_complete);
+  const opened = await retrying(() => fetch(grant.verification_uri_complete));
   step("person: opens link", `${opened.status}, prefilled code form (opening alone approves nothing)`);
   const entered = await post("/device", { user_code: grant.user_code });
   if (!entered.html.includes(metadata.client_name)) fail("verification page does not name the agent");
-  step("person: confirms code", `page shows "${metadata.client_name}", the code to match, and the scopes next`);
+  step("person: confirms code", `page shows "${metadata.client_name}" and the code to match`);
   await post("/device/email", { email });
-  const captured = await a.call("/api/sandbox/device-sign-in/email", {
-    method: "POST",
-    body: JSON.stringify({ device_code: grant.device_code }),
-  });
+  const captured = await call(s, "/api/sandbox/device-sign-in/email", { method: "POST", body: JSON.stringify({ device_code: grant.device_code }) });
   const code = captured.body.email?.text.match(/code is (\d{6})/)?.[1] || fail(`device helper: ${errorOf(captured.body)}`);
-  step("getSandboxDeviceSignInEmail", "captured code read (redacted)");
+  step("getSandboxDeviceSignInEmail (Session header)", "captured code read (redacted)");
   await post("/device/verify", { code });
-  const done = await post("/device/approve", consent());
+  const done = await post("/device/approve", consent(fullScopes));
   if (!done.html.includes("You’re connected")) fail("device approval failed");
-  step("person: approves both scopes");
+  step("person: approves all scopes");
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, interval * 1000));
     const result = await poll();
     if (result.status === 200) {
-      a.signedIn(result.body);
       const reused = await poll();
       step("device_code reused", `${reused.status} ${errorOf(reused.body)}`);
       return result.body;
@@ -272,96 +226,152 @@ async function deviceSignIn(a: Agent, email: string) {
   return fail("device sign-in timed out");
 }
 
-const samplePhoto = async (a: Agent) => (await a.call("/api/photos/samples", { method: "POST", body: JSON.stringify({ color: "orange" }) })).body;
-async function approveAndWait(a: Agent, op: any) {
-  // In a real agent this is the person's explicit approval of op.summary in the agent's UI.
-  let result = (
-    await a.call(`/api/operations/${op.operation_id}/confirm`, {
-      method: "POST",
-      body: JSON.stringify({ revision: op.revision, approved_by: "user" }),
-    })
-  ).body;
-  for (let i = 0; i < 40 && result.state === "in_progress"; i++) {
-    await new Promise((r) => setTimeout(r, 500));
-    result = (await a.call(`/api/operations/${op.operation_id}`)).body;
-  }
-  if (result.state !== "succeeded") fail(`operation ${result.state}`);
-  return result.result.data.order_id as string;
+async function mediatedSignIn(s: S, email: string) {
+  const started = await token({ grant_type: mediatedGrant, scope: mediatedScopes, email });
+  if (started.body.error !== "code_required") fail(`mediated: ${errorOf(started.body)}`);
+  step("token endpoint, mediated-sign-in grant", `${started.status} code_required, sent_to="${started.body.sent_to}", expires_in=${started.body.expires_in}`);
+  const captured = await call(s, `/api/sandbox/sign-in/${started.body.sign_in_id}/email`);
+  const code = captured.body.email?.text.match(/code is (\d{6})/)?.[1] || fail("no captured code");
+  step("getSandboxSignInEmail (Session header)", "captured code read (redacted)");
+  const wrong = await token({ grant_type: mediatedGrant, sign_in_id: started.body.sign_in_id, one_time_code: code === "000000" ? "111111" : "000000" });
+  step("wrong code", `${wrong.status} ${errorOf(wrong.body)}`);
+  const done = await token({ grant_type: mediatedGrant, sign_in_id: started.body.sign_in_id, one_time_code: code });
+  if (done.status !== 200) fail(`mediated code: ${errorOf(done.body)}`);
+  return done.body;
 }
 
-async function payoff(type: string, a: Agent) {
-  // Renew with the Account Token into a new Session (spec §4.8).
-  const renewed = await a.token({ grant_type: "refresh_token", refresh_token: a.state.accountToken! });
-  if (renewed.status !== 200 || !renewed.body.signed_in) fail(`renewal: ${errorOf(renewed.body)}`);
-  a.state.session = renewed.body;
-  step("renew with Account Token (new session)", `signed_in=${renewed.body.signed_in}, scope="${renewed.body.scope}"`);
-  const account = await a.call("/api/account");
-  step("GET /api/account", `${account.status}, scope="${account.body.scope}", saved_addresses=${account.body.saved_addresses}`);
-  const saved = await a.call("/api/account/addresses", {
-    method: "POST",
-    body: JSON.stringify({
-      label: "Home",
-      address: { name: `Demo ${type} Customer`, line1: "500 Poppy Lane", city: "Denver", state: "CO", postalCode: "80202", country: "US" },
-    }),
-  });
-  step("saveAccountAddress", `${saved.status}, default=${saved.body.default}`);
-  const photo = await samplePhoto(a);
-  const proposed = await a.call("/api/orders", {
-    method: "POST",
-    headers: { "Idempotency-Key": randomUUID() },
-    body: JSON.stringify({ items: [{ photoId: photo.id, product: "prints", quantity: 3, fit: "contain" }] }),
-  });
-  if (proposed.status !== 202) fail(`proposal: ${errorOf(proposed.body)}`);
-  const op = proposed.body.operation;
+const address = (who: string) => ({ name: `Demo ${who} Customer`, line1: "500 Poppy Lane", city: "Denver", state: "CO", postalCode: "80202", country: "US" });
+const samplePhoto = async (s: S) => (await call(s, "/api/photos/samples", { method: "POST", body: JSON.stringify({ color: "orange" }) })).body;
+/** Operations v2: the request is refused with the operation; the User approves; the same request again with Poppy-Approval. */
+async function approved(s: S, route: string, body: unknown, label: string) {
+  const first = await call(s, route, { method: "POST", body: JSON.stringify(body) });
+  if (first.status !== 403 || first.body.error !== "approval_required") fail(`${label}: expected approval_required, got ${first.status} ${errorOf(first.body)}`);
+  const op = first.body.operation;
   const shipTo = op.summary.split("\n").find((l: string) => l.startsWith("Deliver to"));
-  step("proposeOrder without address or email", `202 proposed; summary "${shipTo}"`);
-  const orderId = await approveAndWait(a, op);
-  step("user approves → confirmOperation", `succeeded, order ${redact(orderId)}`);
-  const history = await a.call("/api/account/orders");
-  const listed = history.body.orders.find((o: any) => o.id === orderId);
-  step("GET /api/account/orders", `${history.body.orders.length} order(s); new order listed=${!!listed}, reorderable=${listed?.reorderable}`);
-  const re = await a.call(`/api/account/orders/${orderId}/reorder`, {
-    method: "POST",
-    headers: { "Idempotency-Key": randomUUID() },
-    body: "{}",
-  });
-  if (re.status !== 202) fail(`reorder: ${errorOf(re.body)}`);
-  step("reorderOrder", `202, new operation state=${re.body.operation.state}, approval required=${re.body.operation.user_approval_required}`);
-  const reorderId = await approveAndWait(a, re.body.operation);
-  step("user approves reorder → confirmOperation", `succeeded, order ${redact(reorderId)}`);
-  const staleToken = a.state.session.access_token;
-  const revoked = await fetch(oauth.revocation_endpoint, {
-    method: "POST",
-    headers: form,
-    body: new URLSearchParams({ token: a.state.accountToken!, token_type_hint: "refresh_token", ...(await clientAuth()) }),
-  });
-  step("revoke Account Token", `${revoked.status}`);
-  const after = await a.token({ grant_type: "refresh_token", refresh_token: a.state.accountToken! });
-  if (after.body.error !== "invalid_grant") fail("renewal still works after revocation");
-  step("renew after revocation", `${after.status} ${after.body.error}`);
-  a.state.session.access_token = staleToken;
-  const denied = await a.call("/api/account");
-  step("old Session Token on /api/account", `${denied.status} ${denied.body.error}`);
+  step(`${label}`, `403 approval_required, operation ${redact(op.operation_id)} revision ${redact(op.revision)}; "${shipTo}"`);
+  // In a real agent the User approves op.summary in the agent's own UI here.
+  const approval = `operation_id="${op.operation_id}", revision="${op.revision}"`;
+  const done = await call(s, route, { method: "POST", body: JSON.stringify(body), headers: { "Poppy-Approval": approval } });
+  if (done.status !== 201) fail(`${label} approved: ${done.status} ${errorOf(done.body)}`);
+  step(`${label} again with Poppy-Approval`, `201, order ${redact(done.body.id)} ${done.body.status}${done.body.checkoutUrl ? ", checkout ready" : ""}`);
+  const again = await call(s, route, { method: "POST", body: JSON.stringify(body), headers: { "Poppy-Approval": approval } });
+  step("same approval retried", `${again.status}, same order: ${again.body.id === done.body.id} (at most once)`);
+  return done.body;
 }
 
+async function payoff(type: string, s: S, signedIn: any) {
+  s.accessToken = signedIn.access_token;
+  s.refreshToken = signedIn.refresh_token;
+  const refreshed = await token({ grant_type: "refresh_token", refresh_token: s.refreshToken!, scope: "orders:read" });
+  step("refresh with a narrower scope", `${refreshed.status}, token_type=${refreshed.body.token_type}, scope="${refreshed.body.scope}", no new refresh token: ${!refreshed.body.refresh_token}`);
+  const narrow = await call(s, "/api/account/addresses", { token: refreshed.body.access_token });
+  step("that token on listAccountAddresses", `${narrow.status} ${errorOf(narrow.body)} (${narrow.auth})`);
+  const bare = await retrying(() => fetch(`${origin}/api/account`, { headers: { Authorization: `Bearer ${s.accessToken}` } }));
+  step("access token without the Session header", `${bare.status} ${errorOf(await json(bare))}`);
+  const account = await call(s, "/api/account");
+  step("GET /api/account", `${account.status}, scope="${account.body.scope}"`);
+  const hasAddresses = signedIn.scope.split(" ").includes("addresses");
+  if (hasAddresses) {
+    const saved = await call(s, "/api/account/addresses", { method: "POST", body: JSON.stringify({ label: "Home", address: address(type) }) });
+    step("saveAccountAddress", `${saved.status}, default=${saved.body.default}`);
+  } else {
+    const saved = await call(s, "/api/account/addresses", { method: "POST", body: JSON.stringify({ label: "Home", address: address(type) }) });
+    step("saveAccountAddress", `${saved.status} ${errorOf(saved.body)} (${saved.auth})`);
+  }
+  const photo = await samplePhoto(s);
+  const order = await approved(
+    s,
+    "/api/orders",
+    { items: [{ photoId: photo.id, product: "prints", quantity: 3, fit: "contain" }], ...(hasAddresses ? {} : { address: address(type) }) },
+    hasAddresses ? "proposeOrder without address or email" : "proposeOrder with an address, without email",
+  );
+  const history = await call(s, "/api/account/orders");
+  const listed = history.body.orders.find((o: any) => o.id === order.id);
+  step("GET /api/account/orders", `${history.body.orders.length} order(s); listed=${!!listed}, reorderable=${listed?.reorderable}`);
+  // A new Session (new sid) of the same User uses the same access token.
+  const other: S = { ...agent.newSession(s.sub), accessToken: s.accessToken };
+  await approved(other, `/api/account/orders/${order.id}/reorder`, {}, "reorderOrder in a new Session");
+  const revoked = await retrying(async () =>
+    fetch(oauth.revocation_endpoint, {
+      method: "POST",
+      headers: form,
+      body: new URLSearchParams({ token: s.refreshToken!, token_type_hint: "refresh_token", ...(await agent.clientAuth()) }),
+    }),
+  );
+  step("revoke refresh token (sign out)", `${revoked.status}`);
+  const after = await token({ grant_type: "refresh_token", refresh_token: s.refreshToken! });
+  step("refresh after revocation", `${after.status} ${errorOf(after.body)}`);
+  const stale = await call(s, "/api/account/orders");
+  step("its access token after revocation", `${stale.status} ${errorOf(stale.body)} (${stale.auth})`);
+  const out = await call(s, "/api/account/orders", { token: null });
+  step("the Session continues signed out", `${out.status} challenge (${out.auth})`);
+  const catalog = await call(s, `/api/orders/${order.id}`, { token: null });
+  step("account order in the signed-out Session", `${catalog.status} (${catalog.auth || errorOf(catalog.body)})`);
+}
+
+// 1. The Session header (§5.2, §5.3).
+log("");
+log("SESSION HEADER");
+const s0 = agent.newSession(`demo-user-${randomUUID()}`);
+const ok = await call(s0, "/api/catalog");
+step("signed-out request, new sid", `${ok.status}: a new signed-out Session`);
+const photo0 = await samplePhoto(s0);
+step("upload a sample photo in it", `${photo0.id ? "photo " + redact(photo0.id) : errorOf(photo0)}`);
+const guestBody = { email: "guest@example.com", address: address("guest"), items: [{ photoId: photo0.id, quantity: 1 }] };
+const g1 = await call(s0, "/api/orders", { method: "POST", body: JSON.stringify(guestBody) });
+const g2 = await call(s0, "/api/orders", { method: "POST", body: JSON.stringify(guestBody) });
+step("same request twice in the Session", `${g1.status} ${errorOf(g1.body)}, same operation: ${g1.body.operation?.operation_id === g2.body.operation?.operation_id}`);
+const s1 = { ...agent.newSession(s0.sub) };
+const notMine = await call(s1, "/api/orders", {
+  method: "POST",
+  body: JSON.stringify(guestBody),
+  headers: { "Poppy-Approval": `operation_id="${g1.body.operation.operation_id}", revision="${g1.body.operation.revision}"` },
+});
+step("its approval from another Session (new sid)", `${notMine.status} ${errorOf(notMine.body)}: handled as a new request, and the photo belongs to the first Session`);
+const hijack = await call({ ...s0, sub: `demo-user-${randomUUID()}` }, "/api/catalog");
+step("that sid with a different sub", `${hijack.status} ${errorOf(hijack.body)}`);
+const signedOut = await call(s0, "/api/account/orders");
+step("account request without an access token", `${signedOut.status} ${errorOf(signedOut.body)} (${signedOut.auth})`);
+const root = await importJWK(rootJwk, "ES256");
+const direct = await new SignJWT({ sid: jti(), htm: "GET", htu: `${origin}/api/catalog` })
+  .setProtectedHeader({ alg: "ES256", typ: "poppy-session+jwt", kid: rootJwk.kid || "demo" })
+  .setIssuer(clientId)
+  .setSubject(s0.sub)
+  .setAudience(issuer)
+  .setIssuedAt()
+  .setJti(jti())
+  .sign(root);
+const nonDelegated = await json(await retrying(() => fetch(`${origin}/api/catalog`, { headers: { "Poppy-Session": direct } })));
+step("Session JWT signed directly by the jwks_uri key", `${errorOf(nonDelegated)}`);
+const d = await delegate(rootJwk, clientId);
+const wrongUrl = await new SignJWT({ sid: jti(), htm: "GET", htu: `${origin}/api/photos` })
+  .setProtectedHeader({ alg: "ES256", typ: "poppy-session+jwt", kid: d.kid, pap_dlg: d.delegation })
+  .setIssuer(clientId)
+  .setSubject(s0.sub)
+  .setAudience(issuer)
+  .setIssuedAt()
+  .setJti(jti())
+  .sign(d.key);
+const mismatch = await json(await retrying(() => fetch(`${origin}/api/catalog`, { headers: { "Poppy-Session": wrongUrl } })));
+step("Session JWT for another URL (htu)", `${errorOf(mismatch)}`);
+const directAssertion = await token({ grant_type: "refresh_token", refresh_token: "prt_unknown" });
+step("client assertion signed directly by the jwks_uri key, unknown refresh token", `${directAssertion.status} ${errorOf(directAssertion.body)} (assertion accepted; token refused)`);
+
+// 2. Each offered sign-in type.
 const run = Date.now().toString(36);
-for (const type of ["mediated", "direct", "device"]) {
+for (const type of ["direct", "device", "mediated"] as const) {
   log("");
-  if (!types.includes(type)) {
-    log(`${type.toUpperCase()} SIGN-IN — not advertised here; skipped.`);
+  if (!offered[type]) {
+    log(`${type.toUpperCase()} SIGN-IN — not offered here; skipped.`);
     continue;
   }
   log(`${type.toUpperCase()} SIGN-IN`);
-  const a = await agentFor(`demo-user-${type}-${randomUUID()}`);
-  step("signed-out session", `session ${redact(a.state.session.session_id)}, signed_in=${a.state.session.signed_in}`);
-  const email = `pap-${type}-${run}@example.com`;
-  const signIn = type === "mediated" ? mediatedSignIn : type === "direct" ? directSignIn : deviceSignIn;
-  const result = await signIn(a, email);
-  step(
-    "signed in",
-    `token_type=${result.token_type}, scope="${result.scope}", same session=${result.session_id === a.state.session.session_id}, Account Token lifetime ${Math.round(result.refresh_token_expires_in / 86400)}d`,
-  );
-  await payoff(type, a);
+  const s: S = agent.newSession(`demo-user-${type}-${randomUUID()}`);
+  step("signed-out Session", `sid ${redact(s.sid)}`);
+  const email = `pap03-${type}-${run}@example.com`;
+  const result = type === "direct" ? await directSignIn(s, email) : type === "device" ? await deviceSignIn(s, email) : await mediatedSignIn(s, email);
+  step("tokens", `token_type=${result.token_type}, scope="${result.scope}", refresh token issued: ${!!result.refresh_token}`);
+  await payoff(type, s, result);
 }
 log("");
-log("All advertised sign-in types verified end to end. No tokens, codes or proofs were printed.");
+log("All offered sign-in types verified end to end. No tokens, codes, JWTs or proofs were printed.");

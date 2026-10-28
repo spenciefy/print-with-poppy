@@ -109,7 +109,7 @@ export const catalog = [
     price: posterPrice,
     maxQuantity: 1,
   },
-  { id: "tshirt", name: products.tshirt.name, minimumPrice: shirtPrice, includedQuantity: 1, additionalShirtPrice: extraShirtPrice, maxQuantity: maxShirts, easterEgg: true, colors: Object.keys(shirtColors), sizes: shirtSizes, description: "Optional custom front-print T-shirt. First shirt $29, each additional shirt $17. Mix sizes and colors with a separate item and quantity for each combination. Ask for photo, color, size quantities together. Show all returned shirt mockups and record explicit user approval using approveShirtPreviews before confirmOperation; it is an approximate illustration. US shipping included; may ship separately. Only offer when asked about T-shirts or hidden extras." },
+  { id: "tshirt", name: products.tshirt.name, minimumPrice: shirtPrice, includedQuantity: 1, additionalShirtPrice: extraShirtPrice, maxQuantity: maxShirts, easterEgg: true, colors: Object.keys(shirtColors), sizes: shirtSizes, description: "Optional custom front-print T-shirt. First shirt $29, each additional shirt $17. Mix sizes and colors with a separate item and quantity for each combination. Ask for photo, color, size quantities together. Show all returned shirt mockups and record explicit user approval using approveShirtPreviews before sending the order approval; it is an approximate illustration. US shipping included; may ship separately. Only offer when asked about T-shirts or hidden extras." },
 ];
 
 export type ProductOrder = { product?: Product; items: { product?: Product; quantity: number; color?: string; size?: string }[] };

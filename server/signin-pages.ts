@@ -5,13 +5,24 @@ import type { Request, Response } from "express";
 import { config } from "./config.js";
 import { get, equal, hash, HttpError } from "./store.js";
 import { escapeHtml as esc } from "./email.js";
-import { demoSignInCode } from "./accounts.js";
+import { demoSignInCode, scopeHints } from "./accounts.js";
 
 export { esc };
 export const scopeText = (scope: string) =>
-  scope === "poppy:read"
-    ? "View your order history, saved addresses and delivery details"
-    : "Save new orders and shipping addresses to your account and propose reorders (each purchase still needs your approval)";
+  scope === "orders:read"
+    ? "See your account email, order history and delivery details"
+    : scope === "orders:write"
+      ? "Save new orders to your account and propose reorders. Each purchase still needs your approval and payment."
+      : "See, save and change your saved shipping addresses";
+const scopeNote = (scope: string) => {
+  const hints = (scopeHints as Record<string, { changes: string; personal_data: boolean }>)[scope];
+  if (!hints) return "";
+  const notes = [
+    hints.changes === "irreversible" ? "can start purchases that can’t be undone" : "",
+    hints.personal_data ? "personal data" : "",
+  ].filter(Boolean);
+  return notes.length ? ` <small>(${notes.join(" · ")})</small>` : "";
+};
 
 export interface BrowserFlow {
   id: string;
@@ -108,7 +119,7 @@ export function renderSignIn(
     res.type("html").send(
       page(
         "Connect your personal agent",
-        `${agent}${intro}<p>Signed in as ${esc(get("account", flow.accountId).email)}. Choose what this agent can access.</p>${errorLine(error)}<form method="post" action="${base}/approve">${hidden(flow)}${flow.scopes.map((s: string) => `<label><input type="checkbox" name="scopes" value="${esc(s)}" checked>${esc(scopeText(s))}</label>`).join("")}<button name="decision" value="approve">Allow access</button><button class="secondary" name="decision" value="deny">Deny</button></form><small>This does not approve a purchase. You can disconnect this agent at any time.</small>`,
+        `${agent}${intro}<p>Signed in as ${esc(get("account", flow.accountId).email)}. Choose what this agent can access.</p>${errorLine(error)}<form method="post" action="${base}/approve">${hidden(flow)}${flow.scopes.map((s: string) => `<label><input type="checkbox" name="scopes" value="${esc(s)}" checked>${esc(scopeText(s))}${scopeNote(s)}</label>`).join("")}<button name="decision" value="approve">Allow access</button><button class="secondary" name="decision" value="deny">Deny</button></form><small>Access lasts 30 days unless you disconnect sooner. This does not approve a purchase. If you didn’t ask this agent to connect, choose Deny.</small>`,
       ),
     );
   } else if (flow.challengeId) {
