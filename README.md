@@ -131,7 +131,7 @@ See [pricing, payment and delivery details](docs/PRICING.md) for API product IDs
 
 ## Hosted example
 
-The legacy Node deployment option uses Vercel for the React website and same-origin rewrites to a single Railway service. The public production site now uses Cloudflare; the following describes the legacy option. Railway owns the API, background worker, SQLite database and private images on a persistent `/app/.data` volume. `PUBLIC_URL` is the Vercel custom domain, so discovery, DPoP proofs, checkout returns and signed media URLs all use the same origin.
+The legacy Node deployment option uses Vercel for the React website and same-origin rewrites to a single Railway service. The public production site now uses Cloudflare; the following describes the legacy option. Railway owns the API, background worker, SQLite database and private images on a persistent `/app/.data` volume. `PUBLIC_URL` is the Vercel custom domain, so discovery, signed Poppy requests, checkout returns and signed media URLs all use the same origin.
 
 `vercel.json` contains the example backend's **public URL only**. Forks must replace that URL with their own Railway service. Set provider credentials only on Railway; Vercel needs no provider secrets. Keep one backend replica and mount the persistent volume before deploying. In Railway service settings, connect the `main` branch, use the detected Dockerfile, set the health check to `/api/health`, and keep serverless sleeping disabled. New services no longer support Railway config-as-code. Railway mounts volumes as root: this deployment sets `RAILWAY_RUN_UID=0` so the service can write its private volume.
 
@@ -173,13 +173,19 @@ Frontend + Poppy API → SQLite order/approval + durable jobs
 
 Brand and sample artwork use abstract orange, red and yellow poppies. The homepage screenshot above shows the public storefront; sample artwork is illustrative, never a customer upload. Fonts: [Young Serif](https://fonts.google.com/specimen/Young+Serif) and [Hanken Grotesk](https://fonts.google.com/specimen/Hanken+Grotesk), self-hosted with OFL licenses.
 
-[Poppy spec](https://personalagentprotocol.org/docs/0.2/spec) · [operations](https://personalagentprotocol.org/docs/extensions/operations) · [Prodigi API](https://www.prodigi.com/print-api/docs/reference/) · [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment)
+[Poppy 0.3 spec](https://personalagentprotocol.org/docs/0.3/spec) · [Operations v2](https://personalagentprotocol.org/docs/0.3/extensions/operations) · [Prodigi API](https://www.prodigi.com/print-api/docs/reference/) · [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment)
+
+## Agent identity and account access
+
+In Poppy 0.3, signed `Poppy-Session` headers verify the agent and identify its session, including signed-out requests. OAuth grants access to a customer’s account with the permissions they approve. This implementation uses standard Bearer access tokens alongside signed session headers; when a token is sent, the session signature covers its hash. DPoP-bound tokens are optional in 0.3 and are not used here. Describe this as signed Poppy sessions with OAuth account access, not as an OAuth DPoP demo.
+
+Customers can order as guests. Connecting an account enables permitted account features such as order history, saved addresses and reordering. Orders placed while signed in are saved to that account; earlier guest orders are not automatically linked. Connecting an account does not approve a purchase: each order still needs approval and payment. Customers can disconnect through their agent to revoke access.
 
 ## Native Poppy and compatibility access
 
 `/.well-known/poppy.json` discovers `/openapi.json`, which documents native Poppy authentication (Session header plus Bearer access tokens) only. `/agent.txt` also contains native-only instructions. Native client metadata URLs must appear in `AGENT_CLIENT_IDS`. Renew with the original session ID to retain access to pending operations.
 
-For agents without native Poppy support, `/api/compat/instructions` and `/api/compat/openapi.json` document the separate HTTP compatibility path. It uses unverified Bearer sessions and does **not** enforce the native identity allowlist or DPoP binding. `ALLOW_COMPAT_AGENT_SESSIONS=false` disables it in every mode; when unset it defaults on only in demo mode. Existing compatibility tokens remain supported when enabled.
+For agents without native Poppy support, `/api/compat/instructions` and `/api/compat/openapi.json` document the separate HTTP compatibility path. It uses unverified Bearer sessions and does **not** verify signed Poppy session headers or enforce the native identity allowlist. `ALLOW_COMPAT_AGENT_SESSIONS=false` disables it in every mode; when unset it defaults on only in demo mode. Existing compatibility tokens remain supported when enabled.
 
 ### Require native Poppy ordering
 
