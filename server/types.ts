@@ -64,6 +64,7 @@ export interface Session {
   clientId: string;
   userId: string;
   extensions: boolean;
+  protocolVersion?: string;
   demo?: boolean;
   compatibility?: boolean;
   accountBinding?: string; // Immutable once this session has signed in.
@@ -117,7 +118,7 @@ export interface Operation {
   owner: string; // The Session that proposed it; owns its photos and order.
   principal?: { clientId: string; userId: string };
   operation_id: string;
-  /** Operations v2: an opaque string that changes whenever summary, terms or expires_at change. */
+  /** Operations v3: an opaque string that changes whenever summary, terms or expires_at change. */
   revision: string;
   /** Internal: proposed until approved, then in_progress → succeeded (checkout ready) or failed. */
   state:
@@ -135,7 +136,8 @@ export interface Operation {
   shirtPreviewApproval?: { revision: string; previewIds: string[]; approved_by: "user"; approved_at: string };
   confirmation: null | {
     revision: string;
-    approved_by: "user";
+    approved_by: "user" | "agent";
+    approval?: import("./commerce.js").Approval;
     confirmed_at: string;
   };
   result: null | { summary: string; data?: Record<string, unknown> };

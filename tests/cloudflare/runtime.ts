@@ -26,20 +26,20 @@ const runtimeAddress = {
   postalCode: "94103",
   country: "US",
 };
-// The demo agent (0.3): the jwks_uri key signs client assertions and
+// The demo agent (0.4): the jwks_uri key signs client assertions and
 // delegations; delegated keys sign the per-request Session JWTs.
 const agent = await poppyAgent(key, clientId, origin);
 const clientAuth = agent.clientAuth;
 const discovery = await (await fetch(origin + "/.well-known/poppy.json")).json();
-assert.equal(discovery.protocol_version, "0.3");
+assert.equal(discovery.protocol_version, "0.4");
 const metadata = await (
   await fetch(origin + "/.well-known/oauth-authorization-server")
 ).json();
-// The local Worker runs the Agent Sandbox shape: Device and Mediated, no Direct.
-assert.ok(!metadata.grant_types_supported.includes("authorization_code"));
+// The local Worker runs the Agent Sandbox shape: Direct, Device and Mediated.
+assert.ok(metadata.grant_types_supported.includes("authorization_code"));
 assert.equal(
   (await fetch(origin + "/oauth/authorize?client_id=" + encodeURIComponent(clientId))).status,
-  404,
+  400,
 );
 
 // Browser form sign-in (the Device page) must preserve Origin while hiding cross-origin referrers.
@@ -129,7 +129,7 @@ async function client() {
       return fetch(origin + path, {
         method,
         headers: {
-          "Poppy-Session": await sessionJwt(method, origin + path),
+          "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": await sessionJwt(method, origin + path),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           "Content-Type": "application/json",
           ...extra,
@@ -139,7 +139,7 @@ async function client() {
     },
   };
 }
-const approval = (op: any) => ({ "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}"` });
+const approval = (op: any) => ({ "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}", approver="user"` });
 assert.equal(
   (
     await fetch(origin + "/api/agent-sessions", {
@@ -175,7 +175,7 @@ assert.equal(
   ).status,
   400,
 );
-// 0.3: client assertions are signed directly by the jwks_uri key; one signed by a delegated key is refused.
+// 0.4: client assertions are signed directly by the jwks_uri key; one signed by a delegated key is refused.
 const { importJWK } = await import("jose");
 const delegated = await delegate(key, clientId);
 const rootSigned = await new SignJWT({})
@@ -222,7 +222,7 @@ async function batchCall(
     method: "POST",
     body: form,
     headers: signed
-      ? { "Poppy-Session": await agent.sessionJwt("POST", url) }
+      ? { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": await agent.sessionJwt("POST", url) }
       : {},
   });
 }
@@ -254,7 +254,7 @@ expired.searchParams.set("exp", "1");
 assert.equal((await fetch(expired)).status, 403);
 assert.equal((await fetch(origin + "/api/orders/nonexistent")).status, 400);
 const p = await a.sessionJwt("GET", origin + "/api/orders/nonexistent");
-const replayHeaders = { "Poppy-Session": p };
+const replayHeaders = { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": p };
 assert.equal(
   (await fetch(origin + "/api/orders/nonexistent", { headers: replayHeaders }))
     .status,
@@ -396,6 +396,6 @@ assert.equal(deviceRevoke.status, 200);
 assert.equal((await d.call("/api/account")).status, 401);
 console.log(
   skipMedia
-    ? "Workers contracts passed WITHOUT media containers: published 0.3 discovery, direct client assertions (delegated-key assertion refused), Device page form protections, Session header, device sign-in, saved addresses and revocation. Photo upload, ordering and reorder were skipped."
-    : "Workers contracts passed: Session header, replay, media privacy, compatibility-off, concurrent proposals and approvals (Operations v2, at most once), ownership, direct client assertions, device sign-in, saved addresses, reorder and revocation.",
+    ? "Workers contracts passed WITHOUT media containers: published 0.4 discovery, direct client assertions (delegated-key assertion refused), Device page form protections, Session header, device sign-in, saved addresses and revocation. Photo upload, ordering and reorder were skipped."
+    : "Workers contracts passed: Session header, replay, media privacy, compatibility-off, concurrent proposals and approvals (Operations v3, at most once), ownership, direct client assertions, device sign-in, saved addresses, reorder and revocation.",
 );

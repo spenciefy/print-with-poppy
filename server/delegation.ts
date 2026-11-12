@@ -1,4 +1,4 @@
-// Delegated keys (Poppy 0.3 §5.2). The keys in a Personal Agent's `jwks_uri`
+// Delegated keys (Poppy 0.4 §5.2). The keys in a Personal Agent's `jwks_uri`
 // sign client assertions directly (§4.1) and delegations: short-lived JWTs
 // (`typ: pap-delegation+jwt`, ES256 or PS384, at most 24 hours) that vouch for
 // one delegated key in `cnf.jwk`. Delegated keys sign only Session JWTs, which

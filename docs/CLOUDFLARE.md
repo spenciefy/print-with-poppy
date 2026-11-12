@@ -34,7 +34,7 @@ npm run check
 npm run test:cloudflare
 ```
 
-The Workers test uses a disposable local Durable Object/R2 namespace on port 8899. It checks native authentication (Session header), replay, signed media expiry and ownership, concurrent proposals and approvals (Operations v2, at most once), approval enforcement, a mixed shirt/print order, simulated payment/fulfillment/shipment, captured emails, account history, renewal and revocation. It does not send real email.
+The Workers test uses a disposable local Durable Object/R2 namespace on port 8899. It checks native authentication (Session header), replay, signed media expiry and ownership, concurrent proposals and approvals (Operations v3, at most once), approval enforcement, a mixed shirt/print order, simulated payment/fulfillment/shipment, captured emails, account history, renewal and revocation. It does not send real email.
 
 For interactive development, build first and install a unique local secret in ignored `.dev.vars`:
 

@@ -118,7 +118,7 @@ try {
     ).status,
     400,
   );
-  // Poppy 0.3 §5.3: a missing Session header is 400 invalid_session,
+  // Poppy 0.4 §5.3: a missing Session header is 400 invalid_session,
   // independently of the recipient; it is not an OAuth account challenge.
   for (const email of ["unapproved@example.com", "spencersyen@gmail.com"]) {
     const response = await fetch(origin + "/api/orders", {

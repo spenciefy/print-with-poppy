@@ -79,6 +79,7 @@ try {
     SANDBOX_TEST_EMAIL: "runtime@example.com",
   };
   await run(["tsx", "tests/cloudflare/runtime.ts"], env);
+  await run(["tsx", "scripts/signin-e2e.ts"], env);
   // The reference agent orders photos, which needs the media containers.
   if (process.env.RUNTIME_SKIP_MEDIA !== "1") await run(
     [

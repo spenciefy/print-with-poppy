@@ -42,9 +42,9 @@ const signing = await importJWK(key.private, "ES256");
 // delegations; delegated keys sign the per-request Session JWTs.
 const agentSigner = await poppyAgent(key.private, clientId, origin);
 /** Test-only: the store's internal id for the Session a client_id + sid names. */
-const sessionFor = (sid: string) =>
-  store.get("session-sid", store.hash(`${clientId}\n${sid}`))?.sessionId as string;
-async function makeAgent(user = randomUUID()) {
+const sessionFor = (sid: string, user: string) =>
+  store.get("session-sid", store.hash(JSON.stringify([clientId, sid, user])))?.sessionId as string;
+async function makeAgent(user: string = randomUUID()) {
   const session: { sid: string; sub: string; access_token?: string; refresh_token?: string; session_id: string } = {
     sid: jti(),
     sub: user,
@@ -57,7 +57,7 @@ async function makeAgent(user = randomUUID()) {
     const r = await fetch(origin + route, {
       ...init,
       headers: {
-        "Poppy-Session": await sessionJwt(init.method || "GET", origin + new URL(route, origin).pathname, token),
+        "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": await sessionJwt(init.method || "GET", origin + new URL(route, origin).pathname, token),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init.headers,
       },
@@ -69,7 +69,7 @@ async function makeAgent(user = randomUUID()) {
     if (!renew) session.sid = jti();
     const r = await request("/api/catalog");
     assert.equal(r.status, 200, JSON.stringify(r.body));
-    session.session_id = sessionFor(session.sid);
+    session.session_id = sessionFor(session.sid, user);
     return { session_id: session.session_id };
   }
   await token();
@@ -82,13 +82,13 @@ async function makeAgent(user = randomUUID()) {
   };
 }
 type Agent = Awaited<ReturnType<typeof makeAgent>>;
-/** Operations v2: send the same request again with the approval. */
+/** Operations v3: send the same request again with the approval. */
 async function approveVia(a: Agent, route: string, body: unknown, op: { operation_id: string; revision: string }) {
   return a.request(route, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}"`,
+      "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}", approver="user"`,
     },
     body: JSON.stringify(body),
   });
@@ -134,13 +134,13 @@ test("real Poppy discovery, Session-header upload, immutable approval, one payme
   const discovery = await (
     await fetch(origin + "/.well-known/poppy.json")
   ).json();
-  assert.equal(discovery.extensions.operations.version, "2");
+  assert.equal(discovery.extensions.operations[0].version, "3");
   const f = await fixture();
   assert.match(
     f.op.summary,
     /123 Market Street, Unit 9, San Francisco, CA 94103/,
   );
-  // Operations v2 object: exactly these fields, and nothing performed yet.
+  // Operations v3 object: exactly these fields, and nothing performed yet.
   for (const k of ["operation_id", "revision", "summary", "terms", "expires_at"]) assert.ok(k in f.op, k);
   for (const k of ["state", "confirmation", "result", "user_approval_required", "owner", "principal", "request"]) assert.equal(k in f.op, false, k);
   assert.match(f.op.revision, /^[A-Za-z0-9_-]+$/);
@@ -234,19 +234,19 @@ test("Session JWT replay, wrong method, ath binding, expired tokens and continui
   assert.equal((await missing.json()).error, "invalid_session");
   const url = origin + "/api/orders/not_found";
   const jwt = await a.sessionJwt("GET", url);
-  assert.equal((await fetch(url, { headers: { "Poppy-Session": jwt } })).status, 404);
-  const replay = await fetch(url, { headers: { "Poppy-Session": jwt } });
+  assert.equal((await fetch(url, { headers: { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": jwt } })).status, 404);
+  const replay = await fetch(url, { headers: { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": jwt } });
   assert.equal(replay.status, 400);
   assert.equal((await replay.json()).error, "invalid_session");
   const wrong = await a.sessionJwt("POST", url);
-  assert.equal((await fetch(url, { headers: { "Poppy-Session": wrong } })).status, 400);
+  assert.equal((await fetch(url, { headers: { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": wrong } })).status, 400);
   const signed = await login(a);
   // ath must cover the access token sent with it.
   const noAth = await a.sessionJwt("GET", url);
-  const r1 = await fetch(url, { headers: { "Poppy-Session": noAth, Authorization: `Bearer ${signed.access_token}` } });
+  const r1 = await fetch(url, { headers: { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": noAth, Authorization: `Bearer ${signed.access_token}` } });
   assert.equal(r1.status, 400);
   const otherToken = await a.sessionJwt("GET", url, "tok_other");
-  const r2 = await fetch(url, { headers: { "Poppy-Session": otherToken, Authorization: `Bearer ${signed.access_token}` } });
+  const r2 = await fetch(url, { headers: { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": otherToken, Authorization: `Bearer ${signed.access_token}` } });
   assert.equal(r2.status, 400);
   // The same sid continues the Session; a new sid is a new Session.
   const first = a.session.session_id;
@@ -293,12 +293,12 @@ test("changed revisions, standing permissions, expired quotes and cancelled prop
   );
 });
 test("approval headers accept structured fields and require String identifiers", () => {
-  const expected = { operation_id: "op_123", revision: "rev_123" };
+  const expected = { operation_id: "op_123", revision: "rev_123", approver: "user" };
   for (const header of [
     'operation_id="op_123", revision="rev_123", extra=("a,b" token)',
     'operation_id="op_123";note="a,b", revision="rev_123"',
     'extra=%"caf%c3%a9", operation_id="op_123", revision="rev_123", date=@123, flag',
-  ]) assert.deepEqual(commerce.parseApproval(header), expected, header);
+  ]) assert.deepEqual(commerce.parseApproval(header + ', approver="user"'), expected, header);
   for (const header of [
     undefined,
     'operation_id="op_123"',
@@ -326,10 +326,12 @@ test("operations: the same request gets the same operation; an approval covers o
   assert.equal(mismatch.body.error, "approval_required");
   assert.notEqual(mismatch.body.operation.revision, f.op.revision);
   assert.equal(store.all("order").filter((o: any) => o.owner === f.a.session.session_id).length, 0);
-  // An unknown revision or an unparseable header is a request without an approval.
+  // An unknown revision revises the same action; an unparseable header is not approval.
   const stale = await approveVia(f.a, "/api/orders", f.proposal, { ...f.op, revision: "1-stale" });
   assert.equal(stale.status, 403);
-  assert.equal(stale.body.operation.revision, f.op.revision);
+  assert.notEqual(stale.body.operation.revision, f.op.revision);
+  assert.equal(stale.body.operation.operation_id, f.op.operation_id);
+  f.op = stale.body.operation;
   const garbage = await f.a.request("/api/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Poppy-Approval": "operation_id=" },
@@ -341,7 +343,7 @@ test("operations: the same request gets the same operation; an approval covers o
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Poppy-Approval": `operation_id="${f.op.operation_id}";note="a,b", revision="${f.op.revision}", extra=("a,b" token);x=1, flag`,
+      "Poppy-Approval": `operation_id="${f.op.operation_id}";note="a,b", revision="${f.op.revision}", extra=("a,b" token);x=1, flag, approver="user"`,
     },
     body: JSON.stringify(f.proposal),
   });
@@ -854,13 +856,13 @@ test("HTTP compatibility sessions isolate ownership, expire, and cannot downgrad
   const op = (await own.json()).operation;
   assert.equal(op.terms.subtotal, 1200);
   assert.equal(op.terms.orderingMethod, "http-compatibility");
-  // Compatibility agents use Operations v2 too: the same request with Poppy-Approval.
+  // Compatibility agents use Operations v3 too: the same request with Poppy-Approval.
   const approved = await fetch(origin + "/api/orders", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${a.access_token}`,
       "Content-Type": "application/json",
-      "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}"`,
+      "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}", approver="user"`,
     },
     body: JSON.stringify(proposal),
   });
@@ -1005,7 +1007,7 @@ test("discovery stays native while compatibility is documented separately", asyn
       }
     }
   }
-  // Operations v2: the approval header is optional and documented; no Idempotency-Key.
+  // Operations v3: the approval header is optional and documented; no Idempotency-Key.
   const orderParams = native.paths["/api/orders"].post.parameters;
   assert.ok(orderParams.some((p: any) => p.name === "Poppy-Approval" && !p.required));
   assert.ok(!orderParams.some((p: any) => p.name === "Idempotency-Key"));
@@ -1057,9 +1059,9 @@ async function oauth(a: Agent, body: Record<string, string>, route = "/oauth/tok
   return { status: r.status, body: parsed };
 }
 const mediatedGrant = "https://personalagentprotocol.org/grant/mediated-sign-in";
-const postJson = (body: unknown): RequestInit => ({
+const postJson = (body: unknown, headers: Record<string, string> = {}): RequestInit => ({
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", ...headers },
   body: JSON.stringify(body),
 });
 function otpFor(challenge: string) {
@@ -1184,7 +1186,7 @@ test("mediated sign-in: client isolation, wrong-code limits, expiry, one account
   a.session.access_token = second.access_token;
   const mixed = await a.request("/api/account");
   assert.equal(mixed.status, 400);
-  assert.equal(mixed.body.error, "invalid_session");
+  assert.equal(mixed.body.error, "session_ended");
   await a.token();
   assert.equal((await a.request("/api/account")).status, 200);
   // Refresh token expiry also removes account access from unexpired access tokens.
@@ -1202,7 +1204,7 @@ test("discovery offers Direct and Device by grant type and Mediated as an extens
   assert.equal(d.auth.mediated, undefined);
   assert.ok(m.grant_types_supported.includes("authorization_code"));
   assert.ok(m.grant_types_supported.includes(mediatedGrant));
-  assert.deepEqual(d.extensions["mediated-sign-in"].fields, [{ name: "email", label: "Email", secret: false }]);
+  assert.deepEqual(d.extensions["mediated-sign-in"][0].fields, [{ name: "email", label: "Email", secret: false }]);
   // The old Mediated endpoint is gone.
   const guest = await (await fetch(origin + "/api/agent-sessions", postJson({}))).json();
   const r = await fetch(origin + "/api/poppy/sign-in", {
@@ -1849,6 +1851,14 @@ test("mixed shirt sizes use quantity pricing and require every preview approval 
   assert.deepEqual(groups.map(g => [g.quantity, g.attributes]), [[2, { color: "orange", size: "m" }], [1, { color: "black", size: "xl" }]]);
   const previews = (agent: typeof f.a, body: unknown) => agent.request(`/api/shirt-preview-approvals/${op.operation_id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const orderBody = { ...f.proposal, items };
+  const declined = await f.a.request("/api/orders", postJson(orderBody, {
+    "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}", approver="agent"`,
+  }));
+  assert.equal(declined.status, 403);
+  assert.equal(declined.body.error, "approval_declined");
+  assert.equal(declined.body.operation, undefined);
+  assert.equal(declined.body.operation_id, op.operation_id);
+  assert.equal(store.get("operation", op.operation_id).orderId, undefined);
   const ids = op.terms.previews.map((p: any) => p.previewId);
   const approval = { revision: op.revision, approved_by: "user", previewIds: ids };
   // The operation approval alone doesn't place a shirt order: every mockup needs approval first.
@@ -1972,4 +1982,68 @@ test("batch upload supports native and HTTP sessions with per-file failures and 
     headers: { Authorization: `Bearer ${guest.access_token}` } });
   assert.equal(result.status, 200);
   assert.equal((await result.json()).uploaded, 2);
+});
+
+test("Operations v3 requires an approver and records agent approval metadata; retries perform once", async () => {
+  const f = await fixture();
+  const send = (approval: string) => f.a.request("/api/orders", postJson(f.proposal, { "Poppy-Approval": approval }));
+  const prefix = `operation_id="${f.op.operation_id}", revision="${f.op.revision}"`;
+  for (const suffix of ["", ', approver="unknown"', ', approver=user']) {
+    assert.equal((await send(prefix + suffix)).status, 403);
+    assert.equal(store.get("operation", f.op.operation_id).orderId, undefined);
+  }
+  const approval = prefix + ', approver="agent", approved_at=1794500000, input_type="ignored", reference="approval_123", future=(token)';
+  const done = await send(approval);
+  assert.equal(done.status, 201, JSON.stringify(done.body));
+  const saved = store.get("operation", f.op.operation_id).confirmation;
+  assert.equal(saved.approved_by, "agent");
+  assert.equal(saved.approval.approved_at, 1794500000);
+  assert.equal(saved.approval.reference, "approval_123");
+  assert.equal(saved.approval.input_type, undefined);
+  assert.equal((await send(approval)).body.id, done.body.id);
+  assert.equal(store.all<any>("order").filter(o => o.operationId === f.op.operation_id).length, 1);
+});
+
+test("Operations v3 guest approvals can continue in a new Session of the same agent and User", async () => {
+  const f = await fixture();
+  const user = f.a.session.sub;
+  const next = await makeAgent(user);
+  assert.notEqual(next.session.session_id, f.a.session.session_id);
+  const { endSession } = await import("../server/sessions.js");
+  endSession(store.get("session", f.a.session.session_id)!);
+  const done = await approveVia(next, "/api/orders", f.proposal, f.op);
+  assert.equal(done.status, 201, JSON.stringify(done.body));
+  assert.equal((await approveVia(next, "/api/orders", f.proposal, f.op)).body.id, done.body.id);
+  // Another user cannot approve this operation or see the original order.
+  const other = await makeAgent();
+  const denied = await approveVia(other, "/api/orders", f.proposal, f.op);
+  assert.notEqual(denied.status, 201);
+  assert.equal(denied.body.id, undefined);
+});
+
+
+test("Operations v3 changed requests revise the same action without executing", async () => {
+  const f = await fixture();
+  const changed = { ...f.proposal, items: [{ ...f.proposal.items[0], quantity: 7 }] };
+  const response = await approveVia(f.a, "/api/orders", changed, f.op);
+  assert.equal(response.status, 403);
+  assert.equal(response.body.error, "approval_required");
+  assert.equal(response.body.operation.operation_id, f.op.operation_id);
+  assert.notEqual(response.body.operation.revision, f.op.revision);
+  assert.equal(store.get("operation", f.op.operation_id).orderId, undefined);
+});
+
+
+test("Operations v3 expired guest terms can be refreshed from a new Session", async () => {
+  const f = await fixture();
+  const saved = store.get<any>("operation", f.op.operation_id)!;
+  saved.terms.expires = Date.now() - 1000;
+  saved.expires_at = new Date(saved.terms.expires).toISOString();
+  store.put("operation", saved.operation_id, saved, saved.owner);
+  const next = await makeAgent(f.a.session.sub);
+  const revised = await approveVia(next, "/api/orders", f.proposal, f.op);
+  assert.equal(revised.status, 403, JSON.stringify(revised.body));
+  assert.equal(revised.body.operation.operation_id, f.op.operation_id);
+  assert.notEqual(revised.body.operation.revision, f.op.revision);
+  assert.equal((await approveVia(next, "/api/orders", f.proposal, revised.body.operation)).status, 201);
 });

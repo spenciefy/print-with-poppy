@@ -28,13 +28,13 @@ import {
 } from "./types.js";
 import { requireAccount } from "./accounts.js";
 import { resolveAccountDefaults } from "./addresses.js";
-/** Operations v2 (§2): used only when the Personal Agent lists `operations` version "2". */
+/** Operations v3 (§2): used only when the Personal Agent lists `operations` version "3". */
 export function requireOperations(session: Session) {
   if (!session.extensions)
     throw new HttpError(
       403,
       "extension_required",
-      "Ordering here needs the operations extension, version 2: list it in your client metadata.",
+      'Ordering here needs the operations extension, version 3: send Poppy-Extensions: "operations";v="3".',
       { extension: "operations" },
     );
 }
@@ -42,7 +42,7 @@ export function requireOperations(session: Session) {
 function principalKey(session: Session) {
   return session.accountId
     ? `account:${session.clientId}:${session.userId}:${session.accountId}`
-    : `session:${session.id}`;
+    : `guest:${JSON.stringify([session.clientId, session.userId])}`;
 }
 /** JSON with sorted keys, so the same request always has the same fingerprint. */
 function canonical(value: unknown): string {
@@ -59,22 +59,31 @@ function canonical(value: unknown): string {
 export function requestFingerprint(session: Session, method: string, path: string, body: unknown) {
   return hash(`${principalKey(session)}\n${method}\n${path}\n${canonical(body ?? {})}`);
 }
-/** RFC 9651 Dictionary: `operation_id="…", revision="…"`; anything else is ignored. */
-export function parseApproval(header: string | undefined) {
+export type Approval = {
+  operation_id: string; revision: string; approver: "user" | "agent";
+  approved_at?: number; input_type?: string; reference?: string;
+};
+/** Operations v3: explicit approver, RFC 9651 Strings, optional audit metadata. */
+export function parseApproval(header: string | undefined): Approval | undefined {
   if (!header) return undefined;
   try {
     const members = parseDictionary(header);
-    const operation = members.get("operation_id");
-    const revision = members.get("revision");
-    // Only RFC Strings count, not Tokens, Display Strings or Inner Lists.
-    // Unknown members and parameters are parsed but do not affect approval.
-    return operation?.type === "item" && operation.value.type === "string" &&
-      revision?.type === "item" && revision.value.type === "string"
-      ? { operation_id: operation.value.value, revision: revision.value.value }
-      : undefined;
-  } catch {
-    return undefined; // Unparseable: ignore the field, never approve an action.
-  }
+    const string = (name: string) => {
+      const m = members.get(name);
+      return m?.type === "item" && m.value.type === "string" ? m.value.value : undefined;
+    };
+    const operation_id = string("operation_id"), revision = string("revision"), approver = string("approver");
+    if (!operation_id || !revision || !/^[A-Za-z0-9_-]{1,256}$/.test(operation_id) ||
+        !/^[A-Za-z0-9_-]{1,256}$/.test(revision) || (approver !== "user" && approver !== "agent")) return;
+    const at = members.get("approved_at");
+    const approved_at = at?.type === "item" && at.value.type === "integer" ? Number(at.value.value) : undefined;
+    const input_type = approver === "user" ? string("input_type") : undefined;
+    const reference = string("reference");
+    return { operation_id, revision, approver,
+      ...(approved_at !== undefined ? { approved_at } : {}),
+      ...(input_type !== undefined ? { input_type } : {}),
+      ...(reference && /^[A-Za-z0-9_-]{1,256}$/.test(reference) ? { reference } : {}) };
+  } catch { return; } // Malformed fields never approve an action.
 }
 const newRevision = (expires: number) => `${Math.floor(expires / 1000)}-${id("r").slice(2)}`;
 
@@ -84,8 +93,15 @@ export async function propose(
   session: Session,
   request: string,
   operationId = id("op"),
+  previous?: Operation,
 ) {
   const p = proposalSchema.parse(resolveAccountDefaults(body, session));
+  // Keep an existing operation's private artwork attached to its original Session.
+  // Reorders may instead have prepared fresh copies in the current Session.
+  if (previous && canApprove(previous, session) && p.items.every(i =>
+    previous.terms.items.some(item => item.photoId === i.photoId))) {
+    session = { ...session, id: previous.owner };
+  }
   const photos = p.items.map((i) => ownedPhoto(i.photoId, session.id));
   const groups = orderProducts(p);
   for (const [n, item] of p.items.entries()) {
@@ -134,10 +150,13 @@ export async function propose(
     result: null,
   };
   return db.transaction(() => {
+    // Never overwrite an operation that was approved while pricing was in flight.
+    const existing = get<Operation>("operation", operationId);
+    if (existing && performed(existing)) return existing;
     // Concurrent identical requests share one operation.
     const ref = get("operation-request", request);
     const current = ref && get<Operation>("operation", ref.operationId);
-    if (current && current.operation_id !== operationId && current.state === "proposed" && current.terms.expires > Date.now())
+    if (current && !existing && current.operation_id !== operationId && current.state === "proposed" && current.terms.expires > Date.now())
       return current;
     put("operation", op.operation_id, op, session.id);
     put("operation-request", request, { operationId: op.operation_id });
@@ -147,20 +166,19 @@ export async function propose(
 
 /** Can this Session approve the operation (Operations §3, check 1)? */
 function canApprove(op: Operation, session: Session) {
-  if (!op.terms.accountId) return op.owner === session.id;
   const principal = op.principal || get<Session>("session", op.owner);
   return (
     !!principal &&
     principal.clientId === session.clientId &&
     principal.userId === session.userId &&
-    session.accountId === op.terms.accountId &&
-    !!session.scopes?.includes("orders:write")
+    (session.accountId ?? null) === (op.terms.accountId ?? null) &&
+    (!op.terms.accountId || !!session.scopes?.includes("orders:write"))
   );
 }
 const performed = (op: Operation) => ["in_progress", "succeeded", "failed"].includes(op.state);
 
 /**
- * An action that needs the User's approval (Operations v2). Without a valid
+ * An action that needs the User's approval (Operations v3). Without a valid
  * approval: 403 `approval_required` with the operation, performing nothing.
  * With `Poppy-Approval` naming the current revision of the operation for this
  * exact request: perform it, at most once, and return the order (201).
@@ -191,25 +209,35 @@ export async function approvalFlow(
         op.revision === approval.revision &&
         op.request === fingerprint
       ) {
-        const done = confirm(op.operation_id, op.owner, op.revision, "user");
+        if (approval.approver === "agent" && requiredShirtPreviews(op).length)
+          throw new HttpError(403, "approval_declined", "The user must approve the custom shirt preview and order.", {
+            operation_id: op.operation_id, revision: op.revision,
+            reason: "Please ask the user to approve the custom shirt preview and order.",
+          });
+        const done = confirm(op.operation_id, op.owner, op.revision, "user", approval);
         return { status: 201, body: performedView(done), op: done, performedNow: true };
       }
+      // Check 3 failed: revise this action, never create a second operation.
+      // An unchanged request can reuse its original private photos after a Session ends.
+      const revised = await propose(await build(op), session, fingerprint, op.operation_id, op);
+      return { status: 403, body: approvalRequired(revised), op: revised };
     }
   }
   // No valid approval: the current revision for this request, or a new one.
   const ref = get("operation-request", fingerprint);
   let pending = ref ? get<Operation>("operation", ref.operationId) : undefined;
+  if (pending?.request !== fingerprint) pending = undefined;
   if (pending) pending = readOperation(pending.operation_id, pending.owner);
   if (pending?.state === "proposed" && approval?.revision !== pending.revision)
     return { status: 403, body: approvalRequired(pending), op: pending };
   const reuse = pending && !performed(pending) ? pending : undefined;
-  const op = await propose(await build(reuse), session, fingerprint, reuse?.operation_id);
+  const op = await propose(await build(reuse), session, fingerprint, reuse?.operation_id, reuse);
   return { status: 403, body: approvalRequired(op), op };
 }
 export const approvalRequired = (op: Operation) => ({
   error: "approval_required",
   error_description:
-    "Not done yet. Show the user the Company's name and this summary, get their approval, then send the same request again with Poppy-Approval: operation_id=\"…\", revision=\"…\".",
+    "Not done yet. Show the user the Company's name and this summary, get their approval, then send the same request again with Poppy-Approval: operation_id=\"…\", revision=\"…\", approver=\"user\".",
   operation: operationView(op),
 });
 /** What an approved order request returns, the first time and on every retry. */
@@ -230,7 +258,7 @@ export function authorizedOperation(
     new HttpError(404, "operation_not_found", "Operation not found.");
   if (!op) throw notFound();
   if (!op.terms.accountId) {
-    if (op.owner !== session.id) throw notFound();
+    if (!canApprove(op, session)) throw notFound();
   } else {
     // Legacy records can recover their principal from the original persisted session.
     const principal = op.principal || get<Session>("session", op.owner);
@@ -271,7 +299,7 @@ function displayPhotoLabels(quote: Quote) {
   });
   return { ...quote, summary, previews };
 }
-/** The operation object (Operations v2 §3). */
+/** The operation object (Operations v3 §3). */
 export function operationView(op: Operation) {
   const labeled = displayPhotoLabels(op.terms);
   return {
@@ -280,6 +308,10 @@ export function operationView(op: Operation) {
     summary: labeled.summary,
     terms: {
       ...labeled,
+      products: orderProducts(labeled),
+      payment: { required: true, amount: labeled.total, currency: labeled.currency, action: "Complete checkout to start printing" },
+      cancellation: "Cancellation is not guaranteed after completing checkout.",
+      fulfillment: config.demo ? "Simulated payment and fulfillment; no physical shipment." : "Physical prints delivered to the approved shipping address.",
       owner: undefined,
       accountId: undefined,
       couponCode: undefined,
@@ -310,6 +342,7 @@ export function confirm(
   owner: string,
   revision: string,
   approvedBy: string,
+  approval?: Approval,
 ) {
   return db.transaction(() => {
     const op = readOperation(opId, owner);
@@ -343,7 +376,8 @@ export function confirm(
     op.state = "in_progress";
     op.confirmation = {
       revision,
-      approved_by: "user",
+      approved_by: approval?.approver ?? "user",
+      ...(approval ? { approval } : {}),
       confirmed_at: new Date().toISOString(),
     };
     op.orderId = order.id;

@@ -1,5 +1,5 @@
 /**
- * A Poppy 0.3 Personal Agent signer, for the reference agents and tests.
+ * A Poppy 0.4 Personal Agent signer, for the reference agents and tests.
  *
  * - Client assertions (RFC 7523, §4.1) are signed directly by the key from the
  *   agent's jwks_uri, with aud = the Company's issuer.

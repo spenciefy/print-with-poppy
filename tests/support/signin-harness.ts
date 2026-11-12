@@ -1,4 +1,4 @@
-// Shared Personal Agent and browser helpers for the sign-in tests (Poppy 0.3).
+// Shared Personal Agent and browser helpers for the sign-in tests (Poppy 0.4).
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { poppyAgent } from "../../scripts/poppy-delegation.js";
@@ -23,7 +23,7 @@ async function tokenRequest(body: Record<string, string>) {
   return { status: r.status, headers: r.headers, body: await r.json() };
 }
 /** Test-only: the store's internal id of the Session a sid names. */
-const sessionOf = (sid: string) => store.get("session-sid", store.hash(`${clientId}\n${sid}`))?.sessionId;
+const sessionOf = (sid: string, user: string) => store.get("session-sid", store.hash(JSON.stringify([clientId, sid, user])))?.sessionId;
 
 /** One Session: a User ID, a sid, and (once signed in) an access token. */
 async function makeAgent(user = randomUUID(), agentId?: string) {
@@ -35,7 +35,7 @@ async function makeAgent(user = randomUUID(), agentId?: string) {
     const r = await fetch(origin + route, {
       ...init,
       headers: {
-        "Poppy-Session": await agent.sessionJwt(s, init.method || "GET", url, token),
+        "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": await agent.sessionJwt(s, init.method || "GET", url, token),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init.headers,
       },
@@ -44,7 +44,7 @@ async function makeAgent(user = randomUUID(), agentId?: string) {
   }
   const started = await request("/api/catalog");
   assert.equal(started.status, 200, JSON.stringify(started.body));
-  s.session_id = sessionOf(s.sid) as string;
+  s.session_id = sessionOf(s.sid, user) as string;
   const poll = (deviceCode: string, extra: Record<string, string> = {}) =>
     tokenRequest({ grant_type: deviceGrant, device_code: deviceCode, ...extra });
   return { user, session: s, request, tokenRequest, poll };
@@ -131,9 +131,9 @@ async function deviceSignIn(a: any, email = `${randomUUID()}@example.com`, scope
   Object.assign(a.session, done.body);
   return done.body;
 }
-/** Operations v2: send the same request again with Poppy-Approval. */
+/** Operations v3: send the same request again with Poppy-Approval. */
 async function approveVia(a: any, route: string, body: unknown, op: { operation_id: string; revision: string }) {
-  return a.request(route, postJson(body, { "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}"` }));
+  return a.request(route, postJson(body, { "Poppy-Approval": `operation_id="${op.operation_id}", revision="${op.revision}", approver="user"` }));
 }
 return { agent, clientId, deviceGrant, mediatedGrant, assertion, clientAuth, tokenRequest, sessionOf, makeAgent, postJson, startDevice, deviceBrowser, code, approveDevice, mediated, deviceSignIn, approveVia };
 }

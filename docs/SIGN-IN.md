@@ -1,6 +1,6 @@
-# Sign-in types (Poppy 0.3 §4)
+# Sign-in types (Poppy 0.4 §4)
 
-Print with Poppy offers all three Poppy sign-in types. Every type signs the customer in with a six-digit emailed code (no passwords) and ends with plain OAuth tokens: a Bearer access token (1 hour) and a refresh token (30 days, not rotated). The agent sends the access token with its Session header (`Poppy-Session`) to act signed in. See [POPPY-0.3.md](POPPY-0.3.md) for the protocol changes and [ACCOUNTS.md](ACCOUNTS.md) for account behavior.
+Print with Poppy offers all three Poppy sign-in types. Every type signs the customer in with a six-digit emailed code (no passwords) and ends with plain OAuth tokens: a Bearer access token (1 hour) and a refresh token (30 days, not rotated). The agent sends the access token with its Session header (`Poppy-Session`) to act signed in. See [POPPY-0.4.md](POPPY-0.4.md) for the protocol changes and [ACCOUNTS.md](ACCOUNTS.md) for account behavior.
 
 | Type | How an agent finds it | Where the customer signs in | Scopes | Offered |
 | --- | --- | --- | --- | --- |
@@ -20,7 +20,7 @@ They're listed in `scopes_supported` and described in `auth.scopes`, `auth.scope
 
 ## Sessions
 
-Every API request carries a Session JWT in `Poppy-Session`, signed by a delegated key (§5.2). The Session is keyed by `client_id` + `sid`: a new `sid` starts a signed-out Session, the same `sid` continues it, and a request with an access token is signed in. Token requests carry only the client assertion, signed directly by a `jwks_uri` key (§4.1). Sign-in doesn't need a Session.
+Every API request carries a Session JWT in `Poppy-Session`, signed by a delegated key (§5.2). The Session is keyed by `client_id` + `sid` + User ID: a new `sid` starts a signed-out Session, the same `sid` continues it, and a request with an access token is signed in. Token requests carry only the client assertion, signed directly by a `jwks_uri` key (§4.1). Sign-in doesn't need a Session.
 
 ## Device Sign-In
 
@@ -53,7 +53,7 @@ At `/oauth/token`, with the client assertion:
 
 ## Refresh and sign-out
 
-`grant_type=refresh_token` with the client assertion returns a new access token; optional `scope` narrows it (never expands), optional `resource` must be `https://{domain}` (or the origin) or the answer is `invalid_target`. Revoking the refresh token at `/oauth/revoke` (RFC 7009) signs out: its access tokens get `invalid_token` at once and the Sessions continue signed out. A Session already signed in to one account refuses another account's token with `invalid_session`; the agent uses a new `sid`.
+`grant_type=refresh_token` with the client assertion returns a new access token; optional `scope` narrows it (never expands), optional `resource` must be `https://{domain}` (or the origin) or the answer is `invalid_target`. Revoking the refresh token at `/oauth/revoke` (RFC 7009) signs out: its access tokens get `invalid_token` at once and the Sessions continue signed out. A Session already signed in to one account refuses another account's token with `session_ended`; the agent uses a new `sid`.
 
 ## Signed-in payoff
 

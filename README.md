@@ -38,9 +38,9 @@ No photos ready? Ask your agent for the yellow, orange or red poppy artwork. Bot
 
 ### Protocol version
 
-This branch targets the published **Poppy draft 0.3**, Operations v2 and Mediated Sign-In v1. Every API request carries a `Poppy-Session` header: a Session JWT signed by a delegated key (`pap_dlg`), keyed by `client_id` + `sid`. Client assertions are signed directly by a `jwks_uri` key with the issuer as `aud`. Account access is plain OAuth (Bearer access tokens and refresh tokens). Ordering answers `approval_required` until the same request comes back with `Poppy-Approval`. Sign-in types come from the issuer metadata's `grant_types_supported`, and the store defines its own scopes (`orders:read`, `orders:write`, `addresses`). Agents must explicitly support 0.3; do not silently fall back to the HTTP guest API after a native failure.
+This branch targets the published **Poppy 0.4**, Operations v3 and Mediated Sign-In v1. Every native API request carries `Poppy-Version: 0.4`, `Poppy-Extensions: "operations";v="3"`, and a `Poppy-Session` header: a Session JWT signed by a delegated key (`pap_dlg`), keyed by `client_id` + `sid` + User ID. Client assertions are signed directly by a `jwks_uri` key with the issuer as `aud`. Account access is plain OAuth (Bearer access tokens and refresh tokens). Ordering answers `approval_required` until the same request comes back with `Poppy-Approval`. Sign-in types come from the issuer metadata's `grant_types_supported`, and the store defines its own scopes (`orders:read`, `orders:write`, `addresses`). Agents must explicitly support 0.4; do not silently fall back to the HTTP guest API after a native failure.
 
-See [the 0.3 notes](docs/POPPY-0.3.md) (and the earlier [0.2 upgrade guide](docs/POPPY-0.2.md)) for the changes, validation and staged rollout plan. Deploy to the isolated sandbox and verify your agent there before upgrading a live store. This code change alone does not establish that a deployed agent supports 0.3.
+See [the 0.4 notes](docs/POPPY-0.4.md) (and the earlier [0.2 upgrade guide](docs/POPPY-0.2.md)) for the changes, validation and staged rollout plan. Deploy to the isolated sandbox and verify your agent there before upgrading a live store. This code change alone does not establish that a deployed agent supports 0.4.
 
 ### Ordering method and native Poppy verification
 
@@ -94,7 +94,7 @@ npm run check
 npm run test:e2e
 ```
 
-The reference client in `scripts/agent.ts` does discovery, issuer verification, client assertions, Session JWTs, upload, proposal, approval (Operations v2), demo payment and shipment, and checks both captured emails. Without `--approve-demo`, it stops at the approval summary. Its local identity is deliberately available only in demo mode; real agents publish and manage their own keys.
+The reference client in `scripts/agent.ts` does discovery, issuer verification, client assertions, Session JWTs, upload, proposal, approval (Operations v3), demo payment and shipment, and checks both captured emails. Without `--approve-demo`, it stops at the approval summary. Its local identity is deliberately available only in demo mode; real agents publish and manage their own keys.
 
 Automated integration tests exercise the real Express API and temporary SQLite database. Provider-contract tests intercept requests: they validate payloads and error handling but do **not** prove real provider acceptance. A passing local test suite does not verify a deployment’s credentials, payment capture, provider acceptance or email delivery. Verify those separately for your own installation.
 
@@ -109,7 +109,7 @@ Automated integration tests exercise the real Express API and temporary SQLite d
 7. Start with `APP_MODE=sandbox`. Prodigi sandbox never prints; Stripe test mode never charges. The startup checks reject test/live Stripe key mismatches and incomplete provider configuration. Use separate keys and storage for live.
 8. Validate one sandbox order, email delivery and the webhook lifecycle. Then switch to live credentials, order a physical sample with explicit purchase authorization, and check print/crop/color quality and delivered price before inviting customers.
 
-Poppy operations v2 is required for ordering. Guest sessions need no customer login. Optional customer accounts support all three native Poppy sign-in types: direct (email OTP, consent and PKCE), device (link and code opened on any device, then email OTP and consent) and mediated (email, then OTP). Signed-in customers get saved shipping addresses and reorders, both through normal approval. Refresh tokens support refresh and immediate revocation. MCP, company-chatbot and browser-session capabilities are not advertised. See [Customer accounts](docs/ACCOUNTS.md) and [Sign-in types](docs/SIGN-IN.md) for the flows and security boundaries. An approved order means checkout is being prepared; payment and fulfillment are separate order states.
+Poppy operations v3 is required for ordering. Guest sessions need no customer login. Optional customer accounts support all three native Poppy sign-in types: direct (email OTP, consent and PKCE), device (link and code opened on any device, then email OTP and consent) and mediated (email, then OTP). Signed-in customers get saved shipping addresses and reorders, both through normal approval. Refresh tokens support refresh and immediate revocation. MCP, company-chatbot and browser-session capabilities are not advertised. See [Customer accounts](docs/ACCOUNTS.md) and [Sign-in types](docs/SIGN-IN.md) for the flows and security boundaries. An approved order means checkout is being prepared; payment and fulfillment are separate order states.
 
 The card stays at **Stripe-hosted Checkout**. An agent with an authorized card may complete the page. Issuer authentication can require the user. No raw-card or direct-charge endpoint exists.
 
@@ -173,11 +173,11 @@ Frontend + Poppy API → SQLite order/approval + durable jobs
 
 Brand and sample artwork use abstract orange, red and yellow poppies. The homepage screenshot above shows the public storefront; sample artwork is illustrative, never a customer upload. Fonts: [Young Serif](https://fonts.google.com/specimen/Young+Serif) and [Hanken Grotesk](https://fonts.google.com/specimen/Hanken+Grotesk), self-hosted with OFL licenses.
 
-[Poppy 0.3 spec](https://personalagentprotocol.org/docs/0.3/spec) · [Operations v2](https://personalagentprotocol.org/docs/0.3/extensions/operations) · [Prodigi API](https://www.prodigi.com/print-api/docs/reference/) · [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment)
+[Poppy 0.4 spec](https://personalagentprotocol.org/docs/0.4/spec) · [Operations v3](https://personalagentprotocol.org/docs/0.4/extensions/operations) · [Prodigi API](https://www.prodigi.com/print-api/docs/reference/) · [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment)
 
 ## Agent identity and account access
 
-In Poppy 0.3, signed `Poppy-Session` headers verify the agent and identify its session, including signed-out requests. OAuth grants access to a customer’s account with the permissions they approve. This implementation uses standard Bearer access tokens alongside signed session headers; when a token is sent, the session signature covers its hash. DPoP-bound tokens are optional in 0.3 and are not used here. Describe this as signed Poppy sessions with OAuth account access, not as an OAuth DPoP demo.
+In Poppy 0.4, signed `Poppy-Session` headers verify the agent and identify its session, including signed-out requests. OAuth grants access to a customer’s account with the permissions they approve. This implementation uses standard Bearer access tokens alongside signed session headers; when a token is sent, the session signature covers its hash. DPoP-bound tokens are optional in 0.4 and are not used here. Describe this as signed Poppy sessions with OAuth account access, not as an OAuth DPoP demo.
 
 Customers can order as guests. Connecting an account enables permitted account features such as order history, saved addresses and reordering. Orders placed while signed in are saved to that account; earlier guest orders are not automatically linked. Connecting an account does not approve a purchase: each order still needs approval and payment. Customers can disconnect through their agent to revoke access.
 

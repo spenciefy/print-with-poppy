@@ -29,7 +29,7 @@ const reorderInput = z
   .refine((b) => !(b.addressId && b.address), "Send address or addressId, not both.");
 
 /**
- * Propose a past account order again (Operations v2): the same items at current
+ * Propose a past account order again (Operations v3): the same items at current
  * prices, to the original address unless overridden. Until the same request
  * comes back with Poppy-Approval it answers 403 approval_required; then it
  * places the order. A reorder never places an order on its own.

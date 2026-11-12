@@ -1,4 +1,4 @@
-// Mediated Sign-In extension v1 (Poppy 0.3): an extension grant at the token
+// Mediated Sign-In extension v1 (Poppy 0.4): an extension grant at the token
 // endpoint (RFC 6749 §4.5). The agent sends the User's email with `scope` and
 // its client assertion; the store emails a one-time code and answers
 // `code_required`; the agent sends `sign_in_id` and `one_time_code` to finish.

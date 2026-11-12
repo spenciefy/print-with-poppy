@@ -1,11 +1,11 @@
 /**
- * Poppy 0.3 reference run for a local demo store (APP_MODE=demo, optionally
+ * Poppy 0.4 reference run for a local demo store (APP_MODE=demo, optionally
  * AGENT_SANDBOX=true), as the store's demo agent: client assertions signed by
  * its jwks_uri key, Session JWTs (Poppy-Session) by delegated keys.
  *
  * Covers discovery, Session header checks, signed-out Sessions, each offered
  * sign-in type (Direct, Device, Mediated extension grant), refresh, account
- * reads, saved addresses, ordering and reordering through Operations v2
+ * reads, saved addresses, ordering and reordering through Operations v3
  * (approval_required → retry with Poppy-Approval, at most once), revocation and
  * continuing signed out.
  *
@@ -15,6 +15,8 @@
  */
 import { SignJWT, importJWK } from "jose";
 import { createHash, randomUUID } from "node:crypto";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import Database from "better-sqlite3";
 import { poppyAgent, delegate, jti } from "./poppy-delegation.js";
 
@@ -48,7 +50,7 @@ async function retrying(send: () => Promise<Response>) {
 
 // Discovery (§3): poppy.json → protected resource metadata → issuer metadata.
 const discovery = await json(await fetch(`${origin}/.well-known/poppy.json`));
-if (discovery.protocol_version !== "0.3") fail("Needs Poppy 0.3.");
+if (discovery.protocol_version !== "0.4") fail("Needs Poppy 0.4.");
 const domain = discovery.organization.domain;
 if (domain.toLowerCase() !== new URL(origin).hostname) fail("organization.domain mismatch");
 const prm = await json(await fetch(`${origin}/.well-known/oauth-protected-resource`));
@@ -68,21 +70,26 @@ const offered = {
   mediated: grants.includes(mediatedGrant) && !!discovery.extensions?.["mediated-sign-in"],
 };
 const fullScopes = oauth.scopes_supported.join(" ");
-const mediatedScopes = discovery.extensions?.["mediated-sign-in"]?.scopes.join(" ");
+const mediatedScopes = discovery.extensions?.["mediated-sign-in"]?.[0]?.scopes.join(" ");
 log(`Store: ${discovery.organization.name} (${domain}), protocol ${discovery.protocol_version}, environment ${cfg.environment}`);
 log(`Issuer ${issuer} from protected resource metadata (resource ${prm.resource}); protected_resources ✓`);
 log(`Sign-in offered: ${Object.entries(offered).filter(([, v]) => v).map(([k]) => k).join(", ")} (grant_types_supported: ${grants.length})`);
-log(`scopes_supported: ${fullScopes}; mediated-sign-in scopes: ${mediatedScopes}; described: ${oauth.scopes_supported.every((s: string) => discovery.auth.scopes?.[s])}; extensions: ${Object.entries(discovery.extensions).map(([k, v]: any) => `${k} v${v.version}`).join(", ")}`);
+log(`scopes_supported: ${fullScopes}; mediated-sign-in scopes: ${mediatedScopes}; described: ${oauth.scopes_supported.every((s: string) => discovery.auth.scopes?.[s])}; extensions: ${Object.entries(discovery.extensions).map(([k, v]: any) => `${k} v${v.map((entry: any) => entry.version).join(",")}`).join(", ")}`);
 
 // The demo agent's jwks_uri key, from the store's local database.
-const db = new Database(`${process.env.DATA_DIR || ".data"}/poppy.sqlite`, { readonly: true });
-const row = db.prepare("SELECT body FROM records WHERE kind='demo-key' AND id='identity'").get() as any;
-db.close();
-if (!row) fail("Start the demo store once so it creates its demo identity.");
-const rootJwk = JSON.parse(row.body).private;
+let rootJwk;
+if (process.env.AGENT_PRIVATE_JWK_FILE) {
+  rootJwk = JSON.parse(readFileSync(process.env.AGENT_PRIVATE_JWK_FILE, "utf8"));
+} else {
+  const db = new Database(`${process.env.DATA_DIR || ".data"}/poppy.sqlite`, { readonly: true });
+  const row = db.prepare("SELECT body FROM records WHERE kind='demo-key' AND id='identity'").get() as any;
+  db.close();
+  if (!row) fail("Start the demo store once so it creates its demo identity.");
+  rootJwk = JSON.parse(row.body).private;
+}
 const clientId = `${origin}/api/demo/agent.json`;
 const metadata = await json(await fetch(clientId));
-log(`Agent: ${metadata.client_name} (${new URL(clientId).hostname}); extensions ${JSON.stringify(metadata.extensions)}`);
+log(`Agent: ${metadata.client_name} (${new URL(clientId).hostname}); request declares operations v3`);
 const agent = await poppyAgent(rootJwk, clientId, issuer);
 const form = { "Content-Type": "application/x-www-form-urlencoded" };
 
@@ -95,7 +102,7 @@ async function call(s: S, route: string, init: RequestInit & { token?: string | 
     fetch(url, {
       ...init,
       headers: {
-        "Poppy-Session": await agent.sessionJwt(s, init.method || "GET", url, token),
+        "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": await agent.sessionJwt(s, init.method || "GET", url, token),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(init.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
         ...init.headers,
@@ -110,7 +117,7 @@ async function token(body: Record<string, string>) {
     fetch(oauth.token_endpoint, { method: "POST", headers: form, body: new URLSearchParams({ ...body, ...(await agent.clientAuth()) }) }),
   );
   const b = await json(r);
-  if (r.status === 200 && ("session_id" in b || "signed_in" in b || "refresh_token_expires_in" in b)) fail("0.3 token responses are plain OAuth");
+  if (r.status === 200 && ("session_id" in b || "signed_in" in b || "refresh_token_expires_in" in b)) fail("0.4 token responses are plain OAuth");
   return { status: r.status, body: b };
 }
 
@@ -242,7 +249,7 @@ async function mediatedSignIn(s: S, email: string) {
 
 const address = (who: string) => ({ name: `Demo ${who} Customer`, line1: "500 Poppy Lane", city: "Denver", state: "CO", postalCode: "80202", country: "US" });
 const samplePhoto = async (s: S) => (await call(s, "/api/photos/samples", { method: "POST", body: JSON.stringify({ color: "orange" }) })).body;
-/** Operations v2: the request is refused with the operation; the User approves; the same request again with Poppy-Approval. */
+/** Operations v3: the request is refused with the operation; the User approves; the same request again with Poppy-Approval. */
 async function approved(s: S, route: string, body: unknown, label: string) {
   const first = await call(s, route, { method: "POST", body: JSON.stringify(body) });
   if (first.status !== 403 || first.body.error !== "approval_required") fail(`${label}: expected approval_required, got ${first.status} ${errorOf(first.body)}`);
@@ -250,7 +257,7 @@ async function approved(s: S, route: string, body: unknown, label: string) {
   const shipTo = op.summary.split("\n").find((l: string) => l.startsWith("Deliver to"));
   step(`${label}`, `403 approval_required, operation ${redact(op.operation_id)} revision ${redact(op.revision)}; "${shipTo}"`);
   // In a real agent the User approves op.summary in the agent's own UI here.
-  const approval = `operation_id="${op.operation_id}", revision="${op.revision}"`;
+  const approval = `operation_id="${op.operation_id}", revision="${op.revision}", approver="user"`;
   const done = await call(s, route, { method: "POST", body: JSON.stringify(body), headers: { "Poppy-Approval": approval } });
   if (done.status !== 201) fail(`${label} approved: ${done.status} ${errorOf(done.body)}`);
   step(`${label} again with Poppy-Approval`, `201, order ${redact(done.body.id)} ${done.body.status}${done.body.checkoutUrl ? ", checkout ready" : ""}`);
@@ -325,11 +332,13 @@ const s1 = { ...agent.newSession(s0.sub) };
 const notMine = await call(s1, "/api/orders", {
   method: "POST",
   body: JSON.stringify(guestBody),
-  headers: { "Poppy-Approval": `operation_id="${g1.body.operation.operation_id}", revision="${g1.body.operation.revision}"` },
+  headers: { "Poppy-Approval": `operation_id="${g1.body.operation.operation_id}", revision="${g1.body.operation.revision}", approver="user"` },
 });
-step("its approval from another Session (new sid)", `${notMine.status} ${errorOf(notMine.body)}: handled as a new request, and the photo belongs to the first Session`);
+assert.equal(notMine.status, 201);
+step("its approval from another Session (new sid)", "201: same agent and User may approve the original guest operation");
 const hijack = await call({ ...s0, sub: `demo-user-${randomUUID()}` }, "/api/catalog");
-step("that sid with a different sub", `${hijack.status} ${errorOf(hijack.body)}`);
+assert.equal(hijack.status, 200);
+step("that sid with a different sub names a separate Session", `${hijack.status} ${errorOf(hijack.body)}`);
 const signedOut = await call(s0, "/api/account/orders");
 step("account request without an access token", `${signedOut.status} ${errorOf(signedOut.body)} (${signedOut.auth})`);
 const root = await importJWK(rootJwk, "ES256");
@@ -341,7 +350,7 @@ const direct = await new SignJWT({ sid: jti(), htm: "GET", htu: `${origin}/api/c
   .setIssuedAt()
   .setJti(jti())
   .sign(root);
-const nonDelegated = await json(await retrying(() => fetch(`${origin}/api/catalog`, { headers: { "Poppy-Session": direct } })));
+const nonDelegated = await json(await retrying(() => fetch(`${origin}/api/catalog`, { headers: { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": direct } })));
 step("Session JWT signed directly by the jwks_uri key", `${errorOf(nonDelegated)}`);
 const d = await delegate(rootJwk, clientId);
 const wrongUrl = await new SignJWT({ sid: jti(), htm: "GET", htu: `${origin}/api/photos` })
@@ -352,7 +361,7 @@ const wrongUrl = await new SignJWT({ sid: jti(), htm: "GET", htu: `${origin}/api
   .setIssuedAt()
   .setJti(jti())
   .sign(d.key);
-const mismatch = await json(await retrying(() => fetch(`${origin}/api/catalog`, { headers: { "Poppy-Session": wrongUrl } })));
+const mismatch = await json(await retrying(() => fetch(`${origin}/api/catalog`, { headers: { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": wrongUrl } })));
 step("Session JWT for another URL (htu)", `${errorOf(mismatch)}`);
 const directAssertion = await token({ grant_type: "refresh_token", refresh_token: "prt_unknown" });
 step("client assertion signed directly by the jwks_uri key, unknown refresh token", `${directAssertion.status} ${errorOf(directAssertion.body)} (assertion accepted; token refused)`);

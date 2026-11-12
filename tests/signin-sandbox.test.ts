@@ -34,20 +34,20 @@ after(async () => {
 const origin = "http://localhost:8794";
 const h = await signInHarness(origin, store);
 
-test("sandbox advertises device and mediated (not direct); device sign-in completes with the captured-code helper", async () => {
+test("sandbox advertises Direct, Device and Mediated; device sign-in completes with the captured-code helper", async () => {
   const d = await (await fetch(origin + "/.well-known/poppy.json")).json();
-  // 0.3: the sandbox offers Device (device_code grant) and Mediated, not Direct.
+  // 0.4: sandbox and production both offer the preferred Direct Sign-In flow.
   const m = await (await fetch(origin + "/.well-known/oauth-authorization-server")).json();
-  assert.equal(d.protocol_version, "0.3");
+  assert.equal(d.protocol_version, "0.4");
   assert.equal(d.auth.direct, undefined);
   assert.ok(m.grant_types_supported.includes("urn:ietf:params:oauth:grant-type:device_code"));
-  assert.ok(!m.grant_types_supported.includes("authorization_code"));
-  assert.equal(m.authorization_endpoint, undefined);
-  assert.equal((await fetch(origin + "/oauth/authorize?client_id=x")).status, 404);
+  assert.ok(m.grant_types_supported.includes("authorization_code"));
+  assert.equal(m.authorization_endpoint, origin + "/oauth/authorize");
+  assert.equal((await fetch(origin + "/oauth/authorize?client_id=x")).status, 400);
   assert.equal(d.auth.mediated, undefined);
-  assert.equal(d.extensions["mediated-sign-in"].version, "1");
+  assert.equal(d.extensions["mediated-sign-in"][0].version, "1");
   assert.ok(m.grant_types_supported.includes(h.mediatedGrant));
-  assert.equal(d.extensions.operations.version, "2");
+  assert.equal(d.extensions.operations[0].version, "3");
   const openapi = await (await fetch(origin + "/openapi.json")).json();
   assert.ok(openapi.paths["/api/sandbox/device-sign-in/email"]);
   assert.ok(openapi.paths["/api/sandbox/orders/{id}/pay"]);
