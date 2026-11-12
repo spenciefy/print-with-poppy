@@ -2047,3 +2047,38 @@ test("Operations v3 expired guest terms can be refreshed from a new Session", as
   assert.notEqual(revised.body.operation.revision, f.op.revision);
   assert.equal((await approveVia(next, "/api/orders", f.proposal, revised.body.operation)).status, 201);
 });
+
+
+test("approval payment uses explicit USD decimals while checkout keeps integer cents", async () => {
+  const f = await fixture();
+  const stored = store.get("operation", f.op.operation_id);
+  assert.equal(f.op.terms.payment.amount, (stored.terms.total / 100).toFixed(2));
+  assert.equal(f.op.terms.payment.amountUnit, "major");
+  assert.equal(f.op.terms.quoteAmountsUnit, "minor");
+  for (const cents of [0, 1200, 1299, 1750]) {
+    const op = structuredClone(stored);
+    op.terms.total = cents;
+    assert.equal(commerce.operationView(op).terms.payment.amount, (cents / 100).toFixed(2));
+    assert.equal(op.terms.total, cents);
+  }
+  const approved = await approveVia(f.a, "/api/orders", f.proposal, f.op);
+  assert.equal(approved.status, 201);
+  assert.equal(store.get("order", approved.body.id).quote.total, stored.terms.total);
+});
+
+test("legacy pending payment terms get a new revision; stale approvals cannot execute", async () => {
+  const f = await fixture();
+  const stored = store.get("operation", f.op.operation_id);
+  delete stored.paymentAmountUnit;
+  store.put("operation", stored.operation_id, stored, stored.owner);
+  const legacy = commerce.operationView(stored);
+  assert.equal(legacy.terms.payment.amount, stored.terms.total);
+  const retry = await approveVia(f.a, "/api/orders", f.proposal, legacy);
+  assert.equal(retry.status, 403);
+  assert.equal(retry.body.error, "approval_required");
+  assert.notEqual(retry.body.operation.revision, legacy.revision);
+  assert.equal(retry.body.operation.terms.payment.amount, (stored.terms.total / 100).toFixed(2));
+  const historical = { ...stored, state: "succeeded" };
+  store.put("operation", stored.operation_id, historical, stored.owner);
+  assert.equal(commerce.operationView(commerce.readOperation(stored.operation_id, stored.owner)).terms.payment.amount, stored.terms.total);
+});

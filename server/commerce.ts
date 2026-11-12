@@ -141,6 +141,7 @@ export async function propose(
     principal: { clientId: session.clientId, userId: session.userId },
     operation_id: operationId,
     revision: newRevision(q.expires),
+    paymentAmountUnit: "major",
     state: "proposed",
     summary,
     terms: q,
@@ -288,6 +289,14 @@ export function readOperation(opId: string, owner: string) {
     op.result = { summary: "The quote expired. No payment or order was made." };
     put("operation", opId, op, owner);
   }
+  // A presentation change is still a terms change: invalidate stale approvals.
+  // Completed/expired operations retain their original representation.
+  if (op.state === "proposed" && op.paymentAmountUnit !== "major") {
+    op.paymentAmountUnit = "major";
+    op.revision = newRevision(op.terms.expires);
+    delete op.shirtPreviewApproval;
+    put("operation", opId, op, owner);
+  }
   return op;
 }
 function displayPhotoLabels(quote: Quote) {
@@ -309,7 +318,9 @@ export function operationView(op: Operation) {
     terms: {
       ...labeled,
       products: orderProducts(labeled),
-      payment: { required: true, amount: labeled.total, currency: labeled.currency, action: "Complete checkout to start printing" },
+      ...(op.paymentAmountUnit === "major" ? { quoteAmountsUnit: "minor" } : {}),
+      payment: { required: true, amount: op.paymentAmountUnit === "major" ? (labeled.total / 100).toFixed(2) : labeled.total,
+        ...(op.paymentAmountUnit === "major" ? { amountUnit: "major" } : {}), currency: labeled.currency, action: "Complete checkout to start printing" },
       cancellation: "Cancellation is not guaranteed after completing checkout.",
       fulfillment: config.demo ? "Simulated payment and fulfillment; no physical shipment." : "Physical prints delivered to the approved shipping address.",
       owner: undefined,

@@ -120,6 +120,8 @@ export interface Operation {
   operation_id: string;
   /** Operations v3: an opaque string that changes whenever summary, terms or expires_at change. */
   revision: string;
+  /** Public payment.amount uses decimal major units; absent on historical operations. */
+  paymentAmountUnit?: "major";
   /** Internal: proposed until approved, then in_progress → succeeded (checkout ready) or failed. */
   state:
     | "proposed"

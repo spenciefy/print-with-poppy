@@ -167,7 +167,7 @@ export function openapi(compatibility = false) {
             operation_id: { type: "string" },
             revision: { type: "string", description: "Changes whenever the terms change." },
             summary: { type: "string", description: "Show this verbatim with the Company's name." },
-            terms: { type: "object" },
+            terms: { type: "object", description: "Approval terms. payment.amount is a two-decimal string in major currency units (for example 12.00 USD), with amountUnit=major. Quote subtotal, shipping, tax, discount and total retain integer minor units, identified by quoteAmountsUnit=minor. Use payment.amount for the human-facing payable amount; never treat quote.total cents as dollars." },
             expires_at: { type: "string", format: "date-time" },
           },
         },
