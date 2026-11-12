@@ -89,7 +89,7 @@
     "AGENT_SANDBOX": "true",
     "ALLOW_COMPAT_AGENT_SESSIONS": "false",
     "PUBLIC_URL": "http://localhost:8787",
-    "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json",
+    "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json,https://muse.ai/poppy/agent.json",
     "SANDBOX_EMAIL_DELIVERY": "false",
   },
   "env": {
@@ -176,7 +176,7 @@
         "SANDBOX_EMAIL_DELIVERY": "false",
         "ALLOW_COMPAT_AGENT_SESSIONS": "true",
         "PUBLIC_URL": "https://printwithpoppy.com",
-        "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json",
+        "AGENT_CLIENT_IDS": "https://poppydemoagent.dev/poppy/client.json,https://muse.ai/poppy/agent.json",
         "LIVE_ORDERS_ENABLED": "true",
         "ORDER_EMAIL_ALLOWLIST": "",
       },

@@ -287,16 +287,18 @@ function Footer({ compact = false, httpOrderingEnabled = false }: { compact?: bo
             </p>
             {httpOrderingEnabled && (
               <p>
-                You can also use Muse or Instinct via the HTTP path, but they
-                don’t officially support Personal Agent Protocol yet.
+                You can also use Muse or Instinct through the HTTP ordering path.
+                Muse now publishes a native Poppy agent identity, too.
               </p>
             )}
           </Faq>
           <Faq title="Does this work with Muse or Instinct?">
             <p>
-              {httpOrderingEnabled ? "Yes, but currently only through the HTTP guest API." : "HTTP guest ordering is disabled on this environment. A native Personal Agent Protocol session is required."} Muse and
-              Instinct do not currently support Personal Agent Protocol, although
-              support should be coming soon as the Poppy spec is finalized.
+              Muse now publishes a native Poppy agent identity, which is registered
+              with this store. We’re still verifying its complete ordering flow.
+              {httpOrderingEnabled
+                ? " Muse and Instinct can also use the HTTP guest ordering path."
+                : " HTTP guest ordering is disabled here; your agent must support Poppy 0.4 and Operations v3."}
             </p>
           </Faq>
 
