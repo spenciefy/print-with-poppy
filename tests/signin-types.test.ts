@@ -1,4 +1,4 @@
-// Poppy 0.3 sign-in types: Device Sign-In (§4.6), audited Direct (§4.5) and
+// Poppy 0.4 sign-in types: Device Sign-In (§4.6), audited Direct (§4.5) and
 // Mediated (§4.7) behavior, and the signed-in payoff (saved addresses, reorder).
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
@@ -37,7 +37,7 @@ test("discovery offers all three sign-in types: Direct and Device by grant type,
   assert.equal(d.auth.direct, undefined);
   assert.equal(d.auth.device, undefined);
   assert.equal(d.auth.mediated, undefined);
-  assert.deepEqual(d.extensions["mediated-sign-in"].scopes, ["orders:read", "orders:write"]);
+  assert.deepEqual(d.extensions["mediated-sign-in"][0].scopes, ["orders:read", "orders:write"]);
   const m = await (await fetch(origin + "/.well-known/oauth-authorization-server")).json();
   assert.equal(m.device_authorization_endpoint, origin + "/oauth/device");
   assert.equal(m.authorization_endpoint, origin + "/oauth/authorize");
@@ -214,7 +214,7 @@ test("device sign-in: denied, expired, wrong codes, binding and request errors",
   store.remove("signin-rate", rateKey);
 });
 
-test("tokens for a second account are refused in a Session already signed in to another (invalid_session)", async () => {
+test("tokens for a second account are refused in a Session already signed in to another (session_ended)", async () => {
   const a = await makeAgent();
   await mediated(a, `${randomUUID()}@example.com`, "orders:read");
   assert.equal((await a.request("/api/account")).status, 200);
@@ -225,7 +225,7 @@ test("tokens for a second account are refused in a Session already signed in to 
   assert.equal(r.status, 200);
   const mixed = await a.request("/api/account", { token: r.body.access_token });
   assert.equal(mixed.status, 400);
-  assert.equal(mixed.body.error, "invalid_session");
+  assert.equal(mixed.body.error, "session_ended");
   assert.equal(mixed.headers.get("www-authenticate"), null);
   // A new Session (new sid) works with them.
   const b = await makeAgent(a.user);
@@ -333,7 +333,7 @@ async function uploadPhoto(a: Agent) {
   assert.equal(uploaded.status, 201);
   return uploaded.body.id as string;
 }
-/** Operations v2: propose (403 approval_required), then approve by sending the same request again. */
+/** Operations v3: propose (403 approval_required), then approve by sending the same request again. */
 async function proposeAndApprove(a: Agent, route: string, body: unknown) {
   const proposed = await a.request(route, postJson(body));
   assert.equal(proposed.status, 403, JSON.stringify(proposed.body));
@@ -423,7 +423,7 @@ test("saved addresses let signed-in orders omit address and email; guests are un
   assert.equal(after.body.addresses[0].default, true);
 });
 
-test("reorder asks for approval (Operations v2), places one order once approved, and is account-scoped", async () => {
+test("reorder asks for approval (Operations v3), places one order once approved, and is account-scoped", async () => {
   const a = await makeAgent();
   await deviceSignIn(a);
   await a.request("/api/account/addresses", postJson({ address: sampleAddress }));

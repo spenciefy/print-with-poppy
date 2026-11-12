@@ -134,7 +134,7 @@ export async function registerRoutes(
   const domainResource = () => `https://${new URL(config.origin).hostname}`;
   app.get("/.well-known/poppy.json", (_req, res) =>
     res.json({
-      protocol_version: "0.3",
+      protocol_version: "0.4",
       organization: {
         name: config.agentSandbox
           ? "Print with Poppy — Agent Sandbox"
@@ -158,8 +158,8 @@ export async function registerRoutes(
         },
       ],
       extensions: {
-        operations: { version: "2" },
-        "mediated-sign-in": mediatedExtension(),
+        operations: [{ version: "3" }],
+        "mediated-sign-in": [mediatedExtension()],
       },
     }),
   );
@@ -444,7 +444,7 @@ export async function registerRoutes(
         ),
       );
   });
-  // Operations v2: proposeOrder answers 403 approval_required until the same
+  // Operations v3: proposeOrder answers 403 approval_required until the same
   // request comes back with Poppy-Approval; then it places the order (201).
   app.post("/api/orders", async (req, res) => {
     const session: Session = res.locals.session;

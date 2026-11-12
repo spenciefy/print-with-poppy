@@ -1,4 +1,4 @@
-// Device Sign-In (Poppy 0.3 §4.3): the OAuth 2.0 device authorization grant
+// Device Sign-In (Poppy 0.4 §4.3): the OAuth 2.0 device authorization grant
 // (RFC 8628). The agent shows the customer a link and a short code; the customer
 // opens it on any device, signs in with an emailed code, and approves access.
 import { randomInt } from "node:crypto";

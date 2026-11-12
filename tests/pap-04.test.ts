@@ -1,4 +1,4 @@
-// Published Poppy 0.3 draft, one test per change that touches a Company:
+// Published Poppy 0.4 draft, one test per change that touches a Company:
 // discovery, client assertions (§4.1), the Session header (§5), Sessions keyed
 // by client_id + sid, plain OAuth tokens, error shapes (§7), Device without
 // key binding, and loopback redirect URIs.
@@ -92,7 +92,7 @@ async function sessionJwt(o: {
   return new SignJWT(claims).setProtectedHeader(header).sign(d ? d.key : rootKey);
 }
 const get = async (jwt: string | string[], url = catalog, token?: string) => {
-  const headers = new Headers();
+  const headers = new Headers({ "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"' });
   for (const v of [jwt].flat()) headers.append("Poppy-Session", v);
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const r = await fetch(url, { headers });
@@ -105,11 +105,11 @@ const refusedSession = async (jwt: string | string[], label: string, url = catal
   assert.equal(r.challenge, null, label);
 };
 
-test("discovery: protected resource metadata, issuer metadata and poppy.json for the published 0.3 draft", async () => {
+test("discovery: protected resource metadata, issuer metadata and poppy.json for the published 0.4 draft", async () => {
   const d = await (await fetch(origin + "/.well-known/poppy.json")).json();
   const prm = await (await fetch(origin + "/.well-known/oauth-protected-resource")).json();
   const m = await (await fetch(origin + "/.well-known/oauth-authorization-server")).json();
-  assert.equal(d.protocol_version, "0.3");
+  assert.equal(d.protocol_version, "0.4");
   assert.equal(prm.resource, "https://localhost");
   assert.deepEqual(prm.authorization_servers, [origin]);
   assert.equal(d.auth.issuer, prm.authorization_servers[0]);
@@ -132,9 +132,9 @@ test("discovery: protected resource metadata, issuer metadata and poppy.json for
   }
   assert.deepEqual(d.auth.scope_hints["orders:write"], { changes: "irreversible", personal_data: true });
   assert.equal(d.auth.mediated, undefined);
-  assert.deepEqual(d.extensions.operations, { version: "2" });
-  assert.equal(d.extensions["mediated-sign-in"].version, "1");
-  assert.ok(d.extensions["mediated-sign-in"].scopes.every((s: string) => m.scopes_supported.includes(s)));
+  assert.deepEqual(d.extensions.operations, [{ version: "3" }]);
+  assert.equal(d.extensions["mediated-sign-in"][0].version, "1");
+  assert.ok(d.extensions["mediated-sign-in"][0].scopes.every((s: string) => m.scopes_supported.includes(s)));
   assert.equal(d.web, undefined, "no browser join");
 });
 
@@ -233,24 +233,24 @@ test("Session header: claim checks, single use, cardinality, and an access token
   assert.equal(dpop.status, 400);
 });
 
-test("Sessions: keyed by client_id + sid; a new sid is signed out; sub and agent_id can't change; ended sids stay refused", async () => {
+test("Sessions: keyed by client_id + sid + User ID; Agent ID is fixed at creation; ended Sessions stay refused", async () => {
   const sid = jti();
   const user = randomUUID();
   assert.equal((await get(await sessionJwt({ sid, sub: user, agent_id: "travel" }))).status, 200);
-  const id = h.sessionOf(sid);
+  const id = h.sessionOf(sid, user);
   assert.ok(id);
   assert.equal((await get(await sessionJwt({ sid, sub: user, agent_id: "travel" }))).status, 200);
-  assert.equal(h.sessionOf(sid), id);
-  await refusedSession(await sessionJwt({ sid, sub: `user-${randomUUID()}`, agent_id: "travel" }), "another sub");
-  await refusedSession(await sessionJwt({ sid, sub: user }), "agent_id dropped");
-  await refusedSession(await sessionJwt({ sid, sub: user, agent_id: "shopping" }), "another agent_id");
+  assert.equal(h.sessionOf(sid, user), id);
+  assert.equal((await get(await sessionJwt({ sid, sub: `user-${randomUUID()}` }))).status, 200);
+  assert.equal((await get(await sessionJwt({ sid, sub: user, agent_id: "shopping" }))).status, 200);
+  assert.equal(store.get("session", id).agentId, "travel");
   // A new sid is a new, signed-out Session.
   const other = await makeAgent(user);
   assert.notEqual(other.session.session_id, id);
   assert.equal((await other.request("/api/account")).status, 401);
   // Ended Sessions are remembered and refused.
   sessions.endSession(store.get("session", id)!);
-  await refusedSession(await sessionJwt({ sid, sub: user, agent_id: "travel" }), "ended sid");
+  assert.equal((await get(await sessionJwt({ sid, sub: user }))).body.error, "session_ended");
 });
 
 test("tokens: plain OAuth Bearer; refresh narrows scope and accepts only this resource; grants never exceed the request", async () => {
@@ -299,7 +299,7 @@ test("errors: 401 challenge without a code, insufficient_scope, invalid_token, e
   const { errorResponse } = await import("../server/http-errors.js");
   const { HttpError } = await import("../server/errors.js");
   const ext = errorResponse(new HttpError(403, "extension_required", "x", { extension: "operations" }));
-  assert.equal(ext.headers["WWW-Authenticate"], 'Bearer error="extension_required", extension="operations"');
+  assert.equal(ext.headers["WWW-Authenticate"], undefined);
   const limited = errorResponse(new HttpError(429, "rate_limited", "Too many."));
   assert.equal(limited.body.error, undefined);
   assert.ok(limited.headers["Retry-After"]);
@@ -357,4 +357,32 @@ test("loopback redirect URIs (RFC 8252 §7.3) match any port", () => {
   assert.equal(auth.redirectMatches(["http://127.0.0.1/callback"], "http://127.0.0.1:53121/other"), false);
   assert.equal(auth.redirectMatches(["https://agent.example/cb"], "https://agent.example:444/cb"), false);
   assert.equal(auth.redirectMatches(["https://agent.example/cb"], "https://agent.example/cb"), true);
+});
+
+test("0.4 version negotiation: missing, old, malformed and repeated versions fail before state is used", async () => {
+  for (const version of [undefined, "0.3", "1.0", "0.4, 0.4", "0.4.0"]) {
+    const headers: Record<string, string> = { "Poppy-Session": await sessionJwt() };
+    if (version !== undefined) headers["Poppy-Version"] = version;
+    const r = await fetch(catalog, { headers });
+    assert.equal(r.status, 400);
+    assert.equal((await r.json()).error, "version_unsupported");
+    assert.equal(r.headers.get("www-authenticate"), null);
+  }
+});
+
+test("0.4 extensions are declared per request, never inferred from client metadata", async () => {
+  for (const ext of [undefined, '"operations";v="2"', 'operations;v="3"', '"operations";v=3', '"operations";v="3", (']) {
+    const url = origin + "/api/orders";
+    const headers: Record<string, string> = { "Poppy-Session": await sessionJwt({ htm: "POST", htu: url }), "Poppy-Version": "0.4", "Content-Type": "application/json" };
+    if (ext !== undefined) headers["Poppy-Extensions"] = ext;
+    const r = await fetch(url, { method: "POST", headers, body: "{}" });
+    assert.equal(r.status, 403);
+    const b = await r.json();
+    assert.equal(b.error, "extension_required");
+    assert.equal(b.extension, "operations");
+    assert.equal(r.headers.get("www-authenticate"), null);
+    assert.equal(b.operation, undefined);
+  }
+  const { requestVersions } = await import("../server/protocol-version.js");
+  assert.equal(requestVersions("0.4", '"unknown.example/extra";v="99", "operations";v="3";future=?1').extensions, true);
 });

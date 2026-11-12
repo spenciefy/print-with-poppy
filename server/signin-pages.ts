@@ -113,12 +113,12 @@ export function renderSignIn(
   error = "",
   intro = "",
 ) {
-  const agent = agentCard(flow);
+  const agent = agentCard(flow) + `<p>Continue only if you just asked ${esc(flow.name)} to connect to Print with Poppy. If someone sent you this link, close this page.</p>`;
   consentPolicy(res, flow.logo, flow.redirectUri);
   if (flow.accountId) {
     res.type("html").send(
       page(
-        "Connect your personal agent",
+        `Connect ${flow.name}`,
         `${agent}${intro}<p>Signed in as ${esc(get("account", flow.accountId).email)}. Choose what this agent can access.</p>${errorLine(error)}<form method="post" action="${base}/approve">${hidden(flow)}${flow.scopes.map((s: string) => `<label><input type="checkbox" name="scopes" value="${esc(s)}" checked>${esc(scopeText(s))}${scopeNote(s)}</label>`).join("")}<button name="decision" value="approve">Allow access</button><button class="secondary" name="decision" value="deny">Deny</button></form><small>Access lasts 30 days unless you disconnect sooner. This does not approve a purchase. If you didn’t ask this agent to connect, choose Deny.</small>`,
       ),
     );
@@ -132,7 +132,7 @@ export function renderSignIn(
   } else {
     res.type("html").send(
       page(
-        "Sign in with your email",
+        `Connect ${flow.name}`,
         `${agent}${intro}<p>Connect your Print with Poppy account to this agent. We’ll email you a code—no password needed.</p>${errorLine(error)}<form method="post" action="${base}/email">${hidden(flow)}<label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" maxlength="254" required><button>Send code</button></form><small>New here? Verifying your email creates your account.</small>`,
       ),
     );

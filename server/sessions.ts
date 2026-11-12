@@ -1,7 +1,5 @@
-// Sessions (Poppy 0.3 §5): named by the Personal Agent's `client_id` and the
-// `sid` in its Session JWTs. An unknown `sid` starts a signed-out Session; a
-// known one must keep its User ID and Agent ID. Ended Sessions are remembered and
-// refused with `invalid_session`.
+// Poppy 0.4 §5: Sessions are keyed by client_id, sid and User ID.
+// Agent ID is recorded once; ended Sessions remain refused.
 import { get, put, id, hash, HttpError } from "./store.js";
 import type { Session } from "./types.js";
 
@@ -10,7 +8,7 @@ export const sessionLifetimeMs = 30 * 86400000;
 /** How long an ended Session's `sid` stays refused. */
 export const endedRetentionMs = 90 * 86400000;
 
-const indexKey = (clientId: string, sid: string) => hash(`${clientId}\n${sid}`);
+export const sessionIndexKey = (clientId: string, sid: string, userId: string) => hash(JSON.stringify([clientId, sid, userId]));
 const invalid = (message: string) => new HttpError(400, "invalid_session", message);
 
 export function sessionEnded(session: Session) {
@@ -20,7 +18,7 @@ export function sessionEnded(session: Session) {
 export function endSession(session: Session) {
   put("session", session.id, { ...session, ended: true });
   if (session.sid)
-    put("session-sid", indexKey(session.clientId, session.sid), {
+    put("session-sid", sessionIndexKey(session.clientId, session.sid, session.userId), {
       sessionId: session.id,
       ended: true,
       expires: Date.now() + endedRetentionMs,
@@ -31,24 +29,20 @@ export function endSession(session: Session) {
 export function sessionFor(
   clientId: string,
   sid: string,
-  claims: { userId: string; agentId?: string; extensions: boolean },
+  claims: { userId: string; agentId?: string; extensions: boolean; protocolVersion?: string },
 ): Session {
-  const key = indexKey(clientId, sid);
+  const key = sessionIndexKey(clientId, sid, claims.userId);
   const ref = get("session-sid", key);
   if (ref) {
     const session = ref.ended ? undefined : get<Session>("session", ref.sessionId);
     if (!session || sessionEnded(session)) {
       if (session && !session.ended) endSession(session);
-      throw invalid("This Session has ended. Start a new Session with a new sid.");
+      throw new HttpError(400, "session_ended", "This Session has ended. Start a new Session with a new sid.");
     }
-    if (session.userId !== claims.userId || (session.agentId ?? null) !== (claims.agentId ?? null))
-      throw invalid("A Session keeps the sub and agent_id it started with.");
-    // The client's metadata can change; follow its current extensions.
-    if (session.extensions !== claims.extensions) {
-      session.extensions = claims.extensions;
-      put("session", session.id, session);
-    }
-    return session;
+    // Agent ID is fixed at creation. It is not an authentication binding (0.4 §5.3).
+    if (session.protocolVersion !== claims.protocolVersion)
+      throw invalid("Start a new Session to change protocol versions.");
+    return { ...session, extensions: claims.extensions };
   }
   const session: Session = {
     id: id("ses"),
@@ -57,6 +51,7 @@ export function sessionFor(
     userId: claims.userId,
     ...(claims.agentId ? { agentId: claims.agentId } : {}),
     extensions: claims.extensions,
+    protocolVersion: claims.protocolVersion,
     created: Date.now(),
   };
   put("session", session.id, session);

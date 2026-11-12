@@ -613,8 +613,7 @@ function Guide({ config }: { config: Config }) {
         JWT signed by a delegated key, with its{" "}
         <code>pap-delegation+jwt</code> from your <code>jwks_uri</code> key in
         the <code>pap_dlg</code> header. A new <code>sid</code> starts a
-        signed-out Session. List the operations extension, version 2, in your
-        client metadata. Native client
+        signed-out Session. Send <code>Poppy-Version: 0.4</code> and <code>Poppy-Extensions: &quot;operations&quot;;v=&quot;3&quot;</code> with every Session header. Native client
         metadata URLs require registration with{" "}
         <a href={`mailto:${config.support}`}>{config.support}</a>.
       </p>
@@ -630,7 +629,7 @@ function Guide({ config }: { config: Config }) {
         <strong>Agent identity and account access are separate.</strong>{" "}
         Signed Poppy sessions verify which agent is making each request. OAuth
         grants access to a customer’s account, limited to the permissions they
-        approve. Poppy 0.3 makes DPoP-bound tokens optional; this store uses
+        approve. Poppy 0.4 makes DPoP-bound tokens optional; this store uses
         standard Bearer access tokens alongside signed session headers. The
         session signature includes a hash of the access token when one is sent.
         Native signed-out requests still require a signed session header, but
@@ -690,7 +689,7 @@ function Guide({ config }: { config: Config }) {
       <p>
         After explicit approval, send the same <code>POST /api/orders</code>{" "}
         request again with{" "}
-        <code>Poppy-Approval: operation_id="…", revision="…"</code>. It places
+        <code>Poppy-Approval: operation_id="…", revision="…", approver="user"</code>. It places
         the order once and returns it; a retry returns the same order. Poll{" "}
         <code>GET /api/orders/&#123;id&#125;</code> for <code>checkoutUrl</code>.
       </p>
@@ -714,11 +713,11 @@ function Guide({ config }: { config: Config }) {
       </p>
       <hr />
       <p className="agent-document-end">
-        <a href="https://personalagentprotocol.org/docs/0.3/spec">
-          Poppy draft 0.3
+        <a href="https://personalagentprotocol.org/docs/0.4/spec">
+          Poppy 0.4
         </a>{" "}
         ·{" "}
-        <a href="https://personalagentprotocol.org/docs/0.3/extensions/operations">
+        <a href="https://personalagentprotocol.org/docs/0.4/extensions/operations">
           Operations extension
         </a>{" "}
         ·{" "}

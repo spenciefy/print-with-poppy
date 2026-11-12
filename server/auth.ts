@@ -5,6 +5,7 @@ import { config } from "./config.js";
 import { get, put, once, id, hash, equal, HttpError } from "./store.js";
 import type { Session } from "./types.js";
 import { DelegationError, delegatedKey } from "./delegation.js";
+import { requestVersions } from "./protocol-version.js";
 import { sessionFor, sessionEnded } from "./sessions.js";
 import { activeGrant, refreshAccount, exchangeCode, checkAccount } from "./accounts.js";
 import { pollDevice } from "./device.js";
@@ -21,8 +22,8 @@ export const publicJwk = (key: any) =>
   ["EC", "RSA", "OKP"].includes(key.kty) &&
   !privateKeyFields.some((field) => field in key);
 export const deviceGrantType = "urn:ietf:params:oauth:grant-type:device_code";
-/** The hosted Agent Sandbox keeps Direct Sign-In off (an upstream choice): no grant, no endpoint. */
-export const directSignIn = () => !config.agentSandbox;
+/** 0.4 prefers Direct Sign-In, including in the isolated sandbox. */
+export const directSignIn = () => true;
 /** An RFC 8252 §7.3 loopback redirect URI: http with a loopback IP literal. */
 export function loopbackRedirect(value: unknown) {
   if (typeof value !== "string") return false;
@@ -58,7 +59,6 @@ export const demoClientMetadata = () => ({
   jwks_uri: `${config.origin}/api/demo/jwks.json`,
   redirect_uris: [`${config.origin}/api/demo/callback`],
   token_endpoint_auth_method: "private_key_jwt",
-  extensions: { operations: { version: "2" } },
 });
 export async function client(clientId: string) {
   if (config.demo && clientId === `${config.origin}/api/demo/agent.json`) {
@@ -135,7 +135,7 @@ export async function client(clientId: string) {
 export const clientAssertionAlgorithms = ["ES256", "PS384", "RS256", "EdDSA"];
 
 /**
- * RFC 7523 client authentication (Poppy 0.3 §4.1): signed directly by a key in
+ * RFC 7523 client authentication (Poppy 0.4 §4.1): signed directly by a key in
  * the agent's `jwks_uri`, `iss` = `sub` = `client_id`, `aud` = the issuer as a
  * single string, short-lived, with `iat` and an unguessable `jti` (reuse refused).
  */
@@ -228,7 +228,7 @@ export function compatibilitySession() {
   };
 }
 /**
- * Authenticate an API or protocol-endpoint request (Poppy 0.3 §5.3): the
+ * Authenticate an API or protocol-endpoint request (Poppy 0.4 §5.3): the
  * `Poppy-Session` header names the Session and User, and an access token, if
  * present, signs the request in to its account with its scopes. HTTP
  * compatibility (non-Poppy) and visual-demo sessions keep their own tokens.
@@ -269,9 +269,10 @@ async function authenticateOnce(req: Request): Promise<Session> {
     );
   }
   if (sessionHeaders > 1) throw invalidSession("Send exactly one Poppy-Session header.");
+  const versions = requestVersions(req.get("Poppy-Version"), req.get("Poppy-Extensions"));
   if (authorization && (!token || !/^Bearer$/i.test(scheme) || authorization.split(" ").length !== 2))
     throw new HttpError(401, "invalid_token", "Send the access token as Authorization: Bearer TOKEN.");
-  const verified = await verifySessionHeader(req, req.get("Poppy-Session")!, token);
+  const verified = await verifySessionHeader(req, req.get("Poppy-Session")!, token, versions);
   return verified;
 }
 
@@ -294,7 +295,7 @@ function normalizeHtu(value: unknown) {
   })}`;
 }
 
-async function verifySessionHeader(req: Request, raw: string, accessToken?: string): Promise<Session> {
+async function verifySessionHeader(req: Request, raw: string, accessToken: string | undefined, versions: ReturnType<typeof requestVersions>): Promise<Session> {
   // 1. The client metadata (no redirects) and its key set.
   let header: any, unverified: any;
   try {
@@ -377,10 +378,10 @@ async function verifySessionHeader(req: Request, raw: string, accessToken?: stri
   const session = sessionFor(clientId, payload.sid, {
     userId: payload.sub,
     agentId: payload.agent_id,
-    extensions: c.metadata.extensions?.operations?.version === "2",
+    ...versions,
   });
   if (record) {
-    // A Session keeps one account (§5.4 MAY): another account is invalid_session.
+    // A Session keeps one account (§5.4 MAY): another account is session_ended.
     checkAccount(session, record.accountId);
     if (!session.accountBinding) {
       session.accountBinding = record.accountId;

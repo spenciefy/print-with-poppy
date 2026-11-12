@@ -1,4 +1,6 @@
-# Poppy 0.3 (published draft)
+# Poppy 0.3 (historical implementation)
+
+This describes the previous release. Current behavior and migration notes: [Poppy 0.4](POPPY-0.4.md).
 
 This store targets the published draft 0.3 ([spec](https://personalagentprotocol.org/docs/0.3/spec.md), [guides](https://personalagentprotocol.org/docs/0.3/guides.md), [changelog](https://personalagentprotocol.org/docs/changelog.md)), the Operations extension version 2 and the Mediated Sign-In extension version 1. It replaces 0.2 and the earlier delegated-keys draft: agents built for either can't use this store. Sign-in details: [SIGN-IN.md](SIGN-IN.md).
 

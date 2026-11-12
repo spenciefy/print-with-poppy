@@ -14,7 +14,7 @@ The live `poppy.json` links to sandbox discovery in its API description. This is
 
 ## Connect an agent
 
-1. Publish your HTTPS Poppy client metadata and JWKS with your own public signing key, and list the operations extension, version 2 (`"extensions": {"operations": {"version": "2"}}`). Keep the private key in your agent.
+1. Publish your HTTPS Poppy client metadata and JWKS with your own public signing key. Declare Operations v3 per request with `Poppy-Extensions: "operations";v="3"` and `Poppy-Version: 0.4`. Keep the private key in your agent.
 2. Send the client metadata URL to `hello@printwithpoppy.com` for registration. Poppy Demo Agent's `https://poppydemoagent.dev/poppy/client.json`, its interop harness identity `https://poppydemoagent.dev/poppy/interop/client.json`, and Muse's `https://muse.ai/poppy/agent.json` are preconfigured. The forgiving and strict test variants share the interop identity and use the same authentication and approval requirements. Registration on production and sandbox is separate.
 3. Discover `/.well-known/poppy.json` and its OAuth metadata on the sandbox origin. Send a `Poppy-Session` header (a Session JWT signed by a delegated key, `pap_dlg`) on every API request; a new `sid` starts a signed-out Session. Client assertions at the OAuth endpoints are signed directly by your `jwks_uri` key. No compatibility-session or unsigned-auth bypass is enabled.
 4. Read `/openapi.json` or browse `/docs`. The sandbox-only operations are included in that document. They are ordinary PWP API operations, not additions to the Poppy protocol.
@@ -36,7 +36,7 @@ Keep one Session (one `sid`) for the whole order. These are OpenAPI operation ID
 }
 ```
 
-4. Show the operation's summary, photos/crops, address and illustrative total. Get approval, then send the same `proposeOrder` request again with `Poppy-Approval: operation_id="…", revision="…"` (Operations v2). It returns the order (201); its `id` is the order to simulate. Retrying with the same approval returns the same order. Success here means checkout is being prepared, not payment.
+4. Show the operation's summary, photos/crops, address and illustrative total. Get approval, then send the same `proposeOrder` request again with `Poppy-Approval: operation_id="…", revision="…", approver="user"` (Operations v3). It returns the order (201); its `id` is the order to simulate. Retrying with the same approval returns the same order. Success here means checkout is being prepared, not payment.
 5. `simulatePayment`: POST `/api/sandbox/orders/{id}/pay`, no body or card required. Your client may request approval for this write. Poll `getOrder` until `printing`.
 6. `simulateShipment`: POST `/api/sandbox/orders/{id}/ship`. Poll until `shipped`.
 7. `getSandboxEmails`: GET `/api/sandbox/orders/{id}/emails` until confirmation and shipment previews are present. Each email has `delivery: "captured"` or `"submitted"` and, after Resend acceptance, a `providerId`. Submitted means accepted by Resend, not confirmed inbox delivery.
@@ -55,7 +55,7 @@ The `code_required` answer contains `sign_in_id`. Call `getSandboxSignInEmail` (
 
 For **device sign-in**, start it at `/oauth/device`, open the verification link, enter a synthetic email there, and complete it: the page shows the captured code, and a test agent can read it with `getSandboxDeviceSignInEmail` (POST `/api/sandbox/device-sign-in/email` with `{device_code}`; only the agent that started it). Poll `/oauth/token` with the device code grant and your client assertion. Signed in, try saved addresses (omit `address` on `proposeOrder`) and `reorderOrder`; both still need your approval of the operation. See [SIGN-IN.md](SIGN-IN.md).
 
-Direct Sign-In isn't offered in the hosted sandbox (no `authorization_code` grant). Production OTP delivery remains real and never exposes these test-only endpoints.
+Direct Sign-In is offered alongside Device and Mediated Sign-In, using the same synthetic sandbox accounts. Production OTP delivery remains real and never exposes these test-only endpoints.
 
 ## Run your own sandbox
 
@@ -100,9 +100,9 @@ Use the deployed [DPA](https://poppydemoagent.dev/) with its existing GitHub log
 
 For operator reference-client coverage, append `--sandbox-account` to the documented command to exercise captured OTP and order history. Append `--tshirt` to include the custom orange, size M T-shirt in the same order. The script verifies native ordering provenance and two captured emails. It uses sample poppy artwork; it never pays or prints a real order.
 
-## Poppy 0.3
+## Poppy 0.4
 
-The reference client targets the published draft 0.3 and refuses other advertised versions. Client assertions use the issuer as their audience and are signed directly by the `jwks_uri` key; Session JWTs are signed by per-User delegated keys carrying their `pap_dlg` delegation and name each request's method and URL. See [POPPY-0.3.md](POPPY-0.3.md). Keep `ALLOW_COMPAT_AGENT_SESSIONS=false` for native verification. Follow [the upgrade checklist](POPPY-0.2.md) before deploying the change to production; a successful local reference run is not a hosted PDA browser test.
+The reference client targets the published draft 0.4 and refuses other advertised versions. Client assertions use the issuer as their audience and are signed directly by the `jwks_uri` key; Session JWTs are signed by per-User delegated keys carrying their `pap_dlg` delegation and name each request's method and URL. See [POPPY-0.4.md](POPPY-0.4.md). Keep `ALLOW_COMPAT_AGENT_SESSIONS=false` for native verification. Follow [the upgrade checklist](POPPY-0.2.md) before deploying the change to production; a successful local reference run is not a hosted PDA browser test.
 
 ## Isolated Docker interop grid
 

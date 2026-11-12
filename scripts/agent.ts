@@ -1,11 +1,11 @@
-/** Reference Poppy 0.3 client. No card details are read or sent by this script. */
+/** Reference Poppy 0.4 client. No card details are read or sent by this script. */
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import Database from "better-sqlite3";
 import { poppyAgent } from "./poppy-delegation.js";
 const origin = process.env.PUBLIC_URL || "http://localhost:5173";
 const discovery = await (await fetch(`${origin}/.well-known/poppy.json`)).json();
-if (discovery.protocol_version !== "0.3") throw new Error("This reference client requires Poppy 0.3.");
+if (discovery.protocol_version !== "0.4") throw new Error("This reference client requires Poppy 0.4.");
 const domain = discovery.organization.domain;
 const prm = await (await fetch(`${origin}/.well-known/oauth-protected-resource`)).json();
 const issuer: string = discovery.auth?.issuer ?? prm.authorization_servers?.[0];
@@ -34,7 +34,7 @@ if (process.env.AGENT_PRIVATE_JWK_FILE) {
   privateJwk = JSON.parse(row.body).private;
 }
 const clientId = process.env.AGENT_CLIENT_ID || `${origin}/api/demo/agent.json`;
-// 0.3: the jwks_uri key signs client assertions and delegations; a delegated key signs Session JWTs.
+// 0.4: the jwks_uri key signs client assertions and delegations; a delegated key signs Session JWTs.
 const agent = await poppyAgent(privateJwk, clientId, issuer);
 const session: { sid: string; sub: string; accessToken?: string; refreshToken?: string } = agent.newSession(
   `demo-user-${randomUUID()}`,
@@ -44,7 +44,7 @@ async function call(route: string, init: RequestInit = {}, allow: number[] = [])
   const response = await fetch(url, {
     ...init,
     headers: {
-      "Poppy-Session": await agent.sessionJwt(session, init.method || "GET", url, session.accessToken),
+      "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": await agent.sessionJwt(session, init.method || "GET", url, session.accessToken),
       ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
       ...init.headers,
     },
@@ -110,7 +110,7 @@ const proposal = JSON.stringify({
       : []),
   ],
 });
-// Operations v2: the order request is refused with the operation until the User approves it.
+// Operations v3: the order request is refused with the operation until the User approves it.
 const refused = await call("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: proposal }, [403]);
 if (refused.error !== "approval_required") throw new Error(JSON.stringify(refused));
 const operation = refused.operation;
@@ -130,7 +130,7 @@ if (process.argv.includes("--tshirt")) {
     }),
   });
 }
-const approval = `operation_id="${operation.operation_id}", revision="${operation.revision}"`;
+const approval = `operation_id="${operation.operation_id}", revision="${operation.revision}", approver="user"`;
 let order = await call("/api/orders", {
   method: "POST",
   headers: { "Content-Type": "application/json", "Poppy-Approval": approval },
@@ -190,7 +190,7 @@ if (accountTest) {
       headers: {
         "Content-Type": "application/json",
         "Poppy-Approval": approval,
-        "Poppy-Session": await agent.sessionJwt(same, "POST", `${origin}/api/orders`, session.accessToken),
+        "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": await agent.sessionJwt(same, "POST", `${origin}/api/orders`, session.accessToken),
         Authorization: `Bearer ${session.accessToken}`,
       },
       body: proposal,

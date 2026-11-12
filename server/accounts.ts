@@ -117,7 +117,7 @@ export function checkAccount(session: Session, accountId: string) {
   if (session.accountBinding && session.accountBinding !== accountId)
     throw new HttpError(
       400,
-      "invalid_session",
+      "session_ended",
       "This Session already used a different account. Start a new Session (a new sid) for this one.",
     );
 }
