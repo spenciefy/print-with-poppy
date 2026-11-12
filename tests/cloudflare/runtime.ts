@@ -1,8 +1,10 @@
+import { officialSchema } from "../support/official-schema.js";
+import { officialAgent } from "../support/official-poppy-agent.js";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { SignJWT } from "jose";
-import { poppyAgent, delegate } from "../../scripts/poppy-delegation.js";
+import { delegate } from "../../scripts/poppy-delegation.js";
 const origin = process.env.PUBLIC_URL!;
 assert(
   origin && ["localhost", "127.0.0.1"].includes(new URL(origin).hostname),
@@ -28,7 +30,7 @@ const runtimeAddress = {
 };
 // The demo agent (0.4): the jwks_uri key signs client assertions and
 // delegations; delegated keys sign the per-request Session JWTs.
-const agent = await poppyAgent(key, clientId, origin);
+const agent = await officialAgent(key, clientId, origin);
 const clientAuth = agent.clientAuth;
 const discovery = await (await fetch(origin + "/.well-known/poppy.json")).json();
 assert.equal(discovery.protocol_version, "0.4");
@@ -179,7 +181,7 @@ assert.equal(
 const { importJWK } = await import("jose");
 const delegated = await delegate(key, clientId);
 const rootSigned = await new SignJWT({})
-  .setProtectedHeader({ alg: "ES256", kid: delegated.kid, pap_dlg: delegated.delegation })
+  .setProtectedHeader({ alg: "ES256", kid: delegated.kid, poppy_dlg: delegated.delegation })
   .setIssuer(clientId)
   .setSubject(clientId)
   .setAudience(origin)
@@ -288,6 +290,7 @@ assert.equal(
   "Concurrent proposals must converge.",
 );
 const op = operations[0].operation;
+officialSchema("operation", op);
 assert.notEqual(
   (await b.call("/api/orders", body, approval(op))).status,
   201,

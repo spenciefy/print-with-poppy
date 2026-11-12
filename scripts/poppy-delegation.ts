@@ -4,8 +4,8 @@
  * - Client assertions (RFC 7523, §4.1) are signed directly by the key from the
  *   agent's jwks_uri, with aud = the Company's issuer.
  * - Session JWTs (§5.2, the Poppy-Session header) are signed per request by a
- *   delegated ES256 key, carrying a `pap-delegation+jwt` delegation from the
- *   jwks_uri key in `pap_dlg`. Each delegated key signs for one User ID only.
+ *   delegated ES256 key, carrying a `poppy-delegation+jwt` delegation from the
+ *   jwks_uri key in `poppy_dlg`. Each delegated key signs for one User ID only.
  *
  * A real agent keeps the jwks_uri key in its own key custody (or signs
  * blindly, §10.7); these helpers keep everything in memory.
@@ -53,7 +53,7 @@ export async function poppyAgent(
     const pair = await generateKeyPair("ES256", { extractable: true });
     const jwk = await exportJWK(pair.publicKey);
     const delegation = await new SignJWT({ cnf: { jwk } })
-      .setProtectedHeader({ alg, typ: "pap-delegation+jwt", kid })
+      .setProtectedHeader({ alg, typ: "poppy-delegation+jwt", kid })
       .setIssuer(clientId)
       .setIssuedAt(now)
       .setExpirationTime(now + lifetime)
@@ -73,7 +73,7 @@ export async function poppyAgent(
       htu: url.split(/[?#]/)[0],
       ...(accessToken ? { ath: sha256(accessToken) } : {}),
     })
-      .setProtectedHeader({ alg: "ES256", typ: "poppy-session+jwt", kid: d.kid, pap_dlg: d.delegation })
+      .setProtectedHeader({ alg: "ES256", typ: "poppy-session+jwt", kid: d.kid, poppy_dlg: d.delegation })
       .setIssuer(clientId)
       .setSubject(s.sub)
       .setAudience(issuer)
@@ -99,7 +99,7 @@ export async function delegate(
   const iat = claims.iat ?? Math.floor(Date.now() / 1000);
   const exp = claims.exp ?? iat + 3600;
   const delegation = await new SignJWT({ cnf: claims.cnf ?? { jwk } })
-    .setProtectedHeader({ alg, typ: claims.typ ?? "pap-delegation+jwt", kid: claims.kid ?? rootPrivateJwk.kid ?? "demo" })
+    .setProtectedHeader({ alg, typ: claims.typ ?? "poppy-delegation+jwt", kid: claims.kid ?? rootPrivateJwk.kid ?? "demo" })
     .setIssuer(claims.iss ?? clientId)
     .setIssuedAt(iat)
     .setExpirationTime(exp)

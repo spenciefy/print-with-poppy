@@ -131,7 +131,7 @@ export async function client(clientId: string) {
 }
 
 
-/** §4.1: client assertions are signed directly by a jwks_uri key; ES256 and PS384 MUST be accepted. */
+/** §4.1: client assertions are signed directly by a jwks_uri key; ES256 is required; PS384 is recommended and supported. */
 export const clientAssertionAlgorithms = ["ES256", "PS384", "RS256", "EdDSA"];
 
 /**
@@ -141,7 +141,7 @@ export const clientAssertionAlgorithms = ["ES256", "PS384", "RS256", "EdDSA"];
  */
 export async function verifyClientAssertion(raw: string, keys: any, clientId: string) {
   const header = decodeProtectedHeader(raw);
-  if (header.pap_dlg !== undefined || header.typ === "poppy-session+jwt" || header.typ === "pap-delegation+jwt")
+  if (header.poppy_dlg !== undefined || header.typ === "poppy-session+jwt" || header.typ === "poppy-delegation+jwt")
     throw bad("Sign client assertions directly with a key from jwks_uri, not a delegated key.");
   const { payload } = await jwtVerify(raw, keys, {
     issuer: clientId,

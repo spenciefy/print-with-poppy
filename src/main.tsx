@@ -611,8 +611,8 @@ function Guide({ config }: { config: Config }) {
         <a href="/.well-known/oauth-authorization-server">OAuth metadata</a>.
         Send a <code>Poppy-Session</code> header on every request: a Session
         JWT signed by a delegated key, with its{" "}
-        <code>pap-delegation+jwt</code> from your <code>jwks_uri</code> key in
-        the <code>pap_dlg</code> header. A new <code>sid</code> starts a
+        <code>poppy-delegation+jwt</code> from your <code>jwks_uri</code> key in
+        the <code>poppy_dlg</code> header. A new <code>sid</code> starts a
         signed-out Session. Send <code>Poppy-Version: 0.4</code> and <code>Poppy-Extensions: &quot;operations&quot;;v=&quot;3&quot;</code> with every Session header. Native client
         metadata URLs require registration with{" "}
         <a href={`mailto:${config.support}`}>{config.support}</a>.

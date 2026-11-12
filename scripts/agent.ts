@@ -1,3 +1,4 @@
+import { retrying } from "./http-retry.js";
 /** Reference Poppy 0.4 client. No card details are read or sent by this script. */
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
@@ -41,24 +42,24 @@ const session: { sid: string; sub: string; accessToken?: string; refreshToken?: 
 );
 async function call(route: string, init: RequestInit = {}, allow: number[] = []) {
   const url = origin + route;
-  const response = await fetch(url, {
+  const response = await retrying(async () => fetch(url, {
     ...init,
     headers: {
       "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": await agent.sessionJwt(session, init.method || "GET", url, session.accessToken),
       ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
       ...init.headers,
     },
-  });
+  }));
   const result = await response.json();
   if (!response.ok && !allow.includes(response.status)) throw new Error(JSON.stringify(result));
   return result;
 }
 const tokenRequest = async (body: Record<string, string>) =>
-  fetch(oauth.token_endpoint, {
+  retrying(async () => fetch(oauth.token_endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ ...body, ...(await agent.clientAuth()) }),
-  });
+  }));
 await call("/api/catalog");
 console.log("Poppy discovery and a signed-out Session (Poppy-Session header) verified.");
 const accountTest = process.argv.includes("--sandbox-account");
@@ -185,7 +186,7 @@ if (accountTest) {
     session.accessToken = (await renewed.json()).access_token;
     // Another Session (new sid) of the same User can retry the approval; it's performed only once.
     const same = agent.newSession(session.sub);
-    const retry = await fetch(`${origin}/api/orders`, {
+    const retry = await retrying(async () => fetch(`${origin}/api/orders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -194,13 +195,13 @@ if (accountTest) {
         Authorization: `Bearer ${session.accessToken}`,
       },
       body: proposal,
-    });
+    }));
     if ((await retry.json()).id !== orderId) throw new Error("Approved order retry did not return the same order.");
-    const revoked = await fetch(oauth.revocation_endpoint, {
+    const revoked = await retrying(async () => fetch(oauth.revocation_endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ token: session.refreshToken!, token_type_hint: "refresh_token", ...(await agent.clientAuth()) }),
-    });
+    }));
     if (!revoked.ok) throw new Error("Revocation failed.");
     const denied = await call("/api/account", {}, [401]);
     if (denied.error !== "invalid_token") throw new Error("Revoked access token still authorized.");

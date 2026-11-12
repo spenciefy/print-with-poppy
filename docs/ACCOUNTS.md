@@ -46,10 +46,10 @@ Send the refresh token as `token` to `/oauth/revoke`, with the client assertion.
 
 ## Verification
 
-Run `npm run check`. `tests/pap-03.test.ts` covers the 0.4 rules; `tests/signin-types.test.ts` and `tests/signin-sandbox.test.ts` cover the three sign-in types, saved addresses and reorder. The commerce tests exercise signed-out and signed-in purchase flows with Operations v3, account isolation, stale tokens, refresh, scope reduction, revocation, OTP replay/expiry/attempt limits, browser consent, CSRF, callback validation and PKCE. Provider calls are simulated: passing these tests does not establish real email delivery or Personal Agent UI interoperability.
+Run `npm run check`. `tests/pap-04.test.ts` covers the 0.4 rules; `tests/signin-types.test.ts` and `tests/signin-sandbox.test.ts` cover the three sign-in types, saved addresses and reorder. The commerce tests exercise signed-out and signed-in purchase flows with Operations v3, account isolation, stale tokens, refresh, scope reduction, revocation, OTP replay/expiry/attempt limits, browser consent, CSRF, callback validation and PKCE. Provider calls are simulated: passing these tests does not establish real email delivery or Personal Agent UI interoperability.
 
 In `APP_MODE=demo`, code emails are stored privately as `demo-signin-email` records, never sent. For synthetic `@example.com/.org/.net` accounts only, demo and Agent Sandbox stores show the captured code on the Direct and Device pages and return it through the client-scoped `getSandboxSignInEmail` and `getSandboxDeviceSignInEmail` helpers; see [SIGN-IN.md](SIGN-IN.md#demo-and-sandbox-codes). Production always uses Resend and registers none of these.
 
-Spec: https://personalagentprotocol.org/docs/0.4/spec (draft 0.4, sections 4 and 5).
+Spec: https://personalagentprotocol.org/docs/0.4/spec (version 0.4, sections 4 and 5).
 
 Client assertions use the exact issuer as `aud` and are signed directly by a `jwks_uri` key; Session JWTs are signed by delegated keys and name the request's method and URL. Signed-in operations can be approved from any Session of the same client and opaque User ID signed in to the same account; guest operations stay with their Session. A different agent or User ID cannot approve an operation merely by signing into the same account.

@@ -1,8 +1,8 @@
 // Delegated keys (Poppy 0.4 §5.2). The keys in a Personal Agent's `jwks_uri`
 // sign client assertions directly (§4.1) and delegations: short-lived JWTs
-// (`typ: pap-delegation+jwt`, ES256 or PS384, at most 24 hours) that vouch for
+// (`typ: poppy-delegation+jwt`, ES256 or PS384, at most 24 hours) that vouch for
 // one delegated key in `cnf.jwk`. Delegated keys sign only Session JWTs, which
-// carry the delegation in their `pap_dlg` header and name the delegated key in
+// carry the delegation in their `poppy_dlg` header and name the delegated key in
 // `kid` by its RFC 7638 thumbprint.
 import {
   calculateJwkThumbprint,
@@ -13,8 +13,8 @@ import {
 } from "jose";
 import { createHash } from "node:crypto";
 
-export const delegationTyp = "pap-delegation+jwt";
-/** §5.2: Companies MUST accept both. */
+export const delegationTyp = "poppy-delegation+jwt";
+/** §5.2: ES256 is required; PS384 is recommended and supported. */
 export const delegationAlgorithms = ["ES256", "PS384"];
 const maxLifetimeSeconds = 24 * 60 * 60;
 const maxCached = 10_000;
@@ -49,11 +49,11 @@ function publicP256(jwk: any) {
  * the delegated key to verify the Session JWT with, and the delegation's `exp`.
  */
 export async function delegatedKey(header: any, jwks: any, clientId: string) {
-  if (typeof header.pap_dlg !== "string")
+  if (typeof header.poppy_dlg !== "string")
     throw fail(
-      "Sign Session JWTs with a delegated key and carry its delegation in the pap_dlg header; keys in jwks_uri sign only client assertions and delegations.",
+      "Sign Session JWTs with a delegated key and carry its delegation in the poppy_dlg header; keys in jwks_uri sign only client assertions and delegations.",
     );
-  const delegation = await verifyDelegation(header.pap_dlg, jwks, clientId);
+  const delegation = await verifyDelegation(header.poppy_dlg, jwks, clientId);
   if (header.kid !== (await calculateJwkThumbprint(delegation.jwk)))
     throw fail("The Session JWT's kid must be the delegated key's RFC 7638 thumbprint.");
   return { key: await importJWK(delegation.jwk, "ES256"), exp: delegation.exp };
@@ -95,11 +95,16 @@ async function verifyDelegation(token: string, jwks: any, clientId: string): Pro
   if (
     typeof payload.jti !== "string" ||
     payload.jti.length < 16 ||
-    typeof payload.iat !== "number" ||
+    !Number.isInteger(payload.iat) ||
+    !Number.isInteger(payload.exp) ||
+    payload.iat < 0 ||
+    payload.iat > now + 5 ||
     payload.exp <= payload.iat ||
     payload.exp - payload.iat > maxLifetimeSeconds
   )
     throw fail("A delegation lasts at most 24 hours and has an unguessable jti.");
+  if (["sub", "aud", "agent_id"].some((claim) => claim in payload))
+    throw fail("A delegation must not identify a User, Agent ID or Company.");
   if (!publicP256(payload.cnf?.jwk)) throw fail("cnf.jwk must be a public P-256 key: Session JWTs are ES256.");
   const value: Verified = { exp: payload.exp, jwk: payload.cnf.jwk };
   if (verified.size >= maxCached) {

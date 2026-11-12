@@ -16,7 +16,7 @@ The live `poppy.json` links to sandbox discovery in its API description. This is
 
 1. Publish your HTTPS Poppy client metadata and JWKS with your own public signing key. Declare Operations v3 per request with `Poppy-Extensions: "operations";v="3"` and `Poppy-Version: 0.4`. Keep the private key in your agent.
 2. Send the client metadata URL to `hello@printwithpoppy.com` for registration. Poppy Demo Agent's `https://poppydemoagent.dev/poppy/client.json`, its interop harness identity `https://poppydemoagent.dev/poppy/interop/client.json`, and Muse's `https://muse.ai/poppy/agent.json` are preconfigured. The forgiving and strict test variants share the interop identity and use the same authentication and approval requirements. Registration on production and sandbox is separate.
-3. Discover `/.well-known/poppy.json` and its OAuth metadata on the sandbox origin. Send a `Poppy-Session` header (a Session JWT signed by a delegated key, `pap_dlg`) on every API request; a new `sid` starts a signed-out Session. Client assertions at the OAuth endpoints are signed directly by your `jwks_uri` key. No compatibility-session or unsigned-auth bypass is enabled.
+3. Discover `/.well-known/poppy.json` and its OAuth metadata on the sandbox origin. Send a `Poppy-Session` header (a Session JWT signed by a delegated key, `poppy_dlg`) on every API request; a new `sid` starts a signed-out Session. Client assertions at the OAuth endpoints are signed directly by your `jwks_uri` key. No compatibility-session or unsigned-auth bypass is enabled.
 4. Read `/openapi.json` or browse `/docs`. The sandbox-only operations are included in that document. They are ordinary PWP API operations, not additions to the Poppy protocol.
 
 ## End-to-end order test
@@ -102,7 +102,7 @@ For operator reference-client coverage, append `--sandbox-account` to the docume
 
 ## Poppy 0.4
 
-The reference client targets the published draft 0.4 and refuses other advertised versions. Client assertions use the issuer as their audience and are signed directly by the `jwks_uri` key; Session JWTs are signed by per-User delegated keys carrying their `pap_dlg` delegation and name each request's method and URL. See [POPPY-0.4.md](POPPY-0.4.md). Keep `ALLOW_COMPAT_AGENT_SESSIONS=false` for native verification. Follow [the upgrade checklist](POPPY-0.2.md) before deploying the change to production; a successful local reference run is not a hosted PDA browser test.
+The reference client targets the published version 0.4 and refuses other advertised versions. Client assertions use the issuer as their audience and are signed directly by the `jwks_uri` key; Session JWTs are signed by per-User delegated keys carrying their `poppy_dlg` delegation and name each request's method and URL. See [POPPY-0.4.md](POPPY-0.4.md). Keep `ALLOW_COMPAT_AGENT_SESSIONS=false` for native verification. Follow [the upgrade checklist](POPPY-0.2.md) before deploying the change to production; a successful local reference run is not a hosted PDA browser test.
 
 ## Isolated Docker interop grid
 
