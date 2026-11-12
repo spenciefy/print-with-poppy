@@ -1,3 +1,4 @@
+import { retrying } from "./http-retry.js";
 /**
  * Poppy 0.4 reference run for a local demo store (APP_MODE=demo, optionally
  * AGENT_SANDBOX=true), as the store's demo agent: client assertions signed by
@@ -37,17 +38,6 @@ const json = async (r: Response) => {
 };
 const errorOf = (b: any) => b?.error || b?.raw || "(no error code)";
 const digest = (s: string) => createHash("sha256").update(s).digest("base64url");
-/** §5.6: on 429, wait at least Retry-After and send again (fresh JWTs each time). */
-async function retrying(send: () => Promise<Response>) {
-  for (;;) {
-    const r = await send();
-    if (r.status !== 429) return r;
-    const wait = Math.min(Number(r.headers.get("retry-after")) || 5, 65);
-    log(`  … 429 with Retry-After ${wait}s; waiting, then retrying`);
-    await new Promise((resolve) => setTimeout(resolve, wait * 1000));
-  }
-}
-
 // Discovery (§3): poppy.json → protected resource metadata → issuer metadata.
 const discovery = await json(await fetch(`${origin}/.well-known/poppy.json`));
 if (discovery.protocol_version !== "0.4") fail("Needs Poppy 0.4.");
@@ -262,6 +252,8 @@ async function approved(s: S, route: string, body: unknown, label: string) {
   if (done.status !== 201) fail(`${label} approved: ${done.status} ${errorOf(done.body)}`);
   step(`${label} again with Poppy-Approval`, `201, order ${redact(done.body.id)} ${done.body.status}${done.body.checkoutUrl ? ", checkout ready" : ""}`);
   const again = await call(s, route, { method: "POST", body: JSON.stringify(body), headers: { "Poppy-Approval": approval } });
+  assert.equal(again.status, 201);
+  assert.equal(again.body.id, done.body.id, "Approval retry must return the same order");
   step("same approval retried", `${again.status}, same order: ${again.body.id === done.body.id} (at most once)`);
   return done.body;
 }
@@ -270,19 +262,30 @@ async function payoff(type: string, s: S, signedIn: any) {
   s.accessToken = signedIn.access_token;
   s.refreshToken = signedIn.refresh_token;
   const refreshed = await token({ grant_type: "refresh_token", refresh_token: s.refreshToken!, scope: "orders:read" });
+  assert.equal(refreshed.status, 200);
+  assert.equal(refreshed.body.scope, "orders:read");
+  assert.equal(refreshed.body.token_type, "Bearer");
   step("refresh with a narrower scope", `${refreshed.status}, token_type=${refreshed.body.token_type}, scope="${refreshed.body.scope}", no new refresh token: ${!refreshed.body.refresh_token}`);
   const narrow = await call(s, "/api/account/addresses", { token: refreshed.body.access_token });
+  assert.equal(narrow.status, 403);
+  assert.equal(narrow.body.error, "insufficient_scope");
   step("that token on listAccountAddresses", `${narrow.status} ${errorOf(narrow.body)} (${narrow.auth})`);
   const bare = await retrying(() => fetch(`${origin}/api/account`, { headers: { Authorization: `Bearer ${s.accessToken}` } }));
+  assert.equal(bare.status, 400);
   step("access token without the Session header", `${bare.status} ${errorOf(await json(bare))}`);
   const account = await call(s, "/api/account");
+  assert.equal(account.status, 200);
   step("GET /api/account", `${account.status}, scope="${account.body.scope}"`);
   const hasAddresses = signedIn.scope.split(" ").includes("addresses");
   if (hasAddresses) {
     const saved = await call(s, "/api/account/addresses", { method: "POST", body: JSON.stringify({ label: "Home", address: address(type) }) });
+    assert.equal(saved.status, 201);
+    assert.equal(saved.body.default, true);
     step("saveAccountAddress", `${saved.status}, default=${saved.body.default}`);
   } else {
     const saved = await call(s, "/api/account/addresses", { method: "POST", body: JSON.stringify({ label: "Home", address: address(type) }) });
+    assert.equal(saved.status, 403);
+    assert.equal(saved.body.error, "insufficient_scope");
     step("saveAccountAddress", `${saved.status} ${errorOf(saved.body)} (${saved.auth})`);
   }
   const photo = await samplePhoto(s);
@@ -294,6 +297,8 @@ async function payoff(type: string, s: S, signedIn: any) {
   );
   const history = await call(s, "/api/account/orders");
   const listed = history.body.orders.find((o: any) => o.id === order.id);
+  assert.equal(history.status, 200);
+  assert.equal(listed?.reorderable, true);
   step("GET /api/account/orders", `${history.body.orders.length} order(s); listed=${!!listed}, reorderable=${listed?.reorderable}`);
   // A new Session (new sid) of the same User uses the same access token.
   const other: S = { ...agent.newSession(s.sub), accessToken: s.accessToken };
@@ -305,14 +310,21 @@ async function payoff(type: string, s: S, signedIn: any) {
       body: new URLSearchParams({ token: s.refreshToken!, token_type_hint: "refresh_token", ...(await agent.clientAuth()) }),
     }),
   );
+  assert.equal(revoked.status, 200);
   step("revoke refresh token (sign out)", `${revoked.status}`);
   const after = await token({ grant_type: "refresh_token", refresh_token: s.refreshToken! });
+  assert.equal(after.status, 400);
+  assert.equal(after.body.error, "invalid_grant");
   step("refresh after revocation", `${after.status} ${errorOf(after.body)}`);
   const stale = await call(s, "/api/account/orders");
+  assert.equal(stale.status, 401);
+  assert.equal(stale.body.error, "invalid_token");
   step("its access token after revocation", `${stale.status} ${errorOf(stale.body)} (${stale.auth})`);
   const out = await call(s, "/api/account/orders", { token: null });
+  assert.equal(out.status, 401);
   step("the Session continues signed out", `${out.status} challenge (${out.auth})`);
   const catalog = await call(s, `/api/orders/${order.id}`, { token: null });
+  assert.equal(catalog.status, 401);
   step("account order in the signed-out Session", `${catalog.status} (${catalog.auth || errorOf(catalog.body)})`);
 }
 
@@ -321,12 +333,16 @@ log("");
 log("SESSION HEADER");
 const s0 = agent.newSession(`demo-user-${randomUUID()}`);
 const ok = await call(s0, "/api/catalog");
+assert.equal(ok.status, 200);
 step("signed-out request, new sid", `${ok.status}: a new signed-out Session`);
 const photo0 = await samplePhoto(s0);
 step("upload a sample photo in it", `${photo0.id ? "photo " + redact(photo0.id) : errorOf(photo0)}`);
 const guestBody = { email: "guest@example.com", address: address("guest"), items: [{ photoId: photo0.id, quantity: 1 }] };
 const g1 = await call(s0, "/api/orders", { method: "POST", body: JSON.stringify(guestBody) });
 const g2 = await call(s0, "/api/orders", { method: "POST", body: JSON.stringify(guestBody) });
+assert.equal(g1.status, 403);
+assert.equal(g2.status, 403);
+assert.equal(g1.body.operation?.operation_id, g2.body.operation?.operation_id);
 step("same request twice in the Session", `${g1.status} ${errorOf(g1.body)}, same operation: ${g1.body.operation?.operation_id === g2.body.operation?.operation_id}`);
 const s1 = { ...agent.newSession(s0.sub) };
 const notMine = await call(s1, "/api/orders", {
@@ -340,6 +356,7 @@ const hijack = await call({ ...s0, sub: `demo-user-${randomUUID()}` }, "/api/cat
 assert.equal(hijack.status, 200);
 step("that sid with a different sub names a separate Session", `${hijack.status} ${errorOf(hijack.body)}`);
 const signedOut = await call(s0, "/api/account/orders");
+assert.equal(signedOut.status, 401);
 step("account request without an access token", `${signedOut.status} ${errorOf(signedOut.body)} (${signedOut.auth})`);
 const root = await importJWK(rootJwk, "ES256");
 const direct = await new SignJWT({ sid: jti(), htm: "GET", htu: `${origin}/api/catalog` })
@@ -351,10 +368,11 @@ const direct = await new SignJWT({ sid: jti(), htm: "GET", htu: `${origin}/api/c
   .setJti(jti())
   .sign(root);
 const nonDelegated = await json(await retrying(() => fetch(`${origin}/api/catalog`, { headers: { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": direct } })));
+assert.equal(nonDelegated.error, "invalid_session");
 step("Session JWT signed directly by the jwks_uri key", `${errorOf(nonDelegated)}`);
 const d = await delegate(rootJwk, clientId);
 const wrongUrl = await new SignJWT({ sid: jti(), htm: "GET", htu: `${origin}/api/photos` })
-  .setProtectedHeader({ alg: "ES256", typ: "poppy-session+jwt", kid: d.kid, pap_dlg: d.delegation })
+  .setProtectedHeader({ alg: "ES256", typ: "poppy-session+jwt", kid: d.kid, poppy_dlg: d.delegation })
   .setIssuer(clientId)
   .setSubject(s0.sub)
   .setAudience(issuer)
@@ -362,8 +380,11 @@ const wrongUrl = await new SignJWT({ sid: jti(), htm: "GET", htu: `${origin}/api
   .setJti(jti())
   .sign(d.key);
 const mismatch = await json(await retrying(() => fetch(`${origin}/api/catalog`, { headers: { "Poppy-Version": "0.4", "Poppy-Extensions": '"operations";v="3"', "Poppy-Session": wrongUrl } })));
+assert.equal(mismatch.error, "invalid_session");
 step("Session JWT for another URL (htu)", `${errorOf(mismatch)}`);
 const directAssertion = await token({ grant_type: "refresh_token", refresh_token: "prt_unknown" });
+assert.equal(directAssertion.status, 400);
+assert.equal(directAssertion.body.error, "invalid_grant");
 step("client assertion signed directly by the jwks_uri key, unknown refresh token", `${directAssertion.status} ${errorOf(directAssertion.body)} (assertion accepted; token refused)`);
 
 // 2. Each offered sign-in type.

@@ -4,7 +4,7 @@ Print with Poppy offers all three Poppy sign-in types. Every type signs the cust
 
 | Type | How an agent finds it | Where the customer signs in | Scopes | Offered |
 | --- | --- | --- | --- | --- |
-| Direct (§4.2) | `authorization_code` in `grant_types_supported`; `authorization_endpoint` | Store page in their browser, then a redirect to the agent | all of `scopes_supported` | Live, plain demo. Not in the hosted Agent Sandbox. |
+| Direct (§4.2) | `authorization_code` in `grant_types_supported`; `authorization_endpoint` | Store page in their browser, then a redirect to the agent | all of `scopes_supported` | Live, plain demo, Agent Sandbox |
 | Device (§4.3) | `urn:ietf:params:oauth:grant-type:device_code`; `device_authorization_endpoint` | Store page at `/device` on any device, from a link and code the agent shows | all of `scopes_supported` | Live, plain demo, Agent Sandbox |
 | Mediated (extension v1) | `mediated-sign-in` in `poppy.json` `extensions`, and its grant type in `grant_types_supported` | Agent's own secure UI: email, then the emailed code | `orders:read orders:write` | Live, plain demo, Agent Sandbox |
 
@@ -77,3 +77,5 @@ Demo stores (`APP_MODE=demo`, with or without `AGENT_SANDBOX=true`) never send e
 - `getSandboxDeviceSignInEmail` (`POST /api/sandbox/device-sign-in/email` with `{device_code}`) returns the captured email of a pending device sign-in to the agent that started it.
 
 Production (`APP_MODE=live`) registers none of these and always emails the code.
+
+Mediated Sign-In is retained for interoperability demos despite the extension’s recommendation to retire it once Direct/Device cover its scopes. Prefer Direct Sign-In; see the [0.4 audit](POPPY-0.4.md#compliance-audit-and-independent-checks-35).

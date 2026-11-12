@@ -72,20 +72,36 @@ jobs:
           const production = process.env.CF_TARGET === 'production';
           const origin = production
             ? 'https://printwithpoppy.com'
-            : 'https://pwp-cf-sandbox.spencersyen.workers.dev';
-          for (const path of ['/api/health', '/.well-known/poppy.json']) {
-            const response = await fetch(origin + path);
-            assert(response.ok, `${path}: HTTP ${response.status}`);
-            if (path.endsWith('poppy.json')) {
-              const manifest = await response.json();
-              assert.equal(manifest.protocol_version, '0.4');
-              assert.equal(manifest.extensions?.operations?.[0]?.version, '3');
+            : 'https://sandbox.printwithpoppy.com';
+          async function verify() {
+            for (const path of ['/api/health', '/.well-known/poppy.json']) {
+              const response = await fetch(origin + path, { signal: AbortSignal.timeout(10_000), cache: "no-store" });
+              assert(response.ok, `${path}: HTTP ${response.status}`);
+              if (path.endsWith('poppy.json')) {
+                const manifest = await response.json();
+                assert.equal(manifest.protocol_version, '0.4');
+                assert.equal(manifest.extensions?.operations?.[0]?.version, '3');
+              }
+            }
+            const description = await fetch(origin + '/openapi.json', { signal: AbortSignal.timeout(10_000), cache: 'no-store' });
+            assert(description.ok, `OpenAPI: HTTP ${description.status}`);
+            const text = await description.text();
+            assert(text.includes('poppy_dlg') && text.includes('poppy-delegation+jwt'), 'Published Session proof contract is stale');
+            const response = await fetch(origin + '/api/config', { signal: AbortSignal.timeout(10_000), cache: 'no-store' });
+            assert(response.ok, `config: HTTP ${response.status}`);
+            const config = await response.json();
+            assert.equal(config.mode, production ? 'live' : 'demo');
+            if (production) assert.equal(config.restrictedLaunch, false);
+          }
+          // Durable Object updates can be deferred for 300s. Wait for observed readiness.
+          const deadline = Date.now() + 7 * 60_000;
+          for (;;) {
+            try { await verify(); break; }
+            catch (error) {
+              if (Date.now() >= deadline) throw error;
+              console.log(`Waiting for deployment: ${error.message}`);
+              await new Promise(resolve => setTimeout(resolve, 15_000));
             }
           }
-          const response = await fetch(origin + '/api/config');
-          assert(response.ok, `config: HTTP ${response.status}`);
-          const config = await response.json();
-          assert.equal(config.mode, production ? 'live' : 'demo');
-          if (production) assert.equal(config.restrictedLaunch, false);
           console.log(`Verified ${origin}: health, discovery, mode and launch configuration. This is not a paid-order end-to-end test.`);
           JS

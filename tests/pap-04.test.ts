@@ -1,4 +1,6 @@
-// Published Poppy 0.4 draft, one test per change that touches a Company:
+import { officialAgent } from "./support/official-poppy-agent.js";
+import { decodeJwt, generateKey, importPrivateJwk, signDelegation, signJwt } from "./vendor/poppy-0.4/jose.js";
+// Published Poppy 0.4 protocol regression coverage:
 // discovery, client assertions (§4.1), the Session header (§5), Sessions keyed
 // by client_id + sid, plain OAuth tokens, error shapes (§7), Device without
 // key binding, and loopback redirect URIs.
@@ -88,7 +90,7 @@ async function sessionJwt(o: {
   };
   for (const k of o.omit ?? []) delete claims[k];
   const header: any = { alg: "ES256", typ: o.typ ?? "poppy-session+jwt", kid: o.kid ?? d?.kid ?? root.kid ?? "demo" };
-  if (d) header.pap_dlg = d.delegation;
+  if (d) header.poppy_dlg = d.delegation;
   return new SignJWT(claims).setProtectedHeader(header).sign(d ? d.key : rootKey);
 }
 const get = async (jwt: string | string[], url = catalog, token?: string) => {
@@ -105,7 +107,7 @@ const refusedSession = async (jwt: string | string[], label: string, url = catal
   assert.equal(r.challenge, null, label);
 };
 
-test("discovery: protected resource metadata, issuer metadata and poppy.json for the published 0.4 draft", async () => {
+test("discovery: protected resource metadata, issuer metadata and poppy.json for the published 0.4 specification", async () => {
   const d = await (await fetch(origin + "/.well-known/poppy.json")).json();
   const prm = await (await fetch(origin + "/.well-known/oauth-protected-resource")).json();
   const m = await (await fetch(origin + "/.well-known/oauth-authorization-server")).json();
@@ -159,7 +161,7 @@ test("client assertions: signed directly by a jwks_uri key, aud = issuer as one 
   await refused(once, "replayed jti");
   // A delegated key can't sign client assertions.
   const d = await delegate(root, clientId);
-  await refused(await clientAssertion({ key: d.key, header: { kid: d.kid, pap_dlg: d.delegation } }), "delegated key with pap_dlg");
+  await refused(await clientAssertion({ key: d.key, header: { kid: d.kid, poppy_dlg: d.delegation } }), "delegated key with poppy_dlg");
   await refused(await clientAssertion({ header: { typ: "poppy-session+jwt" } }), "Session JWT typ");
   await refused(await clientAssertion({ header: { kid: "unknown" } }), "unknown kid");
   // PS384 from an RSA jwks key.
@@ -179,6 +181,8 @@ test("Session header: delegation checks (ES256 or PS384, ≤24 h, public P-256 c
   const now = Math.floor(Date.now() / 1000);
   await refusedSession(await sessionJwt({ dlg: await delegate(root, clientId, { iat: now - 7200, exp: now - 60 }) }), "expired delegation");
   await refusedSession(await sessionJwt({ dlg: await delegate(root, clientId, { exp: now + 90000 }) }), "delegation over 24 h");
+  await refusedSession(await sessionJwt({ dlg: await delegate(root, clientId, { iat: now + 120 }) }), "future delegation");
+  await refusedSession(await sessionJwt({ dlg: await delegate(root, clientId, { iat: now + 0.5 }) }), "noninteger delegation time");
   await refusedSession(await sessionJwt({ dlg: await delegate(root, clientId, { iss: "https://other.example/agent.json" }) }), "delegation from another client");
   await refusedSession(await sessionJwt({ dlg: await delegate(root, clientId, { typ: "JWT" }) }), "delegation typ");
   await refusedSession(await sessionJwt({ dlg: await delegate(root, clientId, { kid: "unknown" }) }), "delegation kid not in jwks");
@@ -195,7 +199,7 @@ test("Session header: delegation checks (ES256 or PS384, ≤24 h, public P-256 c
   const rsa = await generateKeyPair("PS384", { extractable: true });
   const rsaJwk = { ...(await exportJWK(rsa.privateKey)), kid: "rsa", alg: "PS384" };
   const ps = await delegate(rsaJwk, clientId, { alg: "PS384" });
-  const header = { alg: "ES256", typ: "poppy-session+jwt", kid: ps.kid, pap_dlg: ps.delegation };
+  const header = { alg: "ES256", typ: "poppy-session+jwt", kid: ps.kid, poppy_dlg: ps.delegation };
   const verified = await delegation.delegatedKey(header, createLocalJWKSet({ keys: [{ ...(await exportJWK(rsa.publicKey)), kid: "rsa", alg: "PS384" }] }), clientId);
   assert.ok(verified.key);
   assert.equal(await calculateJwkThumbprint(ps.jwk), ps.kid);
@@ -228,7 +232,7 @@ test("Session header: claim checks, single use, cardinality, and an access token
   await refusedSession(await sessionJwt({ sid: a.session.sid, sub: a.user, htu: origin + "/api/account" }), "token without ath", origin + "/api/account", tokens.access_token);
   const ok = await get(await sessionJwt({ sid: a.session.sid, sub: a.user, htu: origin + "/api/account", ath: sha256(tokens.access_token) }), origin + "/api/account", tokens.access_token);
   assert.equal(ok.status, 200);
-  // DPoP is gone.
+  // This store advertises Bearer tokens, not optional DPoP binding.
   const dpop = await fetch(origin + "/api/account", { headers: { Authorization: `DPoP ${tokens.access_token}` } });
   assert.equal(dpop.status, 400);
 });
@@ -385,4 +389,24 @@ test("0.4 extensions are declared per request, never inferred from client metada
   }
   const { requestVersions } = await import("../server/protocol-version.js");
   assert.equal(requestVersions("0.4", '"unknown.example/extra";v="99", "operations";v="3";future=?1').extensions, true);
+});
+
+
+test("official 0.4 kit signs accepted requests; obsolete issue #35 names are rejected", async () => {
+  const independent = await officialAgent(root, clientId, origin);
+  const session = independent.newSession("official-kit-user");
+  assert.equal((await get(await independent.sessionJwt(session, "GET", catalog))).status, 200);
+  const delegated = await generateKey();
+  const rootSigner = await importPrivateJwk(root);
+  for (const claim of ["sub", "aud", "agent_id"]) {
+    const valid = decodeJwt(await signDelegation({ root: rootSigner, delegated: delegated.publicJwk, iss: clientId }));
+    const bad = await signJwt(valid.header, { ...valid.payload, [claim]: "forbidden" }, rootSigner.privateKey);
+    await assert.rejects(delegation.delegatedKey({ poppy_dlg: bad, kid: "unused" }, createLocalJWKSet({ keys: [rootSigner.publicJwk] }), clientId), /must not identify/);
+  }
+  await refusedSession(await sessionJwt({ dlg: await delegate(root, clientId, { typ: "pap-delegation+jwt" }) }), "old delegation type");
+  const d = await delegate(root, clientId);
+  const decoded = decodeJwt(await sessionJwt({ dlg: d }));
+  const { poppy_dlg, ...header } = decoded.header;
+  const old = await new SignJWT(decoded.payload).setProtectedHeader({ ...header, alg: "ES256", pap_dlg: poppy_dlg }).sign(d.key);
+  await refusedSession(old, "old delegation header");
 });
