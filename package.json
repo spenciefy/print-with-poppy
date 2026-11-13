@@ -32,7 +32,7 @@
     "express": "5.3.0",
     "express-rate-limit": "8.7.1",
     "helmet": "8.3.0",
-    "hono": "^4.13.13",
+    "hono": "^4.13.16",
     "http-structured-fields": "1.0.0",
     "jose": "6.2.12",
     "multer": "2.4.0",
