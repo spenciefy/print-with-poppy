@@ -106,30 +106,6 @@ function Header({
     </header>
   );
 }
-function CopyIcon({ copied }: { copied: boolean }) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {copied ? (
-        <path d="m5 12 4 4L19 6" />
-      ) : (
-        <>
-          <rect x="8" y="8" width="12" height="12" rx="2" />
-          <path d="M16 8V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4" />
-        </>
-      )}
-    </svg>
-  );
-}
 function Faq({
   title,
   children,
@@ -419,20 +395,7 @@ function VariantIndex() {
   );
 }
 function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
-  const [copied, setCopied] = useState(false);
-  const [error, setError] = useState("");
   const sandbox = config.environment === "agent-sandbox";
-  const storeUrl = config.origin;
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(storeUrl);
-      setCopied(true);
-      setError("");
-      setTimeout(() => setCopied(false), 3000);
-    } catch {
-      setError("Select and copy the store link above.");
-    }
-  }
   const heading = (
     <div className="store-heading">
       <h1 id="home-title">Your photos, printed</h1>
@@ -499,64 +462,12 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
       </p>
     </section>
   );
-  const promptSection = (
-    <section className="store-order" aria-labelledby="instructions-label">
-      <div className="agent-instructions">
-        <div className="instructions-heading">
-          <h2 id="instructions-label">Order with your personal agent</h2>
-        </div>
-        <p className="instructions-text">
-          {sandbox
-            ? "Share this sandbox link with your personal agent to try a sample order. Prints and payments are simulated."
-            : "Share this store link with your personal agent. You can print your own photos or choose one of our poppy designs."}
-        </p>
-        <p className="instructions-text"><a href={storeUrl}>{storeUrl}</a></p>
-        <div className="instructions-actions">
-          <button
-            className="instructions-copy"
-            onClick={copy}
-            aria-live="polite"
-          >
-            <CopyIcon copied={copied} />
-            {copied ? "Copied" : "Copy store link"}
-          </button>
-          <a className="instructions-copy" href="/demo">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M4 2.5v11L13 8z" />
-            </svg>
-            Play demo
-          </a>
-        </div>
-        {error && (
-          <p className="instructions-feedback" role="alert">
-            {error}
-          </p>
-        )}
-      </div>
-    </section>
-  );
   return (
     <div className={variant ? `home-variant variant-${variant}` : undefined}>
       {variant && <VariantNav current={variant} />}
       <main className={`home-minimal store-home${variant ? "" : " store-home-standard"}`}>
         {!variant && heading}
-        {variant === "agent-first" ? (
-          <>
-            {promptSection}
-            {productSection}
-          </>
-        ) : (
-          <>
-            {productSection}
-            {promptSection}
-          </>
-        )}
+        {productSection}
       </main>
       <Footer httpOrderingEnabled={config.httpOrderingEnabled} compact={Boolean(variant)} />
     </div>
