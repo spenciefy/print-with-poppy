@@ -422,15 +422,15 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const sandbox = config.environment === "agent-sandbox";
-  const prompt = sandbox ? `I want to test ordering photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and verify /api/config says environment=agent-sandbox. Offer me the yellow, orange and red sample poppy artwork or ask me to upload photos, and use fictional shipping details and my email address for test emails. Show the proposal and ask for approval, then use simulatePayment and simulateShipment and show the captured confirmation and shipping emails. No real card or prints. Order emails may be sent to the order email address. Keep all requests and session tokens on this sandbox origin.` : `Please help me order photo prints from https://printwithpoppy.com. Ask me to upload my photos, or offer the yellow, orange and red poppy artwork if I do not have photos ready. If you support Personal Agent Protocol and native Poppy sessions, read /.well-known/poppy.json and the catalog. ${config.httpOrderingEnabled ? "If you do not support native Poppy sessions, use https://printwithpoppy.com/api/compat/instructions for HTTP compatibility access; no private signing key is needed." : "Native Personal Agent Protocol is required; HTTP compatibility ordering is disabled."}`;
+  const storeUrl = config.origin;
   async function copy() {
     try {
-      await navigator.clipboard.writeText(prompt);
+      await navigator.clipboard.writeText(storeUrl);
       setCopied(true);
       setError("");
       setTimeout(() => setCopied(false), 3000);
     } catch {
-      setError("Select and copy the instructions below.");
+      setError("Select and copy the store link above.");
     }
   }
   const heading = (
@@ -503,9 +503,14 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
     <section className="store-order" aria-labelledby="instructions-label">
       <div className="agent-instructions">
         <div className="instructions-heading">
-          <h2 id="instructions-label">Copy prompt for your personal agent</h2>
+          <h2 id="instructions-label">Order with your personal agent</h2>
         </div>
-        <p className="instructions-text">{prompt}</p>
+        <p className="instructions-text">
+          {sandbox
+            ? "Share this sandbox link with your personal agent to try a sample order. Prints and payments are simulated."
+            : "Share this store link with your personal agent. You can print your own photos or choose one of our poppy designs."}
+        </p>
+        <p className="instructions-text"><a href={storeUrl}>{storeUrl}</a></p>
         <div className="instructions-actions">
           <button
             className="instructions-copy"
@@ -513,7 +518,7 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
             aria-live="polite"
           >
             <CopyIcon copied={copied} />
-            {copied ? "Copied" : "Copy"}
+            {copied ? "Copied" : "Copy store link"}
           </button>
           <a className="instructions-copy" href="/demo">
             <svg
