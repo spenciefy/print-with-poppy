@@ -106,30 +106,6 @@ function Header({
     </header>
   );
 }
-function CopyIcon({ copied }: { copied: boolean }) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {copied ? (
-        <path d="m5 12 4 4L19 6" />
-      ) : (
-        <>
-          <rect x="8" y="8" width="12" height="12" rx="2" />
-          <path d="M16 8V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4" />
-        </>
-      )}
-    </svg>
-  );
-}
 function Faq({
   title,
   children,
@@ -419,20 +395,7 @@ function VariantIndex() {
   );
 }
 function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
-  const [copied, setCopied] = useState(false);
-  const [error, setError] = useState("");
   const sandbox = config.environment === "agent-sandbox";
-  const prompt = sandbox ? `I want to test ordering photo prints using ${config.origin} via Personal Agent Protocol. Read /.well-known/poppy.json and verify /api/config says environment=agent-sandbox. Offer me the yellow, orange and red sample poppy artwork or ask me to upload photos, and use fictional shipping details and my email address for test emails. Show the proposal and ask for approval, then use simulatePayment and simulateShipment and show the captured confirmation and shipping emails. No real card or prints. Order emails may be sent to the order email address. Keep all requests and session tokens on this sandbox origin.` : `Please help me order photo prints from https://printwithpoppy.com. Ask me to upload my photos, or offer the yellow, orange and red poppy artwork if I do not have photos ready. If you support Personal Agent Protocol and native Poppy sessions, read /.well-known/poppy.json and the catalog. ${config.httpOrderingEnabled ? "If you do not support native Poppy sessions, use https://printwithpoppy.com/api/compat/instructions for HTTP compatibility access; no private signing key is needed." : "Native Personal Agent Protocol is required; HTTP compatibility ordering is disabled."}`;
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(prompt);
-      setCopied(true);
-      setError("");
-      setTimeout(() => setCopied(false), 3000);
-    } catch {
-      setError("Select and copy the instructions below.");
-    }
-  }
   const heading = (
     <div className="store-heading">
       <h1 id="home-title">Your photos, printed</h1>
@@ -499,59 +462,12 @@ function Home({ config, variant }: { config: Config; variant?: HomeVariant }) {
       </p>
     </section>
   );
-  const promptSection = (
-    <section className="store-order" aria-labelledby="instructions-label">
-      <div className="agent-instructions">
-        <div className="instructions-heading">
-          <h2 id="instructions-label">Copy prompt for your personal agent</h2>
-        </div>
-        <p className="instructions-text">{prompt}</p>
-        <div className="instructions-actions">
-          <button
-            className="instructions-copy"
-            onClick={copy}
-            aria-live="polite"
-          >
-            <CopyIcon copied={copied} />
-            {copied ? "Copied" : "Copy"}
-          </button>
-          <a className="instructions-copy" href="/demo">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M4 2.5v11L13 8z" />
-            </svg>
-            Play demo
-          </a>
-        </div>
-        {error && (
-          <p className="instructions-feedback" role="alert">
-            {error}
-          </p>
-        )}
-      </div>
-    </section>
-  );
   return (
     <div className={variant ? `home-variant variant-${variant}` : undefined}>
       {variant && <VariantNav current={variant} />}
       <main className={`home-minimal store-home${variant ? "" : " store-home-standard"}`}>
         {!variant && heading}
-        {variant === "agent-first" ? (
-          <>
-            {promptSection}
-            {productSection}
-          </>
-        ) : (
-          <>
-            {productSection}
-            {promptSection}
-          </>
-        )}
+        {productSection}
       </main>
       <Footer httpOrderingEnabled={config.httpOrderingEnabled} compact={Boolean(variant)} />
     </div>
