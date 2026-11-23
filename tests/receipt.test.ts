@@ -20,3 +20,19 @@ test("mixed products and crop exceptions remain distinct; duplicate items aggreg
   assert.match(s, /1 × 12 × 16 matte print/);
   assert.match(s, /Photo 3 · 1 copy each/);
 });
+
+test("underfilled small-print bundles disclose quantity and recommend five across both sizes", () => {
+  for (const count of [1, 2, 4, 5]) {
+    const items: Proposal["items"] = [{ ...proposal.items[0], product: "prints", quantity: 1 }];
+    if (count > 1) items.push({ ...proposal.items[1], product: "square", quantity: count - 1 });
+    items.push({ ...proposal.items[2], product: "enlargement", quantity: 1 });
+    const summary = receipt({ ...proposal, items }, photos, price, false);
+    assert.equal(summary.includes("We recommend choosing 5"), count < 5);
+    if (count < 5) {
+      assert.ok(summary.includes(`Only ${count} small`));
+      assert.ok(summary.includes(`add ${5 - count} more`));
+    }
+  }
+  const summary = receipt({ ...proposal, items: [{ ...proposal.items[0], product: "enlargement", quantity: 1 }] }, photos, price, false);
+  assert.ok(!summary.includes("We recommend choosing 5"));
+});
